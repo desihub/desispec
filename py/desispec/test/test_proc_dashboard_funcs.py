@@ -324,6 +324,11 @@ class TestStickyBanners(unittest.TestCase):
         if 'overflow: hidden' in content_rule:
             self.assertLess(content_rule.index('overflow: hidden'),
                             content_rule.index('overflow: clip'))
-        ## each month's banner is measured, not just the first
-        self.assertIn("querySelectorAll('.monthbanner')", self.page)
-        self.assertIn("'--month-banner-height'", self.page)
+        ## the column names stick below both banners
+        self.assertIn('.nightTable th {position: sticky;', self.page)
+        self.assertIn('top: calc(var(--month-banner-height, 66px) '
+                      + '+ var(--night-banner-height, 66px))', self.page)
+        ## each banner is measured, not just the first of its kind
+        self.assertIn("['.monthbanner', '--month-banner-height']", self.page)
+        self.assertIn("['.nightbanner', '--night-banner-height']", self.page)
+        self.assertIn('querySelectorAll(kinds[j][0])', self.page)

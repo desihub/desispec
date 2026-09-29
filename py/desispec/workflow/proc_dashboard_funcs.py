@@ -783,6 +783,10 @@ def _page_head(color_profile):
        leaves once the last of its rows has scrolled past. */
     .monthbanner {position: sticky; top: 0; z-index: 3;}
     .nightbanner {position: sticky; top: var(--month-banner-height, 66px); z-index: 2;}
+    /* The column names stay just below the night's banner. A header cell is
+       bounded by its own table, so it leaves along with the night's rows. */
+    .nightTable th {position: sticky; z-index: 1;
+                    top: calc(var(--month-banner-height, 66px) + var(--night-banner-height, 66px));}
     /* The Modal (background) */
     .modal {
     display: none;        /* Hidden by default */
@@ -1056,19 +1060,24 @@ def js_str(): # Used
                      coll[i].nextElementSibling.style.maxHeight='0px'
                              }});
              }
-             /* Night banners stick just below their month's banner, whose
-                height depends on the font and on whether its heading wraps.
-                Each month is measured separately and its height set on its
-                own section, which the nights inside it inherit. */
-             function setMonthBannerHeight() {
-                 var banners = document.querySelectorAll('.monthbanner');
-                 for (var k = 0; k < banners.length; k++) {
-                     banners[k].parentElement.style.setProperty(
-                         '--month-banner-height', banners[k].offsetHeight + 'px');
+             /* Night banners stick just below their month's banner, and the
+                column names just below their night's banner. Banner heights
+                depend on the font and on whether the heading wraps, so each
+                banner is measured separately and its height set on its own
+                section, which everything inside it inherits. */
+             function setBannerHeights() {
+                 var kinds = [['.monthbanner', '--month-banner-height'],
+                              ['.nightbanner', '--night-banner-height']];
+                 for (var j = 0; j < kinds.length; j++) {
+                     var banners = document.querySelectorAll(kinds[j][0]);
+                     for (var k = 0; k < banners.length; k++) {
+                         banners[k].parentElement.style.setProperty(
+                             kinds[j][1], banners[k].offsetHeight + 'px');
+                     }
                  }
              }
-             setMonthBannerHeight();
-             window.addEventListener('resize', setMonthBannerHeight);
+             setBannerHeights();
+             window.addEventListener('resize', setBannerHeights);
 
            function statusColumnIndex(table) {
                 /* The column count differs between dashboards and grows as
