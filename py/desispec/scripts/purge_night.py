@@ -70,7 +70,7 @@ def purge_night(night, dry_run=True, no_attic=False):
         ## select tiles for which future redshift jobs would depend, LASTSTEP==skysub
         ## will be removed with the night-level directory removal
         tile_sel = ((etable['OBSTYPE']=='science') & (etable['LASTSTEP']=='all'))
-        tiles = np.asarray(etable['TILEID'][tile_sel])
+        tiles = np.unique(etable['TILEID'][tile_sel])
 
     log = get_logger()
     log.info(f'Purging night {night}')
@@ -118,7 +118,7 @@ def purge_night(night, dry_run=True, no_attic=False):
     ## remove the future redshifts that used the data purged here
     if tiles is not None:
         log.info(f'Future redshifts from {tiles=} will also be removed.')
-        purge_tilenight(tiles, night, dry_run=dry_run)
+        purge_tilenight(tiles, night, dry_run=dry_run, no_attic=no_attic)
 
     ## These should now be taken care of by per-tile based removal
     # log.warning("Not attempting to find and purge perexp redshifts")

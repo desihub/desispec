@@ -34,6 +34,48 @@ def get_parser():
             help="delete files directly and do not move them to attic")
     return parser
 
+def move_link_to_attic(srclink, atticlink):
+    """
+    Move a directory symlink to the attic without touching its target.
+
+    The attic link points at the same target as srclink. If srclink is a
+    relative link, the attic link is also relative but recomputed for its
+    new location so that it still resolves, e.g. the
+    tiles/cumulative/TILEID/NIGHT -> ../../archive/TILEID/DATE links left
+    by desi_archive_tilenight. An existing link or file at atticlink is
+    replaced. An existing real directory at atticlink, e.g. from an earlier
+    purge, is kept and no attic link is made. In all cases srclink is removed.
+
+    Args:
+        srclink, str. Symlink to move.
+        atticlink, str. Location of the new link in the attic.
+    """
+    log = get_logger()
+    srclink = os.path.normpath(srclink)
+    atticlink = os.path.normpath(atticlink)
+    linktarget = os.readlink(srclink)
+    ## normpath rather than realpath so that any other symlinks in the
+    ## target path are not resolved
+    abstarget = os.path.normpath(os.path.join(
+        os.path.dirname(os.path.abspath(srclink)), linktarget))
+    atticparent = os.path.dirname(os.path.abspath(atticlink))
+    if os.path.isabs(linktarget):
+        newtarget = abstarget
+    else:
+        newtarget = os.path.relpath(abstarget, atticparent)
+
+    if os.path.isdir(atticlink) and not os.path.islink(atticlink):
+        log.warning(f"{atticlink} already exists as a directory, so keeping it "
+                    + f"rather than replacing it with a link to {abstarget}")
+    else:
+        os.makedirs(atticparent, exist_ok=True)
+        if os.path.lexists(atticlink):
+            os.remove(atticlink)
+        log.info(f"Linking {atticlink} -> {newtarget}")
+        os.symlink(newtarget, atticlink)
+
+    os.unlink(srclink)
+
 def move_to_attic(srcdir, atticdir):
     """
     Move the contents of srcdir into atticdir, merging with any existing
@@ -43,11 +85,25 @@ def move_to_attic(srcdir, atticdir):
     and atticdir are on the same filesystem. Files already in atticdir are
     overwritten by files of the same name from srcdir. Symlinks are moved
     as symlinks. Any empty directories left behind in srcdir are not removed.
+    If srcdir is itself a symlink, only the link is moved and its target
+    is left untouched, see move_link_to_attic.
 
     Args:
         srcdir, str. Directory whose contents should be moved.
         atticdir, str. Destination directory, created if needed.
     """
+    srcdir = os.path.normpath(srcdir)
+    atticdir = os.path.normpath(atticdir)
+    if os.path.islink(srcdir):
+        move_link_to_attic(srcdir, atticdir)
+        return
+
+    ## an attic link (from an earlier purge of a link) or file is replaced;
+    ## merging into it would move files into the link's target
+    if os.path.islink(atticdir) or \
+            (os.path.lexists(atticdir) and not os.path.isdir(atticdir)):
+        os.remove(atticdir)
+
     if not os.path.lexists(atticdir):
         os.makedirs(os.path.dirname(os.path.abspath(atticdir)), exist_ok=True)
         ## shutil.move is a single rename on the same filesystem and falls
@@ -82,9 +138,14 @@ def remove_directory(dirname, dry_run=True, no_attic=False):
         no_attic, bool. If True, delete files directly and do not move them to attic
     """
     log = get_logger()
-    if os.path.exists(dirname):
+    ## remove trailing slashes so that symlinks are recognized as links
+    dirname = os.path.normpath(dirname)
+    if os.path.lexists(dirname):
         log.info(f"Identified directory {dirname} as existing.")
-        log.info(f"Dir has contents: {os.listdir(dirname)}")
+        if os.path.islink(dirname):
+            log.info(f"{dirname} is a symlink to {os.readlink(dirname)}")
+        if os.path.isdir(dirname):
+            log.info(f"Dir has contents: {os.listdir(dirname)}")
         if dry_run:
             log.info(f"Dry_run set, so not performing any action.")
         else:
@@ -105,8 +166,12 @@ def remove_directory(dirname, dry_run=True, no_attic=False):
                 log.info(f"Moving {dirname} to {attic_dir}")
                 move_to_attic(dirname, attic_dir)
             ## After a merge into an existing attic dir, empty
-            ## subdirectories may be left behind, so clean those up too
-            if os.path.lexists(dirname):
+            ## subdirectories may be left behind, so clean those up too.
+            ## Symlinks are unlinked so that their targets are left untouched
+            if os.path.islink(dirname):
+                log.info(f"Removing symlink: {dirname}")
+                os.unlink(dirname)
+            elif os.path.lexists(dirname):
                 log.info(f"Removing: {dirname}")
                 shutil.rmtree(dirname)
     else:
@@ -136,6 +201,10 @@ def purge_tilenight(tiles, night, dry_run=True, no_attic=False):
         raise ValueError("Must specify list of tiles.")
 
     log = get_logger()
+
+    ## remove duplicate tiles, preserving order, so that each tile is only
+    ## purged once
+    tiles = list(dict.fromkeys(int(tile) for tile in tiles))
 
     epathname = get_exposure_table_pathname(night=str(night), usespecprod=True)
     etable = load_table(tablename=epathname, tabletype='exptable')
