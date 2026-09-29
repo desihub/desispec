@@ -613,9 +613,12 @@ def generate_monthly_table_html(tables, statuses, month):
 
     heading = f"{month_dict[month[4:]]} {month[:4]} ({month})"
     month_table_str = '\n<!--Begin {}-->\n'.format(month)
+    ## The section bounds the sticky banner, so that it scrolls away with the
+    ## last of its nights rather than staying at the top of the page
+    month_table_str += '<section class="month">\n'
 
     monthlystatus = _combine_banner_statuses(statuses)
-    month_table_str += f'<button class="collapsible" id="{monthlystatus}">' \
+    month_table_str += f'<button class="collapsible monthbanner" id="{monthlystatus}">' \
                        + heading + '</button>'
 
     month_table_str += '<div class="content" style="display:inline-block;min-height:0%;">\n'
@@ -625,6 +628,7 @@ def generate_monthly_table_html(tables, statuses, month):
 
     #month_table_str += "</table></div>\n"
     month_table_str += "</div>\n"
+    month_table_str += "</section>\n"
     month_table_str += '<!--End {}-->\n\n'.format(month)
 
     return month_table_str
@@ -702,7 +706,9 @@ def generate_nightly_table_html(night_info, night, show_null):
         ## nothing has gone wrong yet, but the night isn't done either
         night_status = "PENDING"
     nightly_table_str = '<!--Begin {}-->\n'.format(night)
-    nightly_table_str += f'<button class="collapsible" id="{night_status}">{heading}</button>'
+    ## As for the month, the section bounds the sticky banner to its own rows
+    nightly_table_str += '<section class="night">\n'
+    nightly_table_str += f'<button class="collapsible nightbanner" id="{night_status}">{heading}</button>'
     nightly_table_str += '<div class="content" style="display:inline-block;min-height:0%;">\n'
     # table header
     nightly_table_str += "<table id='c' class='nightTable'><tbody>\n\t<tr>"
@@ -717,6 +723,7 @@ def generate_nightly_table_html(night_info, night, show_null):
 
     # End table
     nightly_table_str += "</tbody></table></div>\n"
+    nightly_table_str += "</section>\n"
     nightly_table_str += '<!--End {}-->\n\n'.format(night)
     return nightly_table_str, night_status
 
@@ -762,7 +769,14 @@ def _page_head(color_profile):
     .collapsible {background-color: #eee;color: #444;cursor: pointer;padding: 18px;width: 100%;border: none;text-align: left;outline: none;font-size: 25px;}
     .regular {background-color: #eee;color: #444;  cursor: pointer;  padding: 18px;  width: 25%;  border: 18px;  text-align: left;  outline: none;  font-size: 25px;}
     .active, .collapsible:hover { background-color: #ccc;}
-    .content {padding: 0 18px;display: table;overflow: hidden;background-color: #f1f1f1;maxHeight:0px;}
+    /* clip rather than hidden: hidden makes each content block a scroll
+       container of its own, which stops the banners inside it from sticking */
+    .content {padding: 0 18px;display: table;overflow: clip;background-color: #f1f1f1;}
+    /* While its rows are in view, a night's banner stays at the top of the
+       page under its month's. Each is bounded by its own section, so it
+       leaves once the last of its rows has scrolled past. */
+    .monthbanner {position: sticky; top: 0; z-index: 3;}
+    .nightbanner {position: sticky; top: var(--month-banner-height, 66px); z-index: 2;}
     /* The Modal (background) */
     .modal {
     display: none;        /* Hidden by default */
@@ -1036,6 +1050,18 @@ def js_str(): # Used
                      coll[i].nextElementSibling.style.maxHeight='0px'
                              }});
              }
+             /* Night banners stick just below the month banner, whose height
+                depends on the font and on whether its heading wraps */
+             function setMonthBannerHeight() {
+                 var banner = document.querySelector('.monthbanner');
+                 if (banner) {
+                     document.documentElement.style.setProperty(
+                         '--month-banner-height', banner.offsetHeight + 'px');
+                 }
+             }
+             setMonthBannerHeight();
+             window.addEventListener('resize', setMonthBannerHeight);
+
            function statusColumnIndex(table) {
                 /* The column count differs between dashboards and grows as
                    columns are added, so find STATUS by its header instead */

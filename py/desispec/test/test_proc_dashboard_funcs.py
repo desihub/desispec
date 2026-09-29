@@ -229,7 +229,69 @@ class TestBannerStatuses(unittest.TestCase):
         """The month banner follows its nights"""
         html = generate_monthly_table_html(['', ''], ['GOOD', 'PENDING'],
                                            '202601')
-        self.assertIn('<button class="collapsible" id="PENDING">', html)
+        self.assertIn('<button class="collapsible monthbanner" id="PENDING">', html)
         html = generate_monthly_table_html(['', ''], ['BAD', 'PENDING'],
                                            '202601')
-        self.assertIn('<button class="collapsible" id="BAD">', html)
+        self.assertIn('<button class="collapsible monthbanner" id="BAD">', html)
+
+
+class TestStickyBanners(unittest.TestCase):
+    """Month and night banners stay in view only while their rows are"""
+
+    def setUp(self):
+        self.outdir = tempfile.mkdtemp()
+        self.outfile = os.path.join(self.outdir, 'dashboard.html')
+        self.origspecprod = os.environ.get('SPECPROD')
+        os.environ['SPECPROD'] = 'test'
+        tables = OrderedDict([
+            ('202602', {20260202: _night_info(4002),
+                        20260201: _night_info(4001)}),
+            ('202601', {20260115: _night_info(3001)}),
+            ])
+        make_html_page(tables, self.outfile, show_null=True)
+        self.page = open(year_page_pathname(self.outfile, '2026')).read()
+
+    def tearDown(self):
+        shutil.rmtree(self.outdir, ignore_errors=True)
+        if self.origspecprod is None:
+            del os.environ['SPECPROD']
+        else:
+            os.environ['SPECPROD'] = self.origspecprod
+
+    def test_banners_are_bounded_by_their_sections(self):
+        """Each banner opens its own section, which closes after its rows"""
+        page = self.page
+        self.assertEqual(page.count('<section class="month">'), 2)
+        self.assertEqual(page.count('<section class="night">'), 3)
+        self.assertEqual(page.count('</section>'), 5)
+        self.assertEqual(page.count('<section class="month">\n<button class="collapsible monthbanner"'), 2)
+        self.assertEqual(page.count('<section class="night">\n<button class="collapsible nightbanner"'), 3)
+        ## every night of a month is inside that month's section
+        for month, nights in [('202602', [20260202, 20260201]),
+                              ('202601', [20260115])]:
+            start = page.index(f'<!--Begin {month}-->')
+            end = page.index(f'<!--End {month}-->')
+            month_html = page[start:end]
+            self.assertTrue(month_html.rstrip().endswith('</section>'))
+            for night in nights:
+                self.assertIn(f'<!--Begin {night}-->', month_html)
+                self.assertIn(f'<!--End {night}-->', month_html)
+
+    def test_banners_are_followed_by_their_content(self):
+        """The collapse handler toggles the banner's next sibling"""
+        for banner in ['monthbanner', 'nightbanner']:
+            pieces = self.page.split(f'<button class="collapsible {banner}"')[1:]
+            self.assertGreater(len(pieces), 0)
+            for piece in pieces:
+                after = piece.split('</button>', 1)[1]
+                self.assertTrue(after.startswith('<div class="content"'), banner)
+
+    def test_css_lets_banners_stick(self):
+        """Banners are sticky and nothing around them is a scroll container"""
+        self.assertIn('.monthbanner {position: sticky; top: 0;', self.page)
+        self.assertIn('.nightbanner {position: sticky; '
+                      + 'top: var(--month-banner-height', self.page)
+        content_rule = self.page.split('.content {', 1)[1].split('}', 1)[0]
+        self.assertIn('overflow: clip', content_rule)
+        self.assertNotIn('overflow: hidden', content_rule)
+        self.assertIn("'--month-banner-height'", self.page)
