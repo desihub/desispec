@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from collections import OrderedDict
 
+from desispec.workflow.queue import get_non_final_states
 from desispec.workflow.proc_dashboard_funcs import make_html_page, \
     year_page_pathname, generate_nightly_table_html, \
     generate_monthly_table_html, _combine_banner_statuses
@@ -217,6 +218,31 @@ class TestBannerStatuses(unittest.TestCase):
                                                         show_null=True)
                 self.assertEqual(status, 'PENDING')
 
+    def test_every_unfinished_queue_state_is_pending(self):
+        """Rows colored by any non-final queue state keep the night pending"""
+        for state in get_non_final_states():
+            with self.subTest(state=state):
+                night_info = {'a': _row(1, 'GOOD', 'COMPLETED'),
+                              'b': _row(2, state, state)}
+                html, status = generate_nightly_table_html(night_info, 20260115,
+                                                           show_null=True)
+                self.assertEqual(status, 'PENDING')
+                ## RUNNING keeps a count of its own
+                if state == 'RUNNING':
+                    self.assertIn('Pending: 0/2', html)
+                    self.assertIn('Running: 1/2', html)
+                else:
+                    self.assertIn('Pending: 1/2', html)
+                    self.assertIn('Running: 0/2', html)
+
+    def test_night_with_bad_and_incomplete_jobs_is_bad(self):
+        """Nights rank a failure above a partial result, as months do"""
+        night_info = {'a': _row(1, 'BAD', 'FAILED'),
+                      'b': _row(2, 'INCOMPLETE', 'COMPLETED')}
+        _, status = generate_nightly_table_html(night_info, 20260115,
+                                                show_null=True)
+        self.assertEqual(status, 'BAD')
+
     def test_night_with_bad_and_pending_jobs_is_bad(self):
         """A failure isn't hidden behind jobs that haven't finished"""
         night_info = {'a': _row(1, 'BAD', 'FAILED'),
@@ -291,7 +317,13 @@ class TestStickyBanners(unittest.TestCase):
         self.assertIn('.monthbanner {position: sticky; top: 0;', self.page)
         self.assertIn('.nightbanner {position: sticky; '
                       + 'top: var(--month-banner-height', self.page)
+        ## hidden is only a fallback for browsers that don't know clip, so
+        ## clip has to come after it to win where it is understood
         content_rule = self.page.split('.content {', 1)[1].split('}', 1)[0]
         self.assertIn('overflow: clip', content_rule)
-        self.assertNotIn('overflow: hidden', content_rule)
+        if 'overflow: hidden' in content_rule:
+            self.assertLess(content_rule.index('overflow: hidden'),
+                            content_rule.index('overflow: clip'))
+        ## each month's banner is measured, not just the first
+        self.assertIn("querySelectorAll('.monthbanner')", self.page)
         self.assertIn("'--month-banner-height'", self.page)

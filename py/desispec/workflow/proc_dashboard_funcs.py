@@ -665,11 +665,13 @@ def generate_nightly_table_html(night_info, night, show_null):
             elif color == 'OVERFULL':
                 nover += 1
                 n_notnull += 1
-            elif color == 'PENDING':
-                npending += 1
-                n_notnull += 1
             elif color == 'RUNNING':
                 nrunning += 1
+                n_notnull += 1
+            elif color == 'PENDING' or color in non_final_q_states:
+                ## rows of unfinished jobs are colored by their queue state,
+                ## e.g. SUBMITTED or REQUEUED, and are all still to come
+                npending += 1
                 n_notnull += 1
             else:
                 nnull += 1
@@ -693,13 +695,15 @@ def generate_nightly_table_html(night_info, night, show_null):
                + f"Other: {nnull}"
                )
 
+    ## Same precedence as _combine_banner_statuses, so that a failure is never
+    ## shown as anything milder
     night_status = 'DEFAULT'
     if ngood == n_notnull:
         night_status = "GOOD"
-    elif ninter > 0:
-        night_status = "INCOMPLETE"
     elif nbad > 0:
         night_status = "BAD"
+    elif ninter > 0:
+        night_status = "INCOMPLETE"
     elif nover > 0:
         night_status = "OVERFULL"
     elif npending + nrunning > 0:
@@ -770,8 +774,10 @@ def _page_head(color_profile):
     .regular {background-color: #eee;color: #444;  cursor: pointer;  padding: 18px;  width: 25%;  border: 18px;  text-align: left;  outline: none;  font-size: 25px;}
     .active, .collapsible:hover { background-color: #ccc;}
     /* clip rather than hidden: hidden makes each content block a scroll
-       container of its own, which stops the banners inside it from sticking */
-    .content {padding: 0 18px;display: table;overflow: clip;background-color: #f1f1f1;}
+       container of its own, which stops the banners inside it from sticking.
+       hidden comes first for browsers that don't know clip, which ignore it
+       and would otherwise show collapsed content rather than hide it. */
+    .content {padding: 0 18px;display: table;overflow: hidden;overflow: clip;background-color: #f1f1f1;}
     /* While its rows are in view, a night's banner stays at the top of the
        page under its month's. Each is bounded by its own section, so it
        leaves once the last of its rows has scrolled past. */
@@ -1050,13 +1056,15 @@ def js_str(): # Used
                      coll[i].nextElementSibling.style.maxHeight='0px'
                              }});
              }
-             /* Night banners stick just below the month banner, whose height
-                depends on the font and on whether its heading wraps */
+             /* Night banners stick just below their month's banner, whose
+                height depends on the font and on whether its heading wraps.
+                Each month is measured separately and its height set on its
+                own section, which the nights inside it inherit. */
              function setMonthBannerHeight() {
-                 var banner = document.querySelector('.monthbanner');
-                 if (banner) {
-                     document.documentElement.style.setProperty(
-                         '--month-banner-height', banner.offsetHeight + 'px');
+                 var banners = document.querySelectorAll('.monthbanner');
+                 for (var k = 0; k < banners.length; k++) {
+                     banners[k].parentElement.style.setProperty(
+                         '--month-banner-height', banners[k].offsetHeight + 'px');
                  }
              }
              setMonthBannerHeight();
