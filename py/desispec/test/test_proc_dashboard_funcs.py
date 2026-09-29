@@ -74,7 +74,8 @@ class TestDashboardPages(unittest.TestCase):
         ## refetch the same file on load
         self.assertIn('data-year="2026" src="dashboard-2026.html"', master)
         for year in ['2025', '2026']:
-            self.assertIn(f'<a href="#{year}" id="yearlink-{year}">', master)
+            self.assertIn(f'<a href="#{year}" id="yearlink-{year}" class="GOOD">',
+                          master)
             ## relative, so the pages move together
             self.assertIn(f'"dashboard-{year}.html"', master)
             self.assertNotIn(self.outdir, master)
@@ -137,6 +138,39 @@ class TestDashboardPages(unittest.TestCase):
         ## the exposure dashboard dropping 2025 must not delete the z one's
         self.assertTrue(os.path.exists(year_page_pathname(zoutfile, '2025')))
         self.assertFalse(os.path.exists(year_page_pathname(self.outfile, '2025')))
+
+    def test_year_links_are_colored_by_their_months(self):
+        """A year link combines its months as a month banner combines nights"""
+        def night(expid, color, status):
+            return {f'science_{expid}': _row(expid, color, status)}
+
+        tables = OrderedDict([
+            ## a failure outranks work still pending
+            ('202602', {20260201: night(4001, 'PENDING', 'PENDING')}),
+            ('202601', {20260115: night(3001, 'BAD', 'FAILED')}),
+            ## pending outranks done
+            ('202512', {20251210: night(2001, 'PENDING', 'RUNNING')}),
+            ('202511', {20251105: night(1001, 'GOOD', 'COMPLETED')}),
+            ## all done
+            ('202412', {20241210: night(501, 'GOOD', 'COMPLETED')}),
+            ])
+        make_html_page(tables, self.outfile, show_null=True)
+        master = open(self.outfile).read()
+
+        for year, status in [('2026', 'BAD'), ('2025', 'PENDING'),
+                             ('2024', 'GOOD')]:
+            with self.subTest(year=year):
+                self.assertIn(f'id="yearlink-{year}" class="{status}">', master)
+        ## every status a link can take has a color
+        for status in ['BAD', 'PENDING', 'GOOD', 'DEFAULT']:
+            self.assertIn(f'.yearnav a.{status} {{', master)
+
+    def test_selecting_a_year_keeps_its_color(self):
+        """Marking the active year must not replace the class that colors it"""
+        make_html_page(self.monthly_tables, self.outfile, show_null=True)
+        master = open(self.outfile).read()
+        self.assertIn("classList.toggle('active'", master)
+        self.assertNotIn('link.className =', master)
 
     def test_empty_months_do_not_make_a_year(self):
         """A month with no nights shouldn't put an empty year in the nav"""

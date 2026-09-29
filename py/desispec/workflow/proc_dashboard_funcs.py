@@ -414,8 +414,11 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
             continue
         months_by_year.setdefault(month[:4], OrderedDict())[month] = nightly_tables
 
+    ## The status of each year, for coloring its link on the master page
+    year_statuses = dict()
     for year, months in months_by_year.items():
         html_page = _initialize_page(color_profile, titlefill=titlefill)
+        month_statuses = list()
         for month, nightly_tables in months.items():
             print("Month: {}, nights: {}".format(month,
                                                  list(nightly_tables.keys())))
@@ -432,6 +435,8 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
                 statuses.append(status)
             html_page += generate_monthly_table_html(nightly_table_htmls,
                                                      statuses, month)
+            month_statuses.append(_combine_banner_statuses(statuses))
+        year_statuses[year] = _combine_banner_statuses(month_statuses)
 
         # html_page += js_import_str(os.environ['DESI_DASHBOARD'])
         html_page += js_str()
@@ -445,7 +450,7 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
 
     with open(outfile, 'w') as hs:
         hs.write(_master_page(color_profile, titlefill, months_by_year.keys(),
-                              outfile))
+                              outfile, year_statuses=year_statuses))
         print(f"Write to {outfile} complete.")
 
     if 'NERSC_HOST' in os.environ and outfile.startswith(
@@ -471,7 +476,7 @@ def _remove_stale_year_pages(outfile, years):
             print(f"Removed {pathname}, which this run has no data for.")
 
 
-def _master_page(color_profile, titlefill, years, outfile):
+def _master_page(color_profile, titlefill, years, outfile, year_statuses=None):
     """
     Build the master page: the header, the year links, and the framed year.
 
@@ -480,17 +485,24 @@ def _master_page(color_profile, titlefill, years, outfile):
         titlefill (str): describes the dashboard in the page title.
         years (iterable of str): the years that have a page, newest first.
         outfile (str): pathname of the master page, used to name the year pages.
+        year_statuses (dict, optional): year to the status its link is colored
+            by, combined from its months the same way a month banner combines
+            its nights. Years not in it are colored as DEFAULT.
 
     Returns:
         str: the complete html page.
     """
     years = list(years)
+    if year_statuses is None:
+        year_statuses = dict()
     html_page = _page_head(color_profile)
     html_page += _page_title(titlefill=titlefill)
 
     html_page += '<nav class="yearnav">Year:\n'
     for year in years:
-        html_page += f'  <a href="#{year}" id="yearlink-{year}">{year}</a>\n'
+        status = year_statuses.get(year, 'DEFAULT')
+        html_page += (f'  <a href="#{year}" id="yearlink-{year}"'
+                      + f' class="{status}">{year}</a>\n')
     html_page += '</nav>\n'
 
     html_page += _color_legend(color_profile)
@@ -541,7 +553,9 @@ def _master_js(years, yearfiles):
         }
         for (var i = 0; i < years.length; i++) {
             var link = document.getElementById('yearlink-' + years[i]);
-            if (link) { link.className = (years[i] === year) ? 'active' : ''; }
+            /* toggle rather than assign, which would wipe the status class
+               that colors the link */
+            if (link) { link.classList.toggle('active', years[i] === year); }
         }
     }
 
@@ -814,9 +828,9 @@ def _page_head(color_profile):
     .yearnav a {color: #34495e; padding: 6px 14px; margin-right: 4px;
                 text-decoration: none; border: 1px solid #ddd;
                 background-color: #eee;}
-    .yearnav a:hover {background-color: #ccc;}
-    .yearnav a.active {background-color: #34495e; color: white;
-                       border-color: #34495e;}
+    .yearnav a:hover {background-color: #ccc; filter: brightness(90%);}
+    /* marked by an outline rather than a fill, so its status color still shows */
+    .yearnav a.active {font-weight: bold; box-shadow: inset 0 0 0 3px #34495e;}
     #yearframe {width: 100%; border: none;}
 
     """
@@ -824,6 +838,13 @@ def _page_head(color_profile):
     for ctype,cdict in color_profile.items():
         background = cdict['background']
         html_page += f'\t#{ctype} ' + '{background-color:' + f'{background}' + ';}\n'
+
+    html_page += "\n"
+    ## Year links are colored by the status of their year. These come after the
+    ## .yearnav a:hover rule above, which has the same precedence, so they win.
+    for ctype,cdict in color_profile.items():
+        html_page += (f'\t.yearnav a.{ctype} {{background-color:{cdict["background"]};'
+                      + f' color:{cdict["font"]};}}\n')
 
     html_page += "\n"
     ## Table rows shouldn't do the default background because of cell coloring
