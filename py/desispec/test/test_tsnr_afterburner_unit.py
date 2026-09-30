@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, vstack
 
 from desispec.io import read_table
 from desispec.scripts import tsnr_afterburner as mod
@@ -75,7 +75,7 @@ class TestAfterburnerIntegration(unittest.TestCase):
         comm.Get_rank.return_value = 0
         comm.Get_size.return_value = 1 + len(extra_tables)
         comm.bcast.side_effect = lambda value, root: value
-        comm.gather.side_effect = lambda value, root: [value, *[(frm, exp, None) for frm, exp in extra_tables]]
+        comm.gather.side_effect = lambda value, root: [value, *[(frm, exp, None, []) for frm, exp in extra_tables]]
         self.stack.enter_context(patch('desispec.parallel.use_mpi', return_value=True))
         self.stack.enter_context(patch.dict(sys.modules, {
             'mpi4py': SimpleNamespace(MPI=SimpleNamespace(COMM_WORLD=comm)),
@@ -213,6 +213,19 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertFalse(calc.call_args.kwargs['alpha_only'])
         self.assertEqual(float(self._tables()[0]['TSNR2_ELG'][0]), 50.)
 
+    def test_recompute_ignores_details_cache(self):
+        write_cframe_fixture(self.prod, 20211001, 100, 'b0')
+        details = Path(self.tmp.name) / 'details'
+        cache = details / '20211001' / '00000100' / 'tsnr-b0-00000100.fits'
+        cache.parent.mkdir(parents=True)
+        Table({'TSNR2_{}_B'.format(t): np.array([999.], dtype=np.float32)
+               for t in mod._TSNR2_TRACERS}).write(str(cache))
+        with self._calculation() as calc:
+            self._run('--recompute', '--cameras', 'b0', '--details-dir', str(details))
+        calc.assert_called_once()
+        self.assertEqual(float(self._tables()[0]['TSNR2_ELG'][0]), 50.)
+        self.assertEqual(float(np.median(Table.read(str(cache))['TSNR2_ELG_B'])), 50.)
+
     def test_alpha_only_preserves_qa_tsnr_and_writes_alpha(self):
         self._run()
         write_cframe_fixture(self.prod, 20211001, 100, 'b0', scores=False)
@@ -301,7 +314,7 @@ class TestAfterburnerIntegration(unittest.TestCase):
         before = self.outfile.read_bytes()
         comm = self._mpi()
         frames, exposures = mod._empty_tables()
-        comm.gather.side_effect = lambda value, root: [value, (frames, exposures, 'Rank 1: missing input')]
+        comm.gather.side_effect = lambda value, root: [value, (frames, exposures, 'Rank 1: missing input', [])]
         self.assertEqual(self._run('--mpi'), 1)
         self.assertEqual(self.outfile.read_bytes(), before)
 
@@ -321,18 +334,21 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(frames['CAMERA'].tolist(), ['r0', 'z0'])
         self.assertEqual(float(exposures['TSNR2_ELG'][0]), 20.)
 
-    def test_unreadable_exposure_keeps_existing_rows(self):
-        # LASTSTEP=all exposure with no QA and no cframes: skip it, keep the old rows
+    def test_unreadable_exposure_gets_zeroed_row(self):
+        # LASTSTEP=all exposure with no QA and no cframes: replace its old rows
+        # with zeros (what is on disk), even without --add-badexp
         self._run()
-        before_exp, before_frames = self._tables()
         os.remove(mod.findfile('exposureqa', night=20211001, expid=100))
         self._add_exposure(expid=101)
-        self.assertEqual(self._run(), 0)
+        with self._no_fiberassign():
+            self.assertEqual(self._run(), 0)
         exposures, frames = self._tables()
         self.assertEqual(exposures['EXPID'].tolist(), [100, 101])
         old = exposures[exposures['EXPID'] == 100]
-        self.assertEqual(float(old['TSNR2_ELG'][0]), float(before_exp['TSNR2_ELG'][0]))
-        self.assertEqual(int(np.sum(frames['EXPID'] == 100)), len(before_frames))
+        self.assertEqual(float(old['TSNR2_ELG'][0]), 0.)
+        self.assertEqual(float(old['EFFTIME_SPEC'][0]), 0.)
+        self.assertEqual(frames['CAMERA'][frames['EXPID'] == 100].tolist(), ['b0', 'r0', 'z0'])
+        self.assertTrue(np.all(frames['TSNR2_ELG'][frames['EXPID'] == 100] == 0.))
 
     def test_bad_only_fresh_output_and_update(self):
         write_exptable_fixture(self.prod, 20211001, 100, laststep='skysub')
@@ -356,16 +372,94 @@ class TestAfterburnerIntegration(unittest.TestCase):
             self.assertEqual(self._run('--mpi', '--add-badexp'), 0)
         self.assertEqual(self._tables()[0]['EXPID'].tolist(), [100])
 
-    def test_rerun_preserves_gfa_without_refresh(self):
+    def test_rerun_preserves_gfa_inputs_and_recomputes_efftimes(self):
+        # GFA inputs survive an update without --gfa-proc-dir, and effective
+        # times are recomputed from them with the current sky magnitudes.
         self._run()
         exposures, frames = self._tables()
         exposures['TRANSPARENCY_GFA'] = [.9]
         exposures['EFFTIME_GFA'] = [750.]
         mod.write_output(exposures, frames, str(self.outfile))
-        self._run('--update')
+        def efftime(table):
+            value = np.asarray(table['SKY_MAG_R_SPEC'], dtype=float) * 10.
+            return value, value, value
+        with patch.object(mod, 'compute_efftime', side_effect=efftime):
+            self._run('--update')
         exposures, _ = self._tables()
         self.assertAlmostEqual(float(exposures['TRANSPARENCY_GFA'][0]), .9, places=6)
-        self.assertEqual(float(exposures['EFFTIME_GFA'][0]), 750.)
+        self.assertAlmostEqual(float(exposures['EFFTIME_GFA'][0]), 210., places=4)
+
+    def test_unreadable_existing_summary_is_not_replaced(self):
+        # FRAMES present but EXPOSURES missing: refuse to merge, keep the file
+        self._run()
+        _, frames = self._tables()
+        fits.HDUList([fits.PrimaryHDU(), fits.table_to_hdu(frames)]).writeto(str(self.outfile), overwrite=True)
+        before = self.outfile.read_bytes()
+        self._add_exposure(night=20211002, expid=200)
+        self.assertEqual(self._run('--nights', '20211002'), 1)
+        self.assertEqual(self.outfile.read_bytes(), before)
+        self.assertEqual(self._run('--nights', '20211002', '--overwrite'), 0)
+
+    def test_frames_without_exposures_is_not_merged(self):
+        self._run()
+        exposures, frames = self._tables()
+        mod.write_output(exposures[:0], frames, str(self.outfile))
+        before = self.outfile.read_bytes()
+        self.assertEqual(self._run(), 1)
+        self.assertEqual(self.outfile.read_bytes(), before)
+
+    def _no_fiberassign(self):
+        real_findfile = mod.findfile
+        return patch.object(mod, 'findfile', side_effect=lambda kind, **kw:
+                            ('/missing', False) if kind.startswith('fiberassign') else real_findfile(kind, **kw))
+
+    def test_bad_exposure_removed_without_add_badexp(self):
+        # Changing LASTSTEP to ignore later is the same as ignoring it from the start
+        self._add_exposure(expid=101)
+        self._run()
+        write_exptable_fixture(self.prod, 20211001, 100, laststep='ignore')
+        self.assertEqual(self._run(), 0)
+        exposures, frames = self._tables()
+        self.assertEqual(exposures['EXPID'].tolist(), [101])
+        self.assertEqual(set(frames['EXPID'].tolist()), {101})
+
+    def test_all_cameras_bad_removed_without_add_badexp(self):
+        self._add_exposure(expid=101)
+        self._run()
+        write_exptable_fixture(self.prod, 20211001, 100, BADCAMWORD='a0')
+        self.assertEqual(self._run(), 0)
+        exposures, frames = self._tables()
+        self.assertEqual(exposures['EXPID'].tolist(), [101])
+        self.assertEqual(set(frames['EXPID'].tolist()), {101})
+
+    def test_removed_bad_exposure_updates_tiles(self):
+        # tile 1234 loses its only exposure and is dropped; tile 5678 is recomputed
+        tiles = self.prod / 'tiles.fits'
+        self._add_exposure(expid=101, tileid=5678)
+        self._add_exposure(expid=102, tileid=5678)
+        with self._tile_capture():
+            self._run('--tile-completeness', str(tiles))
+        self.assertEqual(sorted(Table.read(str(tiles))['TILEID'].tolist()), [1234, 5678])
+        write_exptable_fixture(self.prod, 20211001, 100, laststep='ignore')
+        write_exptable_fixture(self.prod, 20211001, 102, tileid=5678, laststep='ignore')
+        def merge(previous, new):
+            return vstack([previous[~np.isin(previous['TILEID'], new['TILEID'])], new])
+        with self._tile_capture() as capture, patch.object(mod, 'merge_tile_completeness_table', side_effect=merge):
+            self.assertEqual(self._run('--tile-completeness', str(tiles)), 0)
+        self.assertEqual(capture.call_args[0][0]['EXPID'].tolist(), [101])
+        self.assertEqual(Table.read(str(tiles))['TILEID'].tolist(), [5678])
+
+    def test_all_cameras_bad_replaces_existing_rows(self):
+        # CAMWORD == BADCAMWORD makes the exposure a bad exposure
+        self._run()
+        write_exptable_fixture(self.prod, 20211001, 100, BADCAMWORD='a0')
+        real_findfile = mod.findfile
+        with patch.object(mod, 'findfile', side_effect=lambda kind, **kw:
+                          ('/missing', False) if kind.startswith('fiberassign') else real_findfile(kind, **kw)):
+            self.assertEqual(self._run('--add-badexp'), 0)
+        exposures, frames = self._tables()
+        self.assertEqual(float(exposures['TSNR2_ELG'][0]), 0.)
+        self.assertTrue(np.all(frames['TSNR2_ELG'] == 0.))
 
     def test_invalidated_gfa_clears_historical_efftimes(self):
         self._run()

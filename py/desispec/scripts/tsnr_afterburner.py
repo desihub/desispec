@@ -125,7 +125,8 @@ def parse(options=None):
                                    'already present. --update is the default (replace or add rows) and '
                                    'is retained only for compatibility.')
     parser.add_argument('--add-badexp', action='store_true',
-                        help='Add zero-filled rows for known bad/unprocessed exposures.')
+                        help='Add zero-filled rows for known bad/unprocessed exposures. Without it, '
+                             'rows for such exposures are removed from existing output.')
     parser.add_argument('--details-dir', type=str, default=None, required=False,
                         help='Directory for per-camera TSNR2 detail files (--recompute path only).')
     parser.add_argument('--recompute', action='store_true',
@@ -204,7 +205,8 @@ def _fill_targ_from_header(entry, hdr):
     """Fill targeting metadata that is absent or still at its default value.
 
     Values already set to something other than the _TARG_DEFAULTS default are
-    kept, so earlier sources take precedence.  FA_SURV is used for SURVEY when
+    kept, so earlier sources take precedence.  GOALTIME <= 0 (including the
+    exposure-table sentinel -99) is treated as missing.  FA_SURV is used for SURVEY when
     SURVEY is absent from the header (fiberassign files).
 
     Args:
@@ -221,7 +223,9 @@ def _fill_targ_from_header(entry, hdr):
             hdrkey = 'FA_SURV'
         if hdrkey not in hdr:
             continue
-        if key in entry and entry[key] != default:
+        # exposure tables use GOALTIME=-99 for unknown, so treat <= 0 as missing
+        missing = entry.get(key, default) <= 0 if key == 'GOALTIME' else entry.get(key, default) == default
+        if not missing:
             continue
         if isinstance(default, str):
             entry[key] = str(hdr[hdrkey]).strip().lower()
@@ -390,7 +394,8 @@ def read_one_camera(night, expid, camera, alpha_only=False, details_dir=None,
             if details_dir is not None and not alpha_only:
                 table_output_filename = '{}/{}/{:08d}/tsnr-{}-{:08d}.fits'.format(
                     details_dir, night, expid, camera, expid)
-                if os.path.isfile(table_output_filename):
+                # --recompute still writes the cache but never reads it
+                if not recompute and os.path.isfile(table_output_filename):
                     tsnr_table = Table.read(table_output_filename)
                     cached = _median_tsnr_values(tsnr_table, camera[0])
                     if len(cached) != len(_TSNR2_TRACERS):
@@ -582,7 +587,9 @@ def collect_science_expids(nights=None, expids=None):
                 'MINTFRAC': float(row['MINTFRAC']) if 'MINTFRAC' in exptab.colnames else 0.9,
             }
 
-            if entry['LASTSTEP'] == 'all':
+            # An exposure with every camera marked bad (CAMWORD == BADCAMWORD)
+            # has no usable data, so treat it like an unprocessed exposure.
+            if entry['LASTSTEP'] == 'all' and entry['CAMWORD'] != entry['BADCAMWORD']:
                 good_expids.append(entry)
             else:
                 bad_expids.append(entry)
@@ -797,8 +804,8 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
     Returns:
         dict: Exposure metadata and CAMERA_ROWS, keyed by camera. Cameras with
         neither QA values nor a cframe are skipped with a warning, as in the
-        original afterburner. None if no camera could be read, so that callers
-        keep any existing rows for this exposure. Calculation failures when the
+        original afterburner. None if no camera could be read; main() then
+        writes a zeroed row for the exposure. Calculation failures when the
         inputs exist still propagate.
     """
     log = get_logger()
@@ -826,7 +833,7 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
         else:
             camera_rows[camera] = values
     if not camera_rows:
-        log.error('No cameras could be read for night={} expid={}; not updating this exposure'.format(
+        log.error('No cameras could be read for night={} expid={}; writing a zeroed row'.format(
             night, expid))
         return None
     entry['CAMERA_ROWS'] = camera_rows
@@ -1111,7 +1118,8 @@ def _get_default_for_col(table, col):
 # ---------------------------------------------------------------------------
 
 def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None, compute_skymags=False):
-    """Add zero-filled rows for EXPIDs that were not fully processed.
+    """Add zero-filled rows for EXPIDs that were not fully processed, or
+    whose processed outputs could not be read.
 
     For each entry in bad_expids that is not already in exposures_table, adds
     one row to exposures_table and one row per camera in frames_table.  TSNR2,
@@ -1139,12 +1147,6 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
     for be in bad_expids:
         expid = int(be['EXPID'])
         if expid in existing_expids:
-            continue
-
-        # should not happen (LASTSTEP='all' exposures go to good_expids)
-        if be.get('LASTSTEP', '') == 'all':
-            log.error('TILEID={} night={} expid={} has LASTSTEP=all but is in bad_expids; skipping'.format(
-                be.get('TILEID'), be.get('NIGHT'), expid))
             continue
 
         entry = {
@@ -1340,10 +1342,12 @@ def add_gfa_efftimes(exposures_table):
     for col in ('EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA', 'EFFTIME_GFA'):
         exposures_table[col] = np.zeros(len(exposures_table), dtype=np.float64)
 
-    # only rows with valid GFA data (transparency > 0)
-    valid = exposures_table['TRANSPARENCY_GFA'] > 0
+    # only rows with valid GFA data (transparency > 0) and a measured sky
+    # (compute_skymag returns 99 when no sky data is available)
+    skymag = np.asarray(exposures_table['SKY_MAG_R_SPEC'], dtype=float)
+    valid = (exposures_table['TRANSPARENCY_GFA'] > 0) & np.isfinite(skymag) & (skymag < 90)
     if not valid.any():
-        log.warning('No rows with valid GFA transparency; skipping GFA efftimes')
+        log.warning('No rows with valid GFA transparency and sky magnitude; skipping GFA efftimes')
         return exposures_table
 
     efftime_dark, efftime_bright, efftime_backup = compute_efftime(exposures_table[valid])
@@ -1685,7 +1689,7 @@ def main(options=None):
             try:
                 preexisting_exposures = read_table(args.outfile, 'TSNR2_EXPID')
             except (KeyError, OSError):
-                log.warning('Could not read pre-existing EXPOSURES; starting fresh')
+                pass
         try:
             preexisting_frames = read_table(args.outfile, 'FRAMES')
         except (KeyError, OSError):
@@ -1693,11 +1697,24 @@ def main(options=None):
             try:
                 preexisting_frames = read_table(args.outfile, 'TSNR2_FRAME')
             except (KeyError, OSError):
-                log.warning('Could not read pre-existing FRAMES; starting fresh')
+                pass
+
+    # -- refuse to merge into an unreadable or inconsistent summary ---------
+    conflict = False
+    if rank == 0 and not args.overwrite and os.path.isfile(args.outfile):
+        if preexisting_exposures is None or preexisting_frames is None:
+            conflict = True
+            log.critical('Cannot read EXPOSURES and FRAMES from existing {}; not merging. '
+                         'Use --overwrite to replace it'.format(args.outfile))
+        else:
+            orphans = set(preexisting_frames['EXPID'].tolist()) - set(preexisting_exposures['EXPID'].tolist())
+            if orphans:
+                conflict = True
+                log.critical('FRAMES in existing {} has {} EXPIDs not in EXPOSURES; not merging. '
+                             'Use --overwrite to replace it'.format(args.outfile, len(orphans)))
 
     # -- --no-update: refuse to replace rows already in the output ----------
-    conflict = False
-    if rank == 0 and not args.update and preexisting_exposures is not None:
+    if rank == 0 and not conflict and not args.update and preexisting_exposures is not None:
         present = np.isin(preexisting_exposures['NIGHT'], all_nights)
         if expids_filter is not None:
             present &= np.isin(preexisting_exposures['EXPID'], list(expids_filter))
@@ -1741,9 +1758,13 @@ def main(options=None):
         exposure_rows = [row for row in results if row is not None]
         frames_table, exposures_table = build_tables(exposure_rows, camword_map)
 
-        if args.add_badexp and bad_expids:
+        # Processed exposures with nothing readable on disk always get zeroed
+        # rows, replacing any earlier values; bad exposures only with --add-badexp.
+        unreadable = [entry for entry, row in zip(good_expids, results) if row is None]
+        zero_fill = (bad_expids if args.add_badexp else []) + unreadable
+        if zero_fill:
             exposures_table, frames_table = inject_bad_exposures(
-                exposures_table, frames_table, bad_expids, cameras=cameras_filter,
+                exposures_table, frames_table, zero_fill, cameras=cameras_filter,
                 compute_skymags=args.recompute_skymags)
 
     except Exception as error:
@@ -1755,16 +1776,18 @@ def main(options=None):
 
     # Gather only new data. Both serial and MPI then use the same upsert path.
     if comm is not None:
-        gathered = comm.gather((frames_table, exposures_table, read_error), root=0)
+        bad_ids = [int(be['EXPID']) for be in bad_expids]
+        gathered = comm.gather((frames_table, exposures_table, read_error, bad_ids), root=0)
         if rank != 0:
             return int(read_error is not None)
-        errors = [error for frm, exp, error in gathered if error is not None]
+        errors = [error for frm, exp, error, bad in gathered if error is not None]
         if errors:
             for error in errors:
                 log.error(error)
             return 1
-        exposure_parts = [exp for frm, exp, error in gathered if len(exp)]
-        frame_parts = [frm for frm, exp, error in gathered if len(frm)]
+        bad_expids = [{'EXPID': expid} for frm, exp, error, bad in gathered for expid in bad]
+        exposure_parts = [exp for frm, exp, error, bad in gathered if len(exp)]
+        frame_parts = [frm for frm, exp, error, bad in gathered if len(frm)]
         frames_table, exposures_table = _empty_tables()
         if exposure_parts:
             exposures_table = vstack(exposure_parts, metadata_conflicts='silent')
@@ -1778,6 +1801,20 @@ def main(options=None):
         frames_table = merge_frames(preexisting_frames, frames_table,
                                     replace_expids=updated_expids, cameras=cameras_filter)
     exposures_table = update_exposure_tsnr(exposures_table, frames_table, updated_expids)
+
+    # Without --add-badexp, bad exposures (LASTSTEP != 'all', or every camera
+    # marked bad) are removed entirely, as if they had been ignored from the
+    # start. Their tiles are recomputed, or dropped if no exposures remain.
+    removed_tiles = set()
+    if not args.add_badexp and bad_expids:
+        remove = np.isin(exposures_table['EXPID'], [int(be['EXPID']) for be in bad_expids])
+        if remove.any():
+            log.warning('Removing {} bad exposures from output: {}'.format(
+                remove.sum(), exposures_table['EXPID'][remove].tolist()))
+            removed_tiles = set(exposures_table['TILEID'][remove].tolist())
+            frames_table = frames_table[~np.isin(frames_table['EXPID'], exposures_table['EXPID'][remove])]
+            exposures_table = exposures_table[~remove]
+
     exposures_table.meta['EXTNAME'] = 'EXPOSURES'
     frames_table.meta['EXTNAME'] = 'FRAMES'
     if len(exposures_table):
@@ -1798,16 +1835,18 @@ def main(options=None):
     gfa_nights = []
     if args.gfa_proc_dir is not None:
         exposures_table, gfa_nights = add_gfa_columns(exposures_table, args.gfa_proc_dir)
-    if args.gfa_proc_dir is not None or args.skymags is not None or args.recompute_skymags:
+    # Always recompute: sky or GFA inputs may have changed for merged rows.
+    if 'TRANSPARENCY_GFA' in exposures_table.colnames:
         eff_cols = ('EFFTIME_GFA', 'EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA')
         before = {col: np.asarray(exposures_table[col]).copy() for col in eff_cols}
         exposures_table = add_gfa_efftimes(exposures_table)
-        # Ignore float rounding and NaN->0 (invalid GFA rows are now stored as
-        # zero), so only real changes trigger tile completeness updates.
+        # Ignore float rounding, but not NaN <-> finite transitions: tile
+        # completeness treats NaN (skipped) and 0 (missing data) differently.
         changed = np.zeros(len(exposures_table), dtype=bool)
         for col in eff_cols:
-            changed |= ~np.isclose(np.nan_to_num(before[col]), np.nan_to_num(exposures_table[col]),
-                                   rtol=1e-5, atol=1e-3)
+            after = np.asarray(exposures_table[col])
+            changed |= np.isfinite(before[col]) != np.isfinite(after)
+            changed |= ~np.isclose(before[col], after, rtol=1e-5, atol=1e-3, equal_nan=True)
         gfa_nights = sorted(set(gfa_nights) | set(exposures_table['NIGHT'][changed].tolist()))
         if gfa_nights:
             log.info('GFA values changed for {} nights'.format(len(gfa_nights)))
@@ -1822,6 +1861,9 @@ def main(options=None):
         if gfa_nights:
             selection |= np.isin(exposures_table['NIGHT'], gfa_nights)
 
+        if removed_tiles:
+            selection |= np.isin(exposures_table['TILEID'], list(removed_tiles))
+
         tiles = np.unique(exposures_table['TILEID'][selection])
         selection = np.isin(exposures_table['TILEID'], tiles)
         log.info('Updating tile completeness for {} tiles'.format(len(tiles)))
@@ -1832,6 +1874,13 @@ def main(options=None):
         if os.path.isfile(args.tile_completeness):
             previous = Table.read(args.tile_completeness)
             new_tile_table = merge_tile_completeness_table(previous, new_tile_table)
+
+        # drop tiles whose only exposures were removed above
+        orphan = np.isin(new_tile_table['TILEID'], list(removed_tiles - set(exposures_table['TILEID'].tolist())))
+        if orphan.any():
+            log.warning('Removing {} tiles with no remaining exposures: {}'.format(
+                orphan.sum(), new_tile_table['TILEID'][orphan].tolist()))
+            new_tile_table = new_tile_table[~orphan]
 
         head = os.path.splitext(args.tile_completeness)[0]
         new_tile_table.write(head + '.fits', overwrite=True)

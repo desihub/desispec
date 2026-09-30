@@ -725,22 +725,15 @@ class TestInjectBadExposures(unittest.TestCase):
         ebv = float(exposures['EBV'][mask][0])
         self.assertGreater(ebv, 0.0)
 
-    def test_bad_expid_with_laststep_all_is_skipped(self):
-        """A bad_expids entry with LASTSTEP='all' should be skipped (logged as error)."""
+    def test_laststep_all_entry_is_zero_filled(self):
+        """main() passes unreadable LASTSTEP='all' exposures here; they get zeroed rows."""
         exposures, frames = self._make_empty_tables()
-        initial_len = len(exposures)
-        bad_expids = [{
-            'NIGHT': 20210601, 'EXPID': 666, 'TILEID': 1234,
-            'CAMWORD': 'a0', 'BADCAMWORD': '',
-            'EXPTIME': 600.0, 'MJD-OBS': 59366.5, 'EFFTIME_ETC': 0.0,
-            'LASTSTEP': 'all',  # should not happen, but guard must skip it
-            'SURVEY': 'main', 'FAPRGRM': 'dark',
-            'GOALTYPE': 'dark', 'GOALTIME': 1000.0, 'MINTFRAC': 0.9,
-            'FAFLAVOR': 'maindark', 'EBVFAC': 1.0,
-        }]
-        inject_bad_exposures(exposures, frames, bad_expids)
-        self.assertEqual(len(exposures), initial_len)
-        self.assertNotIn(666, exposures['EXPID'].tolist())
+        entry = self._bad_entry()
+        entry['LASTSTEP'] = 'all'
+        exposures, frames = inject_bad_exposures(exposures, frames, [entry])
+        row = exposures[exposures['EXPID'] == 999]
+        self.assertEqual(len(row), 1)
+        self.assertEqual(float(row['EFFTIME_SPEC'][0]), 0.0)
 
 
 class TestAddGfaColumns(unittest.TestCase):
@@ -866,6 +859,16 @@ class TestAddGfaEfftimes(unittest.TestCase):
         for col in ('EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA', 'EFFTIME_GFA'):
             self.assertEqual(exposures[col].dtype, np.float64)
         self.assertEqual(float(exposures['EFFTIME_DARK_GFA'][0]), 500.123456789)
+
+    def test_unknown_sky_gives_zero_efftime(self):
+        """SKY_MAG_R_SPEC=99 (unknown) or NaN must not produce a GFA effective time."""
+        for skymag in (99.0, np.nan):
+            exposures = self._make_exposures_with_gfa('dark')
+            exposures['SKY_MAG_R_SPEC'] = [skymag]
+            with patch('desispec.scripts.tsnr_afterburner.compute_efftime') as ce:
+                exposures = add_gfa_efftimes(exposures)
+            ce.assert_not_called()
+            self.assertEqual(float(exposures['EFFTIME_GFA'][0]), 0.0)
 
     def test_gfa_zero_cols_are_float64(self):
         row = _add_gfa_zero_cols({})
@@ -1154,6 +1157,14 @@ class TestFillTargFromHeader(unittest.TestCase):
         self.assertEqual(entry['MINTFRAC'], 0.85)
         self.assertEqual(entry['FAPRGRM'], 'unknown')
 
+    def test_goaltime_sentinel_replaced(self):
+        """Exposure-table GOALTIME=-99 is treated as missing."""
+        entry = dict(_TARG_DEFAULTS)
+        entry['GOALTIME'] = -99.
+        self.assertEqual(_fill_targ_from_header(entry, {'GOALTIME': 180.})['GOALTIME'], 180.)
+        entry['GOALTIME'] = 300.
+        self.assertEqual(_fill_targ_from_header(entry, {'GOALTIME': 180.})['GOALTIME'], 300.)
+
     def test_fa_surv_used_for_survey(self):
         entry = _fill_targ_from_header(dict(_TARG_DEFAULTS), {'FA_SURV': 'Main'})
         self.assertEqual(entry['SURVEY'], 'main')
@@ -1322,6 +1333,13 @@ class TestCollectScienceExpids(unittest.TestCase):
         self.assertEqual(len(good), 1)
         self.assertEqual(len(bad), 0)
         self.assertEqual(good[0]['EXPID'], 1)
+
+    def test_all_cameras_bad_goes_to_bad(self):
+        """LASTSTEP='all' with CAMWORD == BADCAMWORD goes to bad_expids."""
+        good, bad = self._run([{'EXPID': 3, 'TILEID': 1234, 'LASTSTEP': 'all',
+                                'CAMWORD': 'a0123456789', 'BADCAMWORD': 'a0123456789'}])
+        self.assertEqual(len(good), 0)
+        self.assertEqual([b['EXPID'] for b in bad], [3])
 
     def test_bad_exposure_laststep_skysub(self):
         """LASTSTEP != 'all' with valid TILEID goes to bad_expids."""

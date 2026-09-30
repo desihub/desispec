@@ -9,7 +9,11 @@ desispec Change Log
   reading TSNR2 and sky magnitudes from exposure QA files when available and
   falling back to cframes otherwise. Exposure-level EBV is now the median over
   all fibers; runs merge into existing output by default, with ``--no-update``
-  to refuse replacing existing nights (PR `#XXXX`_).
+  to refuse replacing existing nights. Processed exposures with no outputs on
+  disk get zeroed rows; without ``--add-badexp``, exposures that are no longer
+  processed are removed from existing output. Also fixes GOALTIME=-99 on bad
+  exposures and GFA effective times computed from unknown (99) sky magnitudes
+  (PR `#XXXX`_).
 
 .. _`#XXXX`: https://github.com/desihub/desispec/pull/XXXX
 
