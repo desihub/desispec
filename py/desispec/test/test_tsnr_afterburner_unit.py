@@ -449,6 +449,21 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(capture.call_args[0][0]['EXPID'].tolist(), [101])
         self.assertEqual(Table.read(str(tiles))['TILEID'].tolist(), [5678])
 
+    def test_removing_last_exposure_writes_empty_output(self):
+        # removal of every row is intentional: write the empty summary and drop the tile
+        tiles = self.prod / 'tiles.fits'
+        with self._tile_capture():
+            self._run('--tile-completeness', str(tiles))
+        write_exptable_fixture(self.prod, 20211001, 100, laststep='ignore')
+        def merge(previous, new):
+            return vstack([previous[~np.isin(previous['TILEID'], new['TILEID'])], new])
+        with self._tile_capture(), patch.object(mod, 'merge_tile_completeness_table', side_effect=merge):
+            self.assertEqual(self._run('--tile-completeness', str(tiles)), 0)
+        exposures, frames = self._tables()
+        self.assertEqual(len(exposures), 0)
+        self.assertEqual(len(frames), 0)
+        self.assertEqual(len(Table.read(str(tiles))), 0)
+
     def test_all_cameras_bad_replaces_existing_rows(self):
         # CAMWORD == BADCAMWORD makes the exposure a bad exposure
         self._run()

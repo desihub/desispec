@@ -1742,6 +1742,9 @@ def main(options=None):
         if cameras_filter is not None:
             active = [c for c in active if c in cameras_filter]
         camword_map[int(entry['EXPID'])] = active
+        if cameras_filter is not None and not active:
+            log.warning('No --cameras selected for expid={}; it will be written as a zeroed row'.format(
+                entry['EXPID']))
 
     read_error = None
     try:
@@ -1762,6 +1765,9 @@ def main(options=None):
         # rows, replacing any earlier values; bad exposures only with --add-badexp.
         unreadable = [entry for entry, row in zip(good_expids, results) if row is None]
         zero_fill = (bad_expids if args.add_badexp else []) + unreadable
+        if cameras_filter is not None and zero_fill:
+            log.warning('With --cameras, existing rows for cameras outside the selection are kept for '
+                        'zero-filled exposures {}'.format([int(be['EXPID']) for be in zero_fill]))
         if zero_fill:
             exposures_table, frames_table = inject_bad_exposures(
                 exposures_table, frames_table, zero_fill, cameras=cameras_filter,
@@ -1806,12 +1812,14 @@ def main(options=None):
     # marked bad) are removed entirely, as if they had been ignored from the
     # start. Their tiles are recomputed, or dropped if no exposures remain.
     removed_tiles = set()
+    removed_any = False
     if not args.add_badexp and bad_expids:
         remove = np.isin(exposures_table['EXPID'], [int(be['EXPID']) for be in bad_expids])
         if remove.any():
             log.warning('Removing {} bad exposures from output: {}'.format(
                 remove.sum(), exposures_table['EXPID'][remove].tolist()))
             removed_tiles = set(exposures_table['TILEID'][remove].tolist())
+            removed_any = True
             frames_table = frames_table[~np.isin(frames_table['EXPID'], exposures_table['EXPID'][remove])]
             exposures_table = exposures_table[~remove]
 
@@ -1822,7 +1830,8 @@ def main(options=None):
     if len(frames_table):
         frames_table.sort(['EXPID', 'CAMERA'])
 
-    if len(exposures_table) == 0:
+    # An empty result is only written when rows were intentionally removed.
+    if len(exposures_table) == 0 and not removed_any:
         log.error('No valid exposures; nothing to write')
         return 1
 
