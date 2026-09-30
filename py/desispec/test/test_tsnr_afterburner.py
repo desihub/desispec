@@ -29,6 +29,9 @@ from desispec.scripts.tsnr_afterburner import (
     _add_gfa_zero_cols,
     _reorder_exposures,
     _read_etc_values,
+    _petalqa_camera_values,
+    _fill_targ_from_header,
+    find_processed_nights,
     _EXP_SUMMARY_COLUMN_ORDER,
     _TARG_DEFAULTS,
     _TSNR2_TRACERS,
@@ -106,6 +109,14 @@ def _make_exposure_row(expid=100, night=20210601, tileid=1234, petals=None, valu
         'MINTFRAC': np.float32(0.9),
         'PETALQA': _make_petalqa(petals, value=value),
     }
+    # CAMERA_ROWS as read_one_exposure() builds them from PETALQA.
+    row['CAMERA_ROWS'] = {}
+    for petal in petals:
+        for band in _CAMERA_BANDS:
+            camera = band + str(petal)
+            values = _petalqa_camera_values(row['PETALQA'], camera)
+            if values:
+                row['CAMERA_ROWS'][camera] = values
     return row
 
 
@@ -192,9 +203,10 @@ class TestParse(unittest.TestCase):
         self.assertFalse(args.overwrite)
         self.assertFalse(args.recompute)
 
-    def test_mpi_nproc_mutually_exclusive(self):
-        with self.assertRaises(SystemExit):
-            parse(['--mpi', '--nproc', '4'])
+    def test_mpi_with_nproc_allowed(self):
+        args = parse(['--mpi', '--nproc', '4'])
+        self.assertTrue(args.mpi)
+        self.assertEqual(args.nproc, 4)
 
     def test_cameras_arg(self):
         args = parse(['--cameras', 'b0,r0'])
@@ -207,6 +219,16 @@ class TestParse(unittest.TestCase):
     def test_overwrite_flag(self):
         args = parse(['--overwrite'])
         self.assertTrue(args.overwrite)
+
+    def test_update_flag(self):
+        self.assertTrue(parse([]).update)
+        self.assertTrue(parse(['--update']).update)
+        self.assertFalse(parse(['--no-update']).update)
+
+    def test_output_modes_mutually_exclusive(self):
+        for flags in (['--no-update', '--overwrite'], ['--update', '--overwrite']):
+            with self.assertRaises(SystemExit):
+                parse(flags)
 
     def test_recompute_skymags_flag(self):
         args = parse(['--recompute-skymags'])
@@ -282,20 +304,40 @@ class TestDeriveTargInfo(unittest.TestCase):
         self.assertEqual(result['SURVEY'], 'cmx')
 
     def test_goaltype_inferred_from_faprgrm_qso(self):
-        """When faflavor2program returns 'other', GOALTYPE is inferred from FAPRGRM keywords."""
+        """With FAFLAVOR and GOALTYPE unknown, GOALTYPE is inferred from FAPRGRM keywords."""
         entry = dict(_TARG_DEFAULTS)
-        # 'other' faflavor forces faflavor2program to return something non-dark/bright,
-        # then the FAPRGRM 'qso' keyword should push GOALTYPE to 'dark'
-        entry['FAFLAVOR'] = 'other'
         entry['FAPRGRM'] = 'qso'
         result = derive_targ_info(entry)
         self.assertEqual(result['GOALTYPE'], 'dark')
 
     def test_goaltype_inferred_from_faprgrm_bgs(self):
-        """When FAPRGRM contains 'bgs', GOALTYPE should be inferred as 'bright'."""
+        """When FAPRGRM contains 'bgs' and FAFLAVOR is unknown, GOALTYPE should be 'bright'."""
+        entry = dict(_TARG_DEFAULTS)
+        entry['FAPRGRM'] = 'bgsany'
+        result = derive_targ_info(entry)
+        self.assertEqual(result['GOALTYPE'], 'bright')
+
+    def test_known_faflavor_overrides_goaltype(self):
+        """A known FAFLAVOR sets GOALTYPE via faflavor2program, as in the original afterburner."""
+        entry = dict(_TARG_DEFAULTS)
+        entry['FAFLAVOR'] = 'specialtertiary42'
+        entry['FAPRGRM'] = 'tertiary42'
+        entry['GOALTYPE'] = 'dark'
+        result = derive_targ_info(entry)
+        self.assertEqual(result['GOALTYPE'], 'other')
+
+    def test_known_faflavor_other_not_inferred_from_faprgrm(self):
+        """faflavor2program 'other' is kept even if FAPRGRM looks dark."""
         entry = dict(_TARG_DEFAULTS)
         entry['FAFLAVOR'] = 'other'
-        entry['FAPRGRM'] = 'bgsany'
+        entry['FAPRGRM'] = 'qso'
+        result = derive_targ_info(entry)
+        self.assertEqual(result['GOALTYPE'], 'other')
+
+    def test_unknown_faflavor_keeps_goaltype(self):
+        """Without FAFLAVOR, an already known GOALTYPE is kept."""
+        entry = dict(_TARG_DEFAULTS)
+        entry['GOALTYPE'] = 'bright'
         result = derive_targ_info(entry)
         self.assertEqual(result['GOALTYPE'], 'bright')
 
@@ -440,7 +482,7 @@ class TestTsnr2Aggregation(unittest.TestCase):
 
 
 class TestBuildTables(unittest.TestCase):
-    """Integration tests for build_tables() on both code paths."""
+    """Integration tests for build_tables()."""
 
     def setUp(self):
         patcher = mock.patch('desispec.scripts.tsnr_afterburner.tsnr2_to_efftime',
@@ -463,13 +505,6 @@ class TestBuildTables(unittest.TestCase):
             if col in idx:
                 self.assertEqual(idx[col], i,
                                  'Column {} at wrong position'.format(col))
-
-    def test_recompute_path(self):
-        """Recompute path (camword_map=None) produces correct tables."""
-        cam_rows = [_make_camera_row(expid=20, camera=c) for c in ('b0', 'r0', 'z0')]
-        frames, exposures = build_tables(cam_rows, camword_map=None)
-        self.assertEqual(len(frames), 3)
-        self.assertEqual(len(exposures), 1)
 
     def test_empty_input_returns_empty_tables(self):
         """Empty input should return empty tables without errors."""
@@ -586,6 +621,61 @@ class TestInjectBadExposures(unittest.TestCase):
         }]
         inject_bad_exposures(exposures, frames, bad_expids)
         self.assertIn(999, exposures['EXPID'].tolist())
+
+    def test_targeting_filled_from_fiberassign_header(self):
+        """FAFLAVOR/MINTFRAC missing from the exposure table come from the fiberassign header."""
+        exposures, frames = self._make_empty_tables()
+        bad_expids = [{
+            'NIGHT': 20260926, 'EXPID': 999, 'TILEID': 20293,
+            'CAMWORD': 'a0', 'BADCAMWORD': '', 'EXPTIME': 600.0, 'MJD-OBS': 59366.5,
+            'EFFTIME_ETC': 0.0, 'LASTSTEP': 'skysub', 'SURVEY': 'main', 'FAPRGRM': 'bright',
+            'GOALTYPE': 'bright', 'GOALTIME': 180.0, 'MINTFRAC': 0.9, 'FAFLAVOR': 'unknown',
+            'EBVFAC': 1.0,
+        }]
+        fa_hdr = {'TILERA': 37.362, 'TILEDEC': 1.5, 'FAFLAVOR': 'mainbright', 'FAPRGRM': 'bright',
+                  'SURVEY': 'main', 'GOALTYPE': 'BRIGHT', 'MINTFRAC': 0.85, 'GOALTIME': 180.0}
+        self.mock_findfile.return_value = ('/fake/fiberassign-020293.fits.gz', True)
+        with patch('desispec.scripts.tsnr_afterburner.fitsio.read_header', return_value=fa_hdr):
+            exposures, frames = inject_bad_exposures(exposures, frames, bad_expids)
+        row = exposures[exposures['EXPID'] == 999][0]
+        self.assertTrue(np.all(np.isnan(frames['TSNR2_ALPHA'][frames['EXPID'] == 999])))
+        for band in ('G', 'R', 'Z'):
+            self.assertTrue(np.isnan(row['SKY_MAG_{}_SPEC'.format(band)]))
+        self.assertEqual(row['FAFLAVOR'], 'mainbright')
+        self.assertEqual(row['PROGRAM'], 'bright')
+        self.assertAlmostEqual(float(row['MINTFRAC']), 0.85, places=5)
+        self.assertAlmostEqual(float(row['TILERA']), 37.362, places=3)
+
+    def _bad_entry(self, expid=999):
+        return {'NIGHT': 20260926, 'EXPID': expid, 'TILEID': 1234, 'CAMWORD': 'a0', 'BADCAMWORD': '',
+                'EXPTIME': 600.0, 'MJD-OBS': 59366.5, 'EFFTIME_ETC': 0.0, 'LASTSTEP': 'skysub',
+                'SURVEY': 'main', 'FAPRGRM': 'dark', 'GOALTYPE': 'dark', 'GOALTIME': 1000.0,
+                'MINTFRAC': 0.9, 'FAFLAVOR': 'maindark', 'EBVFAC': 1.0}
+
+    def test_skymags_computed_when_requested_and_expdir_exists(self):
+        """With compute_skymags, a bad exposure with an exposures dir gets computed sky mags."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, 'exposures', '20260926', '00000999'))
+            for compute, expected in ((True, 21.0), (False, np.nan)):
+                exposures, frames = self._make_empty_tables()
+                with patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value=tmpdir), \
+                     patch('desispec.scripts.tsnr_afterburner.get_skymag_values', return_value={
+                         'SKY_MAG_G_SPEC': 22.0, 'SKY_MAG_R_SPEC': 21.0, 'SKY_MAG_Z_SPEC': 20.0}) as sky:
+                    exposures, _ = inject_bad_exposures(exposures, frames, [self._bad_entry()],
+                                                        compute_skymags=compute)
+                value = float(exposures['SKY_MAG_R_SPEC'][exposures['EXPID'] == 999][0])
+                np.testing.assert_equal(value, expected)
+                self.assertEqual(sky.called, compute)
+
+    def test_skymags_nan_without_expdir(self):
+        """A bad exposure without an exposures dir keeps NaN sky mags even if requested."""
+        exposures, frames = self._make_empty_tables()
+        with tempfile.TemporaryDirectory() as tmpdir, \
+             patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value=tmpdir), \
+             patch('desispec.scripts.tsnr_afterburner.get_skymag_values') as sky:
+            exposures, _ = inject_bad_exposures(exposures, frames, [self._bad_entry()], compute_skymags=True)
+        sky.assert_not_called()
+        self.assertTrue(np.isnan(exposures['SKY_MAG_R_SPEC'][exposures['EXPID'] == 999][0]))
 
     def test_existing_expid_not_duplicated(self):
         """An EXPID already in the table should not be added again."""
@@ -766,6 +856,20 @@ class TestAddGfaEfftimes(unittest.TestCase):
         exposures['AIRMASS_GFA'] = np.array([1.1])
         exposures['SEEING_GFA'] = np.array([1.1])
         return exposures
+
+    @patch('desispec.scripts.tsnr_afterburner.compute_efftime',
+           return_value=(np.array([500.123456789]), np.array([400.0]), np.array([300.0])))
+    def test_efftimes_are_float64(self, mock_ce):
+        """GFA efftimes stay float64, as stored in production files, to avoid rounding changes."""
+        exposures = self._make_exposures_with_gfa('dark')
+        exposures = add_gfa_efftimes(exposures)
+        for col in ('EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA', 'EFFTIME_GFA'):
+            self.assertEqual(exposures[col].dtype, np.float64)
+        self.assertEqual(float(exposures['EFFTIME_DARK_GFA'][0]), 500.123456789)
+
+    def test_gfa_zero_cols_are_float64(self):
+        row = _add_gfa_zero_cols({})
+        self.assertEqual(np.asarray(row['TRANSPARENCY_GFA']).dtype, np.float64)
 
     @patch('desispec.scripts.tsnr_afterburner.compute_efftime',
            return_value=(np.array([500.0]), np.array([400.0]), np.array([300.0])))
@@ -1002,44 +1106,68 @@ class TestWriteOutput(unittest.TestCase):
                                            msg='Column {} not rounded to 3 dp'.format(col))
 
 
-class TestRecomputePath(unittest.TestCase):
-    """Test the recompute (camword_map=None) path of build_tables."""
+class TestPetalqaCameraValues(unittest.TestCase):
+    """Test _petalqa_camera_values() handling of PETALQA placeholder zeros."""
 
-    def setUp(self):
-        patcher = mock.patch('desispec.scripts.tsnr_afterburner.tsnr2_to_efftime',
-                             side_effect=_mock_tsnr2_to_efftime)
-        self.mock_efftime = patcher.start()
-        self.addCleanup(patcher.stop)
+    def test_recorded_band(self):
+        values = _petalqa_camera_values(_make_petalqa([0, 1]), 'r1')
+        self.assertEqual(len(values), len(_TSNR2_TRACERS))
+        self.assertEqual(float(values['TSNR2_ELG']), 10.0)
 
-    def test_multiple_cameras_same_expid_grouped(self):
-        """Multiple cameras for the same EXPID should produce one EXPOSURES row."""
-        cam_rows = [
-            _make_camera_row(expid=100, camera='b0'),
-            _make_camera_row(expid=100, camera='r0'),
-            _make_camera_row(expid=100, camera='z0'),
-        ]
-        frames, exposures = build_tables(cam_rows, camword_map=None)
-        self.assertEqual(len(exposures), 1)
-        self.assertEqual(len(frames), 3)
+    def test_single_zero_tracer_is_kept(self):
+        petalqa = _make_petalqa([0])
+        petalqa['TSNR2_LYA_Z'] = 0.0
+        values = _petalqa_camera_values(petalqa, 'z0')
+        self.assertEqual(float(values['TSNR2_LYA']), 0.0)
+        self.assertEqual(len(values), len(_TSNR2_TRACERS))
 
-    def test_multiple_expids_produce_multiple_exposures(self):
-        """Different EXPIDs should produce separate EXPOSURES rows."""
-        cam_rows = [
-            _make_camera_row(expid=100, camera='b0'),
-            _make_camera_row(expid=200, camera='b0'),
-        ]
-        frames, exposures = build_tables(cam_rows, camword_map=None)
-        self.assertEqual(len(exposures), 2)
+    def test_all_zero_band_is_missing(self):
+        petalqa = _make_petalqa([0])
+        for tracer in _TSNR2_TRACERS:
+            petalqa['TSNR2_{}_B'.format(tracer)] = 0.0
+        self.assertEqual(_petalqa_camera_values(petalqa, 'b0'), {})
+        self.assertEqual(len(_petalqa_camera_values(petalqa, 'r0')), len(_TSNR2_TRACERS))
 
-    def test_tsnr2_averaged_over_petals(self):
-        """TSNR2 for recompute path should be the mean over petals."""
-        cam_rows = [
-            _make_camera_row(expid=100, camera='b0', value=10.0),
-            _make_camera_row(expid=100, camera='b1', value=20.0),
-        ]
-        frames, exposures = build_tables(cam_rows, camword_map=None)
-        # petal 0 sum = 10, petal 1 sum = 20, mean = 15
-        self.assertAlmostEqual(float(exposures['TSNR2_ELG'][0]), 15.0, places=3)
+    def test_missing_petal_or_qa(self):
+        self.assertEqual(_petalqa_camera_values(_make_petalqa([0]), 'b5'), {})
+        self.assertEqual(_petalqa_camera_values(None, 'b0'), {})
+
+    def test_nan_value_omitted(self):
+        petalqa = _make_petalqa([0])
+        petalqa['TSNR2_ELG_B'] = np.nan
+        values = _petalqa_camera_values(petalqa, 'b0')
+        self.assertNotIn('TSNR2_ELG', values)
+        self.assertEqual(len(values), len(_TSNR2_TRACERS) - 1)
+
+
+class TestFillTargFromHeader(unittest.TestCase):
+    """Test _fill_targ_from_header() precedence rules."""
+
+    def test_fills_defaults_only(self):
+        entry = dict(_TARG_DEFAULTS)
+        entry['SURVEY'] = 'sv3'
+        hdr = {'SURVEY': 'main', 'FAFLAVOR': 'MAINDARK', 'MINTFRAC': 0.85, 'GOALTYPE': 'DARK'}
+        entry = _fill_targ_from_header(entry, hdr)
+        self.assertEqual(entry['SURVEY'], 'sv3')
+        self.assertEqual(entry['FAFLAVOR'], 'maindark')
+        self.assertEqual(entry['GOALTYPE'], 'dark')
+        self.assertEqual(entry['MINTFRAC'], 0.85)
+        self.assertEqual(entry['FAPRGRM'], 'unknown')
+
+    def test_fa_surv_used_for_survey(self):
+        entry = _fill_targ_from_header(dict(_TARG_DEFAULTS), {'FA_SURV': 'Main'})
+        self.assertEqual(entry['SURVEY'], 'main')
+
+
+class TestFindProcessedNights(unittest.TestCase):
+    """Test find_processed_nights() uses the exposures directory."""
+
+    def test_nights_from_exposures_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for name in ('20210628', '20220211', 'attic', '2021'):
+                os.makedirs(os.path.join(tmpdir, 'exposures', name))
+            with patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value=tmpdir):
+                self.assertEqual(find_processed_nights(), [20210628, 20220211])
 
 
 class TestAddEfftimes(unittest.TestCase):
@@ -1457,6 +1585,56 @@ class TestMain(unittest.TestCase):
                 main(['--prod', '/fake/prod', '-o', outfile, '--nights', '20211001', '--overwrite'])
             mock_read_table.assert_not_called()
 
+    def _run_main_with_existing(self, existing_nights, existing_expids, extra_argv):
+        """Run main() against a mocked pre-existing output file; return (rc, write mock)."""
+        from desispec.scripts.tsnr_afterburner import main
+        exposure_row = _make_exposure_row(expid=100, night=20211001)
+        existing = Table({'NIGHT': np.array(existing_nights, dtype=np.int32),
+                          'EXPID': np.array(existing_expids, dtype=np.int32)})
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outfile = os.path.join(tmpdir, 'out.fits')
+            with patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value='/fake/prod'), \
+                 patch('desispec.scripts.tsnr_afterburner.collect_science_expids',
+                       return_value=([self._good_entry()], [])) as mock_collect, \
+                 patch('desispec.scripts.tsnr_afterburner.read_one_exposure',
+                       return_value=exposure_row), \
+                 patch('desispec.scripts.tsnr_afterburner.read_table', return_value=existing), \
+                 patch('desispec.scripts.tsnr_afterburner.merge_exposures',
+                       side_effect=lambda old, new: new), \
+                 patch('desispec.scripts.tsnr_afterburner.merge_frames',
+                       side_effect=lambda old, new, **kwargs: new), \
+                 patch('desispec.scripts.tsnr_afterburner.write_output') as mock_write, \
+                 patch('os.path.isfile', return_value=True):
+                rc = main(['--prod', '/fake/prod', '-o', outfile, '--nights', '20211001'] + extra_argv)
+        return rc, mock_write, mock_collect
+
+    def test_no_update_errors_when_night_present(self):
+        """--no-update should exit with 1 before processing if a requested night is in the file."""
+        rc, mock_write, mock_collect = self._run_main_with_existing(
+            [20211001], [99], ['--no-update'])
+        self.assertEqual(rc, 1)
+        mock_collect.assert_not_called()
+        mock_write.assert_not_called()
+
+    def test_no_update_adds_when_night_absent(self):
+        """--no-update should proceed and write when no requested night is in the file."""
+        rc, mock_write, _ = self._run_main_with_existing([20210930], [99], ['--no-update'])
+        self.assertEqual(rc, 0)
+        mock_write.assert_called_once()
+
+    def test_no_update_with_expids_checks_only_those_expids(self):
+        """With --expids, --no-update conflicts only if those exposures are already present."""
+        rc, _, _ = self._run_main_with_existing([20211001], [99], ['--no-update', '--expids', '100'])
+        self.assertEqual(rc, 0)
+        rc, _, _ = self._run_main_with_existing([20211001], [100], ['--no-update', '--expids', '100'])
+        self.assertEqual(rc, 1)
+
+    def test_default_updates_when_night_present(self):
+        """Without --no-update, rows for a night already in the file are replaced."""
+        rc, mock_write, _ = self._run_main_with_existing([20211001], [100], [])
+        self.assertEqual(rc, 0)
+        mock_write.assert_called_once()
+
     def test_add_badexp_calls_inject(self):
         """--add-badexp with a non-empty bad_expids list should call inject_bad_exposures."""
         from desispec.scripts.tsnr_afterburner import main
@@ -1466,7 +1644,7 @@ class TestMain(unittest.TestCase):
 
         # The mock must return non-empty tables; returning empty tables would cause
         # main() to hit the "No valid exposures" guard and return 1 before write_output.
-        def _inject_passthrough(exp_tbl, frm_tbl, bad_list, cameras=None):
+        def _inject_passthrough(exp_tbl, frm_tbl, bad_list, cameras=None, compute_skymags=False):
             return exp_tbl, frm_tbl
 
         with tempfile.TemporaryDirectory() as tmpdir:

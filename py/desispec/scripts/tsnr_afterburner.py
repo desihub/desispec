@@ -119,8 +119,11 @@ def parse(options=None):
     output_group = parser.add_mutually_exclusive_group()
     output_group.add_argument('--overwrite', action='store_true',
                         help='Overwrite any existing output file (default is to merge/upsert).')
-    output_group.add_argument('--update', action='store_true',
-                              help='Merge with existing output (the default; retained for compatibility).')
+    output_group.add_argument('--update', action=argparse.BooleanOptionalAction, default=True,
+                              help='Use --no-update to add new rows to existing output, but exit with an '
+                                   'error if any requested exposures (or nights, if no --expids) are '
+                                   'already present. --update is the default (replace or add rows) and '
+                                   'is retained only for compatibility.')
     parser.add_argument('--add-badexp', action='store_true',
                         help='Add zero-filled rows for known bad/unprocessed exposures.')
     parser.add_argument('--details-dir', type=str, default=None, required=False,
@@ -130,11 +133,10 @@ def parse(options=None):
     parser.add_argument('--alpha-only', '--alpha_only', action='store_true',
                         help='Recompute alpha, preserving stored TSNR2 and filling missing TSNR2 if needed.')
 
-    parallel_group = parser.add_mutually_exclusive_group()
-    parallel_group.add_argument('--nproc', type=int, default=1,
-                                help='Number of parallel worker processes.')
-    parallel_group.add_argument('--mpi', action='store_true',
-                                help='Use MPI to distribute nights across nodes.')
+    parser.add_argument('--nproc', type=int, default=1,
+                        help='Number of parallel worker processes (per MPI rank with --mpi).')
+    parser.add_argument('--mpi', action='store_true',
+                        help='Use MPI to distribute nights across nodes.')
 
     args = parser.parse_args(options)
     # Retain the legacy Namespace attribute as well as the CLI spelling.
@@ -149,8 +151,11 @@ def parse(options=None):
 def derive_targ_info(entry):
     """Normalize survey/targeting metadata for legacy observations.
 
-    Fills SURVEY, GOALTYPE, FAPRGRM from FAFLAVOR when those fields are
-    'unknown' or absent.  Handles SV1/SV2/CMX/main survey conventions.
+    Fills SURVEY and FAPRGRM from FAFLAVOR when those fields are 'unknown' or
+    absent.  When FAFLAVOR is known, GOALTYPE is always set from
+    faflavor2program(FAFLAVOR), matching the original afterburner; otherwise
+    GOALTYPE is kept, or guessed from FAPRGRM if unknown.  Handles
+    SV1/SV2/CMX/main survey conventions.
 
     Args:
         entry: dict with at least FAFLAVOR, SURVEY, GOALTYPE, FAPRGRM keys.
@@ -176,10 +181,10 @@ def derive_targ_info(entry):
         elif faflavor.find('cmx') >= 0:
             entry['SURVEY'] = 'cmx'
 
-    if entry['GOALTYPE'] == 'unknown' and faflavor != 'unknown':
+    if faflavor != 'unknown':
         entry['GOALTYPE'] = faflavor2program(faflavor)
 
-    if entry['GOALTYPE'] in ('unknown', 'other'):
+    if entry['GOALTYPE'] == 'unknown':
         faprgrm = entry['FAPRGRM']
         if any(x in faprgrm for x in ('qso', 'lrg', 'elg', 'dark')):
             entry['GOALTYPE'] = 'dark'
@@ -192,6 +197,36 @@ def derive_targ_info(entry):
     if entry['GOALTYPE'] in ('dark1b', 'bright1b'):
         entry['GOALTYPE'] = entry['GOALTYPE'].replace('1b', '')
 
+    return entry
+
+
+def _fill_targ_from_header(entry, hdr):
+    """Fill targeting metadata that is absent or still at its default value.
+
+    Values already set to something other than the _TARG_DEFAULTS default are
+    kept, so earlier sources take precedence.  FA_SURV is used for SURVEY when
+    SURVEY is absent from the header (fiberassign files).
+
+    Args:
+        entry: dict of exposure metadata.
+        hdr: FITS header (fitsio or astropy) or dict, e.g. a cframe FIBERMAP
+            header or a fiberassign primary header.
+
+    Returns:
+        entry: the same dict with missing targeting values filled in.
+    """
+    for key, default in _TARG_DEFAULTS.items():
+        hdrkey = key
+        if key == 'SURVEY' and 'SURVEY' not in hdr:
+            hdrkey = 'FA_SURV'
+        if hdrkey not in hdr:
+            continue
+        if key in entry and entry[key] != default:
+            continue
+        if isinstance(default, str):
+            entry[key] = str(hdr[hdrkey]).strip().lower()
+        else:
+            entry[key] = hdr[hdrkey]
     return entry
 
 
@@ -451,14 +486,31 @@ def read_one_camera(night, expid, camera, alpha_only=False, details_dir=None,
     return entry
 
 
-def _read_one_camera_wrapper(args_tuple):
-    """Wrapper for multiprocessing.Pool.map."""
-    return read_one_camera(*args_tuple)
-
-
 # ---------------------------------------------------------------------------
 # Exposure collection
 # ---------------------------------------------------------------------------
+
+def find_processed_nights():
+    """Return the nights that have an exposures directory in the production.
+
+    Exposure tables can list nights that were never processed (e.g. partial
+    productions), so the processed nights are taken from
+    $DESI_SPECTRO_REDUX/$SPECPROD/exposures/{NIGHT} instead.
+
+    Returns:
+        list of int: sorted YYYYMMDD nights.
+    """
+    log = get_logger()
+    exposures_dir = os.path.join(specprod_root(), 'exposures')
+    nights = []
+    for dirname in sorted(glob.glob(os.path.join(exposures_dir, '*'))):
+        basename = os.path.basename(dirname)
+        if basename.isdigit() and len(basename) == 8:
+            nights.append(int(basename))
+    if not nights:
+        log.warning('No night directories found in {}'.format(exposures_dir))
+    return nights
+
 
 def collect_science_expids(nights=None, expids=None):
     """Return processed science exposures from the exposure tables.
@@ -468,7 +520,7 @@ def collect_science_expids(nights=None, expids=None):
     bad-exposure entries (LASTSTEP != 'all', TILEID > 0) for zero-filling.
 
     Args:
-        nights: list of int, optional. If None, derive from filesystem.
+        nights: list of int, optional. If None, use find_processed_nights().
         expids: list of int, optional. Filter to these EXPIDs if given.
 
     Returns:
@@ -481,21 +533,7 @@ def collect_science_expids(nights=None, expids=None):
     log = get_logger()
 
     if nights is None:
-        prod = specprod_root()
-        exptab_pattern = os.path.join(prod, 'exposure_tables', '*', 'exposure_table_*.csv')
-        filenames = sorted(glob.glob(exptab_pattern))
-        nights = []
-        for fn in filenames:
-            basename = os.path.basename(fn)
-            # exposure_table_{NIGHT}.csv
-            try:
-                night_str = basename.replace('exposure_table_', '').replace('.csv', '')
-                nights.append(int(night_str))
-            except ValueError:
-                log.warning('Could not parse night from {}'.format(fn))
-        if not nights:
-            log.warning('No exposure table files found in {}'.format(
-                os.path.join(prod, 'exposure_tables')))
+        nights = find_processed_nights()
 
     good_expids = []
     bad_expids = []
@@ -558,7 +596,27 @@ def collect_science_expids(nights=None, expids=None):
 # Default path: read per-exposure data from exposureqa
 # ---------------------------------------------------------------------------
 
-def _read_exposureqa(night, expid, recompute_skymags=False):
+def _read_cframe_fibermap_header(night, expid, cameras=None):
+    """Return the FIBERMAP header of the first existing cframe of an exposure.
+
+    Args:
+        night: int, YYYYMMDD.
+        expid: int, exposure ID.
+        cameras: Optional list of cameras to try, in order; defaults to all.
+
+    Returns:
+        fitsio header, or None if no cframe is found.
+    """
+    if cameras is None:
+        cameras = [band + str(petal) for petal in _PETALS for band in _CAMERA_BANDS]
+    for camera in cameras:
+        filename = findfile('cframe', night=night, expid=expid, camera=camera, readonly=True)
+        if os.path.isfile(filename):
+            return fitsio.read_header(filename, 'FIBERMAP')
+    return None
+
+
+def _read_exposureqa(night, expid, recompute_skymags=False, exptab_entry=None, cameras=None):
     """Read all per-exposure data from the exposureqa file.
 
     Opens a single file (exposure-qa-{expid:08d}.fits) and extracts all
@@ -571,12 +629,21 @@ def _read_exposureqa(night, expid, recompute_skymags=False):
     model files.  If recompute_skymags=True, get_skymag_values() is called
     even when all three keywords are present.
 
+    Older exposureqa files lack some header keywords.  MJD-OBS, EXPTIME and
+    AIRMASS then come from the exposure table entry, and missing targeting
+    keywords (e.g. FAFLAVOR, absent before 20260601) from the FIBERMAP header
+    of a cframe.
+
     Args:
         night: int, YYYYMMDD.
         expid: int, exposure ID.
         recompute_skymags: bool, if True always call get_skymag_values() even
             when the FIBERQA.meta keywords are present (equivalent to the
             --recompute-skymags CLI flag).
+        exptab_entry: Optional dict for this exposure from
+            collect_science_expids(), used for missing MJD-OBS/EXPTIME/AIRMASS.
+        cameras: Optional cameras whose cframes may supply missing targeting
+            keywords.
 
     Returns:
         dict with keys:
@@ -611,9 +678,15 @@ def _read_exposureqa(night, expid, recompute_skymags=False):
     entry['TILEID'] = np.int32(fiberqa_hdr.get('TILEID', 0))
     entry['TILERA'] = np.float32(fiberqa_hdr.get('TILERA', 0.0))
     entry['TILEDEC'] = np.float32(fiberqa_hdr.get('TILEDEC', 0.0))
-    entry['MJD'] = np.float64(fiberqa_hdr.get('MJD-OBS', 0.0))
-    entry['EXPTIME'] = np.float32(fiberqa_hdr.get('EXPTIME', 0.0))
-    entry['AIRMASS'] = np.float32(fiberqa_hdr.get('AIRMASS', 0.0))
+    if exptab_entry is None:
+        exptab_entry = {}
+    for key, hdrkey, dtype in (('MJD', 'MJD-OBS', np.float64), ('EXPTIME', 'EXPTIME', np.float32),
+                               ('AIRMASS', 'AIRMASS', np.float32)):
+        if hdrkey in fiberqa_hdr:
+            entry[key] = dtype(fiberqa_hdr[hdrkey])
+        else:
+            log.debug('{} not in {}; using exposure table'.format(hdrkey, filename))
+            entry[key] = dtype(exptab_entry.get(hdrkey, 0.0))
 
     entry['SEEING_ETC'], entry['EFFTIME_ETC'] = _read_etc_values(night, expid, fiberqa_hdr)
 
@@ -628,6 +701,13 @@ def _read_exposureqa(night, expid, recompute_skymags=False):
                 entry[key] = val
         else:
             entry[key] = default
+
+    if any(key not in fiberqa_hdr for key in _TARG_DEFAULTS):
+        fibermap_hdr = _read_cframe_fibermap_header(night, expid, cameras)
+        if fibermap_hdr is not None:
+            entry = _fill_targ_from_header(entry, fibermap_hdr)
+        else:
+            log.warning('No cframe FIBERMAP header for missing targeting keywords of expid={}'.format(expid))
 
     entry = derive_targ_info(entry)
 
@@ -665,8 +745,41 @@ def _read_exposureqa(night, expid, recompute_skymags=False):
     return entry
 
 
+def _petalqa_camera_values(petalqa, camera):
+    """Return the TSNR2 values that PETALQA recorded for one camera.
+
+    exposure_qa initializes every TSNR2_{tracer}_{band} to 0 and only fills a
+    petal/band when it could read that camera (and the petal's r-band cframe).
+    Some tracer/band pairs are legitimately 0 (e.g. TSNR2_LYA_Z), so a band is
+    treated as not recorded only when all of its tracers are 0.
+
+    Args:
+        petalqa: numpy structured array from the PETALQA HDU, or None.
+        camera: Camera name, e.g. 'b5'.
+
+    Returns:
+        dict: TSNR2_{tracer} -> np.float32 for finite values; empty if the
+        camera was not recorded (the caller then falls back to the cframe).
+    """
+    values = {}
+    if petalqa is None:
+        return values
+    matches = petalqa['PETAL_LOC'] == int(camera[1])
+    if not matches.any():
+        return values
+    for tracer in _TSNR2_TRACERS:
+        col = 'TSNR2_{}_{}'.format(tracer, camera[0].upper())
+        if col in petalqa.dtype.names:
+            value = petalqa[col][matches][0]
+            if np.isfinite(value):
+                values['TSNR2_' + tracer] = np.float32(value)
+    if values and all(value == 0 for value in values.values()):
+        return {}
+    return values
+
+
 def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
-                      recompute=False, alpha_only=False, details_dir=None):
+                      recompute=False, alpha_only=False, details_dir=None, exptab_entry=None):
     """Load an exposure, using QA, SCORES, then calculation for missing TSNR2.
 
     Args:
@@ -678,35 +791,33 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
         recompute: Force calculation of TSNR2 for selected cameras.
         alpha_only: Recalculate alpha while retaining stored TSNR2 values.
         details_dir: Optional per-camera calculation cache directory.
+        exptab_entry: Optional exposure table entry from
+            collect_science_expids(), used for metadata missing from the QA.
 
     Returns:
-        dict: Exposure metadata and CAMERA_ROWS, keyed by camera. None if no
-        cameras are selected. Unresolved missing inputs and calculation failures
-        propagate rather than replacing existing measurements by zero.
+        dict: Exposure metadata and CAMERA_ROWS, keyed by camera. Cameras with
+        neither QA values nor a cframe are skipped with a warning, as in the
+        original afterburner. None if no camera could be read, so that callers
+        keep any existing rows for this exposure. Calculation failures when the
+        inputs exist still propagate.
     """
-    entry = _read_exposureqa(night, expid, recompute_skymags)
+    log = get_logger()
+    entry = _read_exposureqa(night, expid, recompute_skymags, exptab_entry=exptab_entry, cameras=cameras)
     petalqa = entry.get('PETALQA') if entry is not None else None
     if cameras is None:
         petals = petalqa['PETAL_LOC'] if petalqa is not None else _PETALS
         cameras = [band + str(petal) for petal in petals for band in _CAMERA_BANDS]
     camera_rows = {}
     for camera in cameras:
-        values = {}
-        if petalqa is not None:
-            matches = petalqa['PETAL_LOC'] == int(camera[1])
-            for tracer in _TSNR2_TRACERS:
-                col = 'TSNR2_{}_{}'.format(tracer, camera[0].upper())
-                if matches.any() and col in petalqa.dtype.names:
-                    value = petalqa[col][matches][0]
-                    if np.isfinite(value):
-                        values['TSNR2_' + tracer] = np.float32(value)
+        values = _petalqa_camera_values(petalqa, camera)
         if recompute or alpha_only or len(values) != len(_TSNR2_TRACERS):
             camera_row = read_one_camera(
                 night, expid, camera, alpha_only=alpha_only, details_dir=details_dir,
                 recompute=recompute, tsnr_values=values, read_skymags=False)
             if camera_row is None:
-                raise FileNotFoundError('Cannot obtain TSNR2 for night={} expid={} camera={}'.format(
-                    night, expid, camera))
+                log.warning('Skipping camera {} of night={} expid={}: no QA TSNR2 and no science '
+                            'cframe'.format(camera, night, expid))
+                continue
             if entry is None:
                 entry = dict(camera_row)
                 entry['PETALQA'] = None
@@ -715,6 +826,8 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
         else:
             camera_rows[camera] = values
     if not camera_rows:
+        log.error('No cameras could be read for night={} expid={}; not updating this exposure'.format(
+            night, expid))
         return None
     entry['CAMERA_ROWS'] = camera_rows
     return entry
@@ -729,46 +842,26 @@ def _read_one_exposure_wrapper(args_tuple):
 # Table construction (single-pass)
 # ---------------------------------------------------------------------------
 
-def build_tables(exposure_rows, camword_map=None):
+def build_tables(exposure_rows, camword_map):
     """Build the FRAMES and EXPOSURES tables in a single pass over exposure_rows.
 
-    Iterates once over exposure_rows.  For each exposure, FRAMES rows are
-    emitted for every active camera while the per-camera TSNR2 values are
-    accumulated simultaneously, so the aggregated EXPOSURES row can be
-    appended immediately afterwards.  No second pass over the FRAMES table
-    is required.
+    exposure_rows is a list of dicts from read_one_exposure(), each with
+    exposure metadata and CAMERA_ROWS, a dict mapping camera -> dict of
+    TSNR2_{tracer} values (and TSNR2_ALPHA when available).  For each
+    exposure, one FRAMES row is emitted per camera that is both active in
+    camword_map[expid] and present in CAMERA_ROWS, while per-petal TSNR2 sums
+    are accumulated so the EXPOSURES row can be appended immediately.
+    Per-exposure TSNR2 is the sum over bands per petal, mean over petals.
 
-    Handles two input formats depending on whether --recompute is active:
-
-    Default path (camword_map is provided):
-        exposure_rows is a list of dicts from read_one_exposure(), each
-        containing a 'PETALQA' key (numpy structured array).  For each active
-        (band, petal) pair derived from camword_map[expid], one FRAMES row is
-        produced.  TSNR2 for that row is looked up as
-        PETALQA['TSNR2_{tracer}_{BAND}'][PETALQA['PETAL_LOC'] == petal][0].
-        If --cameras is specified, only (band, petal) pairs whose camera
-        string is in the cameras list are included; excluded petals do not
-        contribute to the per-exposure TSNR2 mean.
-        Per-exposure TSNR2 is the sum over bands per petal, mean over
-        included petals.
-
-    Recompute path (camword_map is None):
-        exposure_rows is the flat list of per-camera dicts.  Each dict
-        already has a 'CAMERA' key and top-level TSNR2_{tracer} values.
-        Rows are assembled directly; per-exposure TSNR2 is summed
-        over cameras per petal, mean over petals.
-
-    In both cases:
-    - derive_targ_info() normalizes legacy survey name fields per EXPID.
+    In addition:
     - tsnr2_to_efftime() is called once per EXPID for the EXPOSURES row.
     - faflavor2program() is called once per EXPID for the PROGRAM column.
     - _EXP_SUMMARY_COLUMN_ORDER is enforced on the EXPOSURES table.
 
     Args:
-        exposure_rows: list of dict.  Format depends on which I/O path is
-            active; see above.
-        camword_map: dict mapping EXPID (int) -> list of camera strings, or
-            None on the --recompute path.
+        exposure_rows: list of dict from read_one_exposure(); None entries
+            are skipped.
+        camword_map: dict mapping EXPID (int) -> list of active camera strings.
 
     Returns:
         (frames_table, exposures_table): tuple of astropy.table.Table,
@@ -779,124 +872,58 @@ def build_tables(exposure_rows, camword_map=None):
     frames_rows = []
     exposures_rows = []
 
-    if camword_map is not None:
-        # -- default path: iterate per-exposure dicts -----------------------
-        for row in exposure_rows:
-            if row is None:
+    for row in exposure_rows:
+        if row is None:
+            continue
+        expid = int(row['EXPID'])
+        camera_rows = row.get('CAMERA_ROWS')
+        if not camera_rows:
+            log.warning('No CAMERA_ROWS for expid={}, skipping'.format(expid))
+            continue
+
+        active_cameras = camword_map.get(expid, [])
+        if not active_cameras:
+            log.warning('No active cameras for expid={}'.format(expid))
+            continue
+
+        # accumulate per-petal TSNR2 sums for EXPOSURES aggregation
+        petal_tsnr2 = {}  # petal -> {tracer -> sum_over_active_bands}
+
+        for camera in active_cameras:
+            if camera not in camera_rows:
                 continue
-            expid = int(row['EXPID'])
-            petalqa = row.get('PETALQA')
-            camera_rows = row.get('CAMERA_ROWS')
-            if petalqa is None and camera_rows is None:
-                log.warning('PETALQA is None for expid={}, skipping'.format(expid))
-                continue
+            petal = int(camera[1])
 
-            active_cameras = camword_map.get(expid, [])
-            if not active_cameras:
-                log.warning('No active cameras for expid={}'.format(expid))
-                continue
+            frame_row = _make_metadata_row(row)
+            frame_row['CAMERA'] = camera
 
-            # accumulate per-petal TSNR2 sums for EXPOSURES aggregation
-            petal_tsnr2 = {}  # petal -> {tracer -> sum_over_active_bands}
+            if petal not in petal_tsnr2:
+                petal_tsnr2[petal] = {t: 0.0 for t in _TSNR2_TRACERS}
+            for tracer in _TSNR2_TRACERS:
+                val = float(camera_rows[camera]['TSNR2_' + tracer])
+                frame_row['TSNR2_{}'.format(tracer)] = np.float32(val)
+                petal_tsnr2[petal][tracer] += val
 
-            for camera in active_cameras:
-                band = camera[0].upper()
-                petal = int(camera[1])
-                if camera_rows is not None:
-                    if camera not in camera_rows:
-                        continue
-                else:
-                    petal_mask = petalqa['PETAL_LOC'] == petal
-                    if not petal_mask.any():
-                        log.debug('No PETALQA row for petal={} expid={}'.format(petal, expid))
-                        continue
+            # QA summaries do not store alpha; keep the column with NaN.
+            frame_row['TSNR2_ALPHA'] = np.float32(camera_rows[camera].get('TSNR2_ALPHA', np.nan))
+            frames_rows.append(frame_row)
 
-                frame_row = _make_metadata_row(row)
-                frame_row['CAMERA'] = camera
+        if not petal_tsnr2:
+            continue
 
-                for tracer in _TSNR2_TRACERS:
-                    col = 'TSNR2_{}_{}'.format(tracer, band)
-                    if camera_rows is not None:
-                        val = float(camera_rows[camera]['TSNR2_' + tracer])
-                    else:
-                        # Production callers resolve missing values in read_one_exposure.
-                        val = float(petalqa[col][petal_mask][0])
-                    frame_row['TSNR2_{}'.format(tracer)] = np.float32(val)
+        # build EXPOSURES row from aggregated per-petal TSNR2
+        exp_row = _make_metadata_row(row)
+        exp_row['PROGRAM'] = faflavor2program(exp_row['FAFLAVOR'])
+        exp_row['SKY_MAG_G_SPEC'] = np.float32(row.get('SKY_MAG_G_SPEC', 99.0))
+        exp_row['SKY_MAG_R_SPEC'] = np.float32(row.get('SKY_MAG_R_SPEC', 99.0))
+        exp_row['SKY_MAG_Z_SPEC'] = np.float32(row.get('SKY_MAG_Z_SPEC', 99.0))
+        for tracer in _TSNR2_TRACERS:
+            exp_row['TSNR2_{}'.format(tracer)] = np.float32(
+                np.mean([petal_tsnr2[p][tracer] for p in petal_tsnr2]))
 
-                    if petal not in petal_tsnr2:
-                        petal_tsnr2[petal] = {t: 0.0 for t in _TSNR2_TRACERS}
-                    petal_tsnr2[petal][tracer] += val
-
-                if camera_rows is not None and 'TSNR2_ALPHA' in camera_rows[camera]:
-                    frame_row['TSNR2_ALPHA'] = camera_rows[camera]['TSNR2_ALPHA']
-                frames_rows.append(frame_row)
-
-            if not petal_tsnr2:
-                continue
-
-            # build EXPOSURES row from aggregated per-petal TSNR2
-            exp_row = _make_metadata_row(row)
-            exp_row['PROGRAM'] = faflavor2program(exp_row['FAFLAVOR'])
-            exp_row['SKY_MAG_G_SPEC'] = np.float32(row.get('SKY_MAG_G_SPEC', 99.0))
-            exp_row['SKY_MAG_R_SPEC'] = np.float32(row.get('SKY_MAG_R_SPEC', 99.0))
-            exp_row['SKY_MAG_Z_SPEC'] = np.float32(row.get('SKY_MAG_Z_SPEC', 99.0))
-
-            if petal_tsnr2:
-                for tracer in _TSNR2_TRACERS:
-                    exp_row['TSNR2_{}'.format(tracer)] = np.float32(
-                        np.mean([petal_tsnr2[p][tracer] for p in petal_tsnr2]))
-            else:
-                for tracer in _TSNR2_TRACERS:
-                    exp_row['TSNR2_{}'.format(tracer)] = np.float32(0.0)
-
-            exp_row = _add_efftimes(exp_row)
-            exp_row = _add_gfa_zero_cols(exp_row)
-            exposures_rows.append(exp_row)
-
-    else:
-        # -- recompute path: flat list of per-camera dicts ------------------
-        # group by EXPID first
-        expid_to_cameras = {}
-        for cam_row in exposure_rows:
-            eid = int(cam_row['EXPID'])
-            if eid not in expid_to_cameras:
-                expid_to_cameras[eid] = []
-            expid_to_cameras[eid].append(cam_row)
-
-        for expid, cam_rows in sorted(expid_to_cameras.items()):
-            petal_tsnr2 = {}  # petal -> {tracer -> sum}
-
-            for cam_row in cam_rows:
-                camera = cam_row['CAMERA']
-                petal = int(camera[1])
-                frames_rows.append(dict(cam_row))  # FRAMES row is the per-camera dict
-
-                for tracer in _TSNR2_TRACERS:
-                    val = float(cam_row.get('TSNR2_{}'.format(tracer), 0.0))
-                    if petal not in petal_tsnr2:
-                        petal_tsnr2[petal] = {t: 0.0 for t in _TSNR2_TRACERS}
-                    petal_tsnr2[petal][tracer] += val
-
-            # use first camera row for exposure-level metadata
-            first = cam_rows[0]
-            exp_row = _make_metadata_row(first)
-            exp_row['EXPTIME'] = float(np.mean([r['EXPTIME'] for r in cam_rows]))
-            exp_row['PROGRAM'] = faflavor2program(exp_row['FAFLAVOR'])
-            exp_row['SKY_MAG_G_SPEC'] = np.float32(first.get('SKY_MAG_G_SPEC', 99.0))
-            exp_row['SKY_MAG_R_SPEC'] = np.float32(first.get('SKY_MAG_R_SPEC', 99.0))
-            exp_row['SKY_MAG_Z_SPEC'] = np.float32(first.get('SKY_MAG_Z_SPEC', 99.0))
-
-            if petal_tsnr2:
-                for tracer in _TSNR2_TRACERS:
-                    exp_row['TSNR2_{}'.format(tracer)] = np.float32(
-                        np.mean([petal_tsnr2[p][tracer] for p in petal_tsnr2]))
-            else:
-                for tracer in _TSNR2_TRACERS:
-                    exp_row['TSNR2_{}'.format(tracer)] = np.float32(0.0)
-
-            exp_row = _add_efftimes(exp_row)
-            exp_row = _add_gfa_zero_cols(exp_row)
-            exposures_rows.append(exp_row)
+        exp_row = _add_efftimes(exp_row)
+        exp_row = _add_gfa_zero_cols(exp_row)
+        exposures_rows.append(exp_row)
 
     if not frames_rows:
         log.warning('No FRAMES rows produced by build_tables')
@@ -964,6 +991,7 @@ def _empty_tables():
     frames['CAMERA'] = np.array([], dtype='U2')
     for tracer in _TSNR2_TRACERS:
         frames['TSNR2_' + tracer] = np.array([], dtype='f4')
+    frames['TSNR2_ALPHA'] = np.array([], dtype='f4')
     frames.meta['EXTNAME'] = 'FRAMES'
     exposures.meta['EXTNAME'] = 'EXPOSURES'
     return frames, exposures
@@ -1019,8 +1047,10 @@ def _add_gfa_zero_cols(row):
                 'FIBERFAC_GFA', 'FIBERFAC_ELG_GFA', 'FIBERFAC_BGS_GFA',
                 'AIRMASS_GFA', 'SKY_MAG_AB_GFA',
                 'EFFTIME_GFA', 'EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA')
+    # float64, as in the stored files and the GFA tables, so comparisons of
+    # GFA values across runs are not affected by float32 rounding.
     for col in gfa_cols:
-        row.setdefault(col, np.float32(0.0))
+        row.setdefault(col, np.float64(0.0))
     return row
 
 
@@ -1052,7 +1082,7 @@ def _reorder_exposures(table):
         if col in table.colnames:
             new_table[col] = table[col]
         elif col in _STR_COLS:
-            new_table[col] = np.full(len(table), '', dtype=object)
+            new_table[col] = np.full(len(table), '', dtype='U32')
         else:
             new_table[col] = np.zeros(len(table), dtype=np.float32)
     for col in extra_cols:
@@ -1080,20 +1110,23 @@ def _get_default_for_col(table, col):
 # Bad exposure injection
 # ---------------------------------------------------------------------------
 
-def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None):
+def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None, compute_skymags=False):
     """Add zero-filled rows for EXPIDs that were not fully processed.
 
     For each entry in bad_expids that is not already in exposures_table, adds
     one row to exposures_table and one row per camera in frames_table.  TSNR2,
     EFFTIME_SPEC, and all computed columns are set to zero.  Targeting metadata
-    is populated from the exposure_table entry and from the fiberassign header
-    if TILERA/TILEDEC are needed.
+    is populated from the exposure_table entry, with values it lacks (e.g.
+    FAFLAVOR, MINTFRAC) and TILERA/TILEDEC taken from the fiberassign header.
 
     Args:
         exposures_table: astropy.table.Table.
         frames_table: astropy.table.Table.
         bad_expids: list of dict, as returned by collect_science_expids().
         cameras: Optional selected camera names, also applied to bad exposures.
+        compute_skymags: If True, compute sky magnitudes for bad exposures
+            that have an exposures directory (as the original afterburner did
+            with --compute-skymags); otherwise they are NaN.
 
     Returns:
         (exposures_table, frames_table): tuple of astropy.table.Table with
@@ -1133,37 +1166,39 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
         if ebvfac > 0:
             entry['EBV'] = np.float32(2.5 * np.log10(ebvfac) / 2.165)
 
-        # -- targeting metadata ---------------------------------------------
+        # -- targeting metadata: exposure table, then fiberassign header ----
         for key in ('SURVEY', 'FAPRGRM', 'FAFLAVOR', 'GOALTYPE', 'GOALTIME', 'MINTFRAC'):
             entry[key] = be.get(key, _TARG_DEFAULTS.get(key, 'unknown'))
-        entry = derive_targ_info(entry)
-        entry['PROGRAM'] = faflavor2program(entry['FAFLAVOR'])
 
-        # -- TILERA/TILEDEC: try fiberassignsvn, then raw data dir glob -----
+        # TILERA/TILEDEC and targeting from fiberassignsvn, else raw data dir
         fa_filename, exists = findfile('fiberassignsvn', tile=int(be['TILEID']), return_exists=True, readonly=True)
+        if not exists:
+            fa_filename, exists = findfile('fiberassign', night=int(be['NIGHT']), expid=expid,
+                                           tile=int(be['TILEID']), return_exists=True, readonly=True)
         if exists:
             fa_hdr = fitsio.read_header(fa_filename, 0)
+            entry = _fill_targ_from_header(entry, fa_hdr)
             entry['TILERA'] = np.float32(fa_hdr['TILERA'])
             entry['TILEDEC'] = np.float32(fa_hdr['TILEDEC'])
         else:
-            fa_filename, exists = findfile('fiberassign', night=int(be['NIGHT']), expid=expid,
-                                           tile=int(be['TILEID']), return_exists=True, readonly=True)
-            if exists:
-                fa_hdr = fitsio.read_header(fa_filename, 0)
-                if entry.get('SURVEY', 'unknown') == 'unknown' and 'FA_SURV' in fa_hdr:
-                    entry['SURVEY'] = str(fa_hdr['FA_SURV']).strip().lower()
-                entry['TILERA'] = np.float32(fa_hdr['TILERA'])
-                entry['TILEDEC'] = np.float32(fa_hdr['TILEDEC'])
-            else:
-                log.error('No fiberassign for TILEID={} expid={}'.format(be['TILEID'], expid))
+            log.error('No fiberassign for TILEID={} expid={}'.format(be['TILEID'], expid))
 
-        # -- sky mags default to 99.0 (sentinel for "unknown") ---------------
-        entry['SKY_MAG_G_SPEC'] = np.float32(99.0)
-        entry['SKY_MAG_R_SPEC'] = np.float32(99.0)
-        entry['SKY_MAG_Z_SPEC'] = np.float32(99.0)
+        entry = derive_targ_info(entry)
+        entry['PROGRAM'] = faflavor2program(entry['FAFLAVOR'])
+
+        # -- sky mags: NaN for unprocessed exposures unless requested and the
+        # -- exposure directory exists (compute_skymag gives 99 if no sky files)
+        expdir = os.path.join(specprod_root(), 'exposures', str(int(be['NIGHT'])), '{:08d}'.format(expid))
+        if compute_skymags and os.path.isdir(expdir):
+            entry.update(get_skymag_values(int(be['NIGHT']), expid))
+        else:
+            entry['SKY_MAG_G_SPEC'] = np.float32(np.nan)
+            entry['SKY_MAG_R_SPEC'] = np.float32(np.nan)
+            entry['SKY_MAG_Z_SPEC'] = np.float32(np.nan)
 
         for tracer in _TSNR2_TRACERS:
             entry['TSNR2_{}'.format(tracer)] = np.float32(0.0)
+        entry['TSNR2_ALPHA'] = np.float32(np.nan)
         entry = _add_efftimes(entry)
         entry = _add_gfa_zero_cols(entry)
 
@@ -1266,7 +1301,7 @@ def add_gfa_columns(exposures_table, gfa_proc_dir):
                 nan_mask.sum(), gfa_col))
             gfa_vals[nan_mask] = 0.0
 
-        changed = exp_vals != gfa_vals
+        changed = ~np.isclose(exp_vals, gfa_vals, rtol=1e-6, atol=0)
         if changed.any():
             exposures_table[exp_col][jj] = gfa_vals
             changed_nights.extend(matched_nights[changed].tolist())
@@ -1301,8 +1336,9 @@ def add_gfa_efftimes(exposures_table):
 
     # A later GFA update can invalidate an earlier measurement. Clear stale
     # effective times before selecting the rows that can be recalculated.
+    # float64 matches the stored columns, so unchanged values round-trip exactly.
     for col in ('EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA', 'EFFTIME_GFA'):
-        exposures_table[col] = np.zeros(len(exposures_table), dtype=np.float32)
+        exposures_table[col] = np.zeros(len(exposures_table), dtype=np.float64)
 
     # only rows with valid GFA data (transparency > 0)
     valid = exposures_table['TRANSPARENCY_GFA'] > 0
@@ -1311,10 +1347,6 @@ def add_gfa_efftimes(exposures_table):
         return exposures_table
 
     efftime_dark, efftime_bright, efftime_backup = compute_efftime(exposures_table[valid])
-
-    for col in ('EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA', 'EFFTIME_GFA'):
-        if col not in exposures_table.colnames:
-            exposures_table[col] = np.zeros(len(exposures_table), dtype=np.float64)
 
     exposures_table['EFFTIME_DARK_GFA'][valid] = efftime_dark
     exposures_table['EFFTIME_BRIGHT_GFA'][valid] = efftime_bright
@@ -1621,20 +1653,7 @@ def main(options=None):
 
     # -- determine nights ---------------------------------------------------
     if args.nights is None:
-        if rank == 0:
-            exptab_template = findfile('exposure_table', night=99999999, readonly=True)
-            exptab_dirname = os.path.dirname(os.path.dirname(exptab_template))
-            exptab_pattern = os.path.join(exptab_dirname, '*',
-                                          os.path.basename(exptab_template).replace('99999999', '*'))
-            all_nights = []
-            for fn in sorted(glob.glob(exptab_pattern)):
-                try:
-                    all_nights.append(int(os.path.splitext(os.path.basename(fn))[0].replace(
-                        'exposure_table_', '')))
-                except ValueError:
-                    pass
-        else:
-            all_nights = []
+        all_nights = find_processed_nights() if rank == 0 else []
     else:
         all_nights = parse_int_args(args.nights, include_end=True) if rank == 0 else []
 
@@ -1676,6 +1695,23 @@ def main(options=None):
             except (KeyError, OSError):
                 log.warning('Could not read pre-existing FRAMES; starting fresh')
 
+    # -- --no-update: refuse to replace rows already in the output ----------
+    conflict = False
+    if rank == 0 and not args.update and preexisting_exposures is not None:
+        present = np.isin(preexisting_exposures['NIGHT'], all_nights)
+        if expids_filter is not None:
+            present &= np.isin(preexisting_exposures['EXPID'], list(expids_filter))
+        if present.any():
+            conflict = True
+            log.critical('--no-update: {} exposures on nights {} are already in {}; '
+                         'rerun without --no-update to replace them'.format(
+                             present.sum(), sorted(set(preexisting_exposures['NIGHT'][present].tolist())),
+                             args.outfile))
+    if comm is not None:
+        conflict = comm.bcast(conflict, root=0)
+    if conflict:
+        return 1
+
     # -- collect exposures --------------------------------------------------
     good_expids, bad_expids = collect_science_expids(ranknights, expids_filter)
 
@@ -1694,7 +1730,8 @@ def main(options=None):
     try:
         # One loading path supplies QA values, disk-score fallbacks, or recomputation.
         args_list = [(entry['NIGHT'], int(entry['EXPID']), args.recompute_skymags,
-                      camword_map[int(entry['EXPID'])], args.recompute, args.alpha_only, args.details_dir)
+                      camword_map[int(entry['EXPID'])], args.recompute, args.alpha_only, args.details_dir,
+                      entry)
                      for entry in good_expids]
         if args.nproc > 1:
             with multiprocessing.Pool(args.nproc) as pool:
@@ -1706,7 +1743,8 @@ def main(options=None):
 
         if args.add_badexp and bad_expids:
             exposures_table, frames_table = inject_bad_exposures(
-                exposures_table, frames_table, bad_expids, cameras=cameras_filter)
+                exposures_table, frames_table, bad_expids, cameras=cameras_filter,
+                compute_skymags=args.recompute_skymags)
 
     except Exception as error:
         if comm is None:
@@ -1764,10 +1802,15 @@ def main(options=None):
         eff_cols = ('EFFTIME_GFA', 'EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA')
         before = {col: np.asarray(exposures_table[col]).copy() for col in eff_cols}
         exposures_table = add_gfa_efftimes(exposures_table)
+        # Ignore float rounding and NaN->0 (invalid GFA rows are now stored as
+        # zero), so only real changes trigger tile completeness updates.
         changed = np.zeros(len(exposures_table), dtype=bool)
         for col in eff_cols:
-            changed |= ~np.isclose(before[col], exposures_table[col], rtol=0, atol=0, equal_nan=True)
+            changed |= ~np.isclose(np.nan_to_num(before[col]), np.nan_to_num(exposures_table[col]),
+                                   rtol=1e-5, atol=1e-3)
         gfa_nights = sorted(set(gfa_nights) | set(exposures_table['NIGHT'][changed].tolist()))
+        if gfa_nights:
+            log.info('GFA values changed for {} nights'.format(len(gfa_nights)))
 
     # -- tile completeness --------------------------------------------------
     if args.tile_completeness is not None:
@@ -1781,6 +1824,7 @@ def main(options=None):
 
         tiles = np.unique(exposures_table['TILEID'][selection])
         selection = np.isin(exposures_table['TILEID'], tiles)
+        log.info('Updating tile completeness for {} tiles'.format(len(tiles)))
 
         new_tile_table = compute_tile_completeness_table(
             exposures_table[selection], prod, auxiliary_table_filenames=args.aux)

@@ -39,9 +39,9 @@ class TestParse(unittest.TestCase):
     # Flags with defaults
     # ------------------------------------------------------------------
 
-    def test_update_default_false(self):
+    def test_update_default_true(self):
         args = self._parse([])
-        self.assertFalse(args.update)
+        self.assertTrue(args.update)
 
     def test_update_flag(self):
         args = self._parse(['--update'])

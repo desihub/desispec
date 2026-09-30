@@ -34,13 +34,17 @@ def exposure_header(night, expid, tileid=1234):
     })
 
 
-def write_exptable_fixture(prod, night, expid, tileid=1234, laststep='all', camword='a0'):
-    """Upsert one synthetic workflow exposure-table row and return its filename."""
+def write_exptable_fixture(prod, night, expid, tileid=1234, laststep='all', camword='a0', **overrides):
+    """Upsert one synthetic workflow exposure-table row and return its filename.
+
+    overrides replace any other exposure-table column values, e.g. EXPTIME.
+    """
     filename = findfile('exposure_table', night=night, specprod_dir=str(prod))
     row = get_exposure_table_column_defaults()
     row.update(NIGHT=night, EXPID=expid, TILEID=tileid, LASTSTEP=laststep,
                CAMWORD=camword, BADCAMWORD='', OBSTYPE='science', EXPTIME=900.,
                SURVEY='main', FAPRGRM='dark', GOALTYPE='dark', GOALTIME=1000.)
+    row.update(overrides)
     table = instantiate_exposure_table()
     if Path(filename).exists():
         table = load_table(filename, tabletype='exptable')
@@ -51,17 +55,22 @@ def write_exptable_fixture(prod, night, expid, tileid=1234, laststep='all', camw
     return filename
 
 
-def write_qa_fixture(prod, night, expid, tileid=1234, value=10., missing=(), petal_hdu=True):
-    """Write QA with one petal; missing names remove selected TSNR2 columns."""
+def write_qa_fixture(prod, night, expid, tileid=1234, value=10., missing=(), petal_hdu=True, zeros=(),
+                     drop_keys=()):
+    """Write QA with one petal; missing names remove selected TSNR2 columns,
+    zeros names set selected TSNR2 columns to 0, and drop_keys removes
+    FIBERQA header keywords (as in older QA files)."""
     filename = findfile('exposureqa', night=night, expid=expid, specprod_dir=str(prod))
     header = exposure_header(night, expid, tileid)
+    for key in drop_keys:
+        del header[key]
     fiber = fits.BinTableHDU(Table({'EBV': [.05, .05]}), header=header, name='FIBERQA')
     petal = Table({'PETAL_LOC': [0]})
     for tracer in _TRACERS:
         for band in ('B', 'R', 'Z'):
             col = 'TSNR2_{}_{}'.format(tracer, band)
             if col not in missing:
-                petal[col] = np.array([value], dtype=np.float32)
+                petal[col] = np.array([0. if col in zeros else value], dtype=np.float32)
     hdus = [fits.PrimaryHDU(), fiber]
     if petal_hdu:
         hdus.append(fits.BinTableHDU(petal, name='PETALQA'))

@@ -5,7 +5,13 @@ desispec Change Log
 0.72.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Rewrite ``desi_tsnr_afterburner`` as ``desispec.scripts.tsnr_afterburner``,
+  reading TSNR2 and sky magnitudes from exposure QA files when available and
+  falling back to cframes otherwise. Exposure-level EBV is now the median over
+  all fibers; runs merge into existing output by default, with ``--no-update``
+  to refuse replacing existing nights (PR `#XXXX`_).
+
+.. _`#XXXX`: https://github.com/desihub/desispec/pull/XXXX
 
 0.72.1 (2026-09-25)
 -------------------

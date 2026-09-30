@@ -102,12 +102,40 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(float(exposures['TSNR2_ELG'][0]), 30.)
         self.assertEqual(len(frames), 3)
 
-    def test_zero_qa_value_is_not_missing(self):
-        write_qa_fixture(self.prod, 20211001, 100, value=0.)
+    def test_single_zero_qa_value_is_not_missing(self):
+        # e.g. TSNR2_LYA_Z is legitimately 0 in real QA files
+        write_qa_fixture(self.prod, 20211001, 100, zeros=['TSNR2_LYA_Z'])
         with patch.object(mod, 'read_one_camera') as camera:
             self._run()
         camera.assert_not_called()
-        self.assertEqual(float(self._tables()[0]['TSNR2_ELG'][0]), 0.)
+        exposures, _ = self._tables()
+        self.assertEqual(float(exposures['TSNR2_LYA'][0]), 20.)
+        self.assertEqual(float(exposures['TSNR2_ELG'][0]), 30.)
+
+    def test_all_zero_qa_band_uses_scores(self):
+        # exposure_qa leaves a band at 0 when it could not read that camera
+        zeros = ['TSNR2_{}_B'.format(tracer) for tracer in mod._TSNR2_TRACERS]
+        write_qa_fixture(self.prod, 20211001, 100, zeros=zeros)
+        write_cframe_fixture(self.prod, 20211001, 100, 'b0')
+        self._run()
+        exposures, _ = self._tables()
+        self.assertEqual(float(exposures['TSNR2_ELG'][0]), 40.)
+
+    def test_old_qa_header_uses_exposure_table_and_cframe_fibermap(self):
+        # QA files before 20260601 lack FAFLAVOR; a few lack MJD-OBS/EXPTIME/AIRMASS
+        write_exptable_fixture(self.prod, 20211001, 100, EXPTIME=950., AIRMASS=1.3, **{'MJD-OBS': 59489.})
+        write_qa_fixture(self.prod, 20211001, 100, drop_keys=['MJD-OBS', 'EXPTIME', 'AIRMASS', 'FAFLAVOR'])
+        write_cframe_fixture(self.prod, 20211001, 100, 'b0')
+        with patch.object(mod, 'read_one_camera') as camera:
+            self.assertEqual(self._run(), 0)
+        camera.assert_not_called()
+        exposures, frames = self._tables()
+        self.assertEqual(float(exposures['EXPTIME'][0]), 950.)
+        self.assertAlmostEqual(float(exposures['AIRMASS'][0]), 1.3, places=5)
+        self.assertEqual(float(exposures['MJD'][0]), 59489.)
+        self.assertEqual(exposures['FAFLAVOR'][0], 'maindark')
+        self.assertEqual(exposures['PROGRAM'][0], 'dark')
+        self.assertEqual(set(frames['FAFLAVOR']), {'maindark'})
 
     def test_missing_qa_column_uses_scores_without_calibrations(self):
         write_qa_fixture(self.prod, 20211001, 100, missing=['TSNR2_ELG_B'])
@@ -241,8 +269,11 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self._mpi()
         self._run('--mpi')
         mpi_exp, mpi_frames = self._tables()
-        np.testing.assert_array_equal(serial_exp.as_array(), mpi_exp.as_array())
-        np.testing.assert_array_equal(serial_frames.as_array(), mpi_frames.as_array())
+        # column by column so NaN (e.g. TSNR2_ALPHA from QA) compares equal
+        for serial, mpi in ((serial_exp, mpi_exp), (serial_frames, mpi_frames)):
+            self.assertEqual(serial.colnames, mpi.colnames)
+            for col in serial.colnames:
+                np.testing.assert_array_equal(serial[col], mpi[col])
 
     def test_mpi_gathers_other_rank_and_empty_rank(self):
         self._run()
@@ -260,8 +291,8 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self._run()
         before = self.outfile.read_bytes()
         comm = self._mpi()
-        write_qa_fixture(self.prod, 20211001, 100, missing=['TSNR2_ELG_B'])
-        self.assertEqual(self._run('--mpi'), 1)
+        with patch.object(mod, 'read_one_exposure', side_effect=RuntimeError('calculation failed')):
+            self.assertEqual(self._run('--mpi'), 1)
         comm.gather.assert_called_once()
         self.assertEqual(self.outfile.read_bytes(), before)
 
@@ -281,13 +312,27 @@ class TestAfterburnerIntegration(unittest.TestCase):
         pool.assert_called_once_with(2)
         self.assertEqual(float(self._tables()[0]['TSNR2_ELG'][0]), 30.)
 
-    def test_missing_fallback_camera_preserves_existing_output(self):
+    def test_missing_fallback_camera_is_skipped(self):
+        # b0 has neither a QA value nor a cframe: skip it, as the original afterburner did
         self._run()
-        before = self.outfile.read_bytes()
         write_qa_fixture(self.prod, 20211001, 100, missing=['TSNR2_ELG_B'])
-        with self.assertRaises(FileNotFoundError):
-            self._run()
-        self.assertEqual(self.outfile.read_bytes(), before)
+        self.assertEqual(self._run(), 0)
+        exposures, frames = self._tables()
+        self.assertEqual(frames['CAMERA'].tolist(), ['r0', 'z0'])
+        self.assertEqual(float(exposures['TSNR2_ELG'][0]), 20.)
+
+    def test_unreadable_exposure_keeps_existing_rows(self):
+        # LASTSTEP=all exposure with no QA and no cframes: skip it, keep the old rows
+        self._run()
+        before_exp, before_frames = self._tables()
+        os.remove(mod.findfile('exposureqa', night=20211001, expid=100))
+        self._add_exposure(expid=101)
+        self.assertEqual(self._run(), 0)
+        exposures, frames = self._tables()
+        self.assertEqual(exposures['EXPID'].tolist(), [100, 101])
+        old = exposures[exposures['EXPID'] == 100]
+        self.assertEqual(float(old['TSNR2_ELG'][0]), float(before_exp['TSNR2_ELG'][0]))
+        self.assertEqual(int(np.sum(frames['EXPID'] == 100)), len(before_frames))
 
     def test_bad_only_fresh_output_and_update(self):
         write_exptable_fixture(self.prod, 20211001, 100, laststep='skysub')
