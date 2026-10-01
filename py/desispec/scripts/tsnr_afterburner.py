@@ -1116,7 +1116,23 @@ def _get_default_for_col(table, col):
 # Bad exposure injection
 # ---------------------------------------------------------------------------
 
-def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None):
+def _bad_exposure_skymags(args_tuple):
+    """Return sky magnitudes for a bad exposure, given (night, expid).
+
+    Computed whenever the exposure directory exists, as for good exposures
+    without stored values (compute_skymag gives 99 if there are no sky
+    files); NaN if nothing was processed at all.  Takes one tuple so that it
+    can be used with multiprocessing.Pool.map.
+    """
+    night, expid = args_tuple
+    expdir = os.path.join(specprod_root(), 'exposures', str(int(night)), '{:08d}'.format(int(expid)))
+    if os.path.isdir(expdir):
+        return get_skymag_values(int(night), int(expid))
+    return {'SKY_MAG_G_SPEC': np.float32(np.nan), 'SKY_MAG_R_SPEC': np.float32(np.nan),
+            'SKY_MAG_Z_SPEC': np.float32(np.nan)}
+
+
+def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None, skymags=None):
     """Add zero-filled rows for EXPIDs that were not fully processed, or
     whose processed outputs could not be read.
 
@@ -1131,6 +1147,9 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
         frames_table: astropy.table.Table.
         bad_expids: list of dict, as returned by collect_science_expids().
         cameras: Optional selected camera names, also applied to bad exposures.
+        skymags: Optional dict mapping EXPID -> sky magnitude dict, e.g.
+            precomputed in parallel with _bad_exposure_skymags(); exposures
+            not in it are computed here.
 
     Returns:
         (exposures_table, frames_table): tuple of astropy.table.Table with
@@ -1184,16 +1203,11 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
         entry = derive_targ_info(entry)
         entry['PROGRAM'] = faflavor2program(entry['FAFLAVOR'])
 
-        # -- sky mags: computed whenever the exposure directory exists, as for
-        # -- good exposures without stored values (compute_skymag gives 99 if
-        # -- there are no sky files); NaN if nothing was processed at all
-        expdir = os.path.join(specprod_root(), 'exposures', str(int(be['NIGHT'])), '{:08d}'.format(expid))
-        if os.path.isdir(expdir):
-            entry.update(get_skymag_values(int(be['NIGHT']), expid))
+        # -- sky mags (see _bad_exposure_skymags) -----------------------------
+        if skymags is not None and expid in skymags:
+            entry.update(skymags[expid])
         else:
-            entry['SKY_MAG_G_SPEC'] = np.float32(np.nan)
-            entry['SKY_MAG_R_SPEC'] = np.float32(np.nan)
-            entry['SKY_MAG_Z_SPEC'] = np.float32(np.nan)
+            entry.update(_bad_exposure_skymags((be['NIGHT'], expid)))
 
         for tracer in _TSNR2_TRACERS:
             entry['TSNR2_{}'.format(tracer)] = np.float32(0.0)
@@ -1750,24 +1764,34 @@ def main(options=None):
                       camword_map[int(entry['EXPID'])], args.recompute, args.alpha_only, args.details_dir,
                       entry)
                      for entry in good_expids]
-        if args.nproc > 1:
-            with multiprocessing.Pool(args.nproc) as pool:
-                results = pool.map(_read_one_exposure_wrapper, args_list)
-        else:
-            results = [read_one_exposure(*values) for values in args_list]
-        exposure_rows = [row for row in results if row is not None]
-        frames_table, exposures_table = build_tables(exposure_rows, camword_map)
+        # One pool serves both the exposure loading and the bad-exposure sky mags.
+        pool = multiprocessing.Pool(args.nproc) if args.nproc > 1 else None
+        try:
+            if pool is not None:
+                mapper = pool.map
+            else:
+                mapper = lambda func, items: [func(item) for item in items]
+            results = mapper(_read_one_exposure_wrapper, args_list)
+            exposure_rows = [row for row in results if row is not None]
+            frames_table, exposures_table = build_tables(exposure_rows, camword_map)
 
-        # Processed exposures with nothing readable on disk always get zeroed
-        # rows, replacing any earlier values; bad exposures only with --add-badexp.
-        unreadable = [entry for entry, row in zip(good_expids, results) if row is None]
-        zero_fill = (bad_expids if args.add_badexp else []) + unreadable
-        if cameras_filter is not None and zero_fill:
-            log.warning('With --cameras, existing rows for cameras outside the selection are kept for '
-                        'zero-filled exposures {}'.format([int(be['EXPID']) for be in zero_fill]))
-        if zero_fill:
-            exposures_table, frames_table = inject_bad_exposures(
-                exposures_table, frames_table, zero_fill, cameras=cameras_filter)
+            # Processed exposures with nothing readable on disk always get zeroed
+            # rows, replacing any earlier values; bad exposures only with --add-badexp.
+            unreadable = [entry for entry, row in zip(good_expids, results) if row is None]
+            zero_fill = (bad_expids if args.add_badexp else []) + unreadable
+            if cameras_filter is not None and zero_fill:
+                log.warning('With --cameras, existing rows for cameras outside the selection are kept for '
+                            'zero-filled exposures {}'.format([int(be['EXPID']) for be in zero_fill]))
+            if zero_fill:
+                sky_args = [(be['NIGHT'], int(be['EXPID'])) for be in zero_fill]
+                skymags = dict(zip([expid for night, expid in sky_args],
+                                   mapper(_bad_exposure_skymags, sky_args)))
+                exposures_table, frames_table = inject_bad_exposures(
+                    exposures_table, frames_table, zero_fill, cameras=cameras_filter, skymags=skymags)
+        finally:
+            if pool is not None:
+                pool.close()
+                pool.join()
 
     except Exception as error:
         if comm is None:

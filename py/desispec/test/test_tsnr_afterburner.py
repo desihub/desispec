@@ -1663,7 +1663,7 @@ class TestMain(unittest.TestCase):
 
         # The mock must return non-empty tables; returning empty tables would cause
         # main() to hit the "No valid exposures" guard and return 1 before write_output.
-        def _inject_passthrough(exp_tbl, frm_tbl, bad_list, cameras=None):
+        def _inject_passthrough(exp_tbl, frm_tbl, bad_list, cameras=None, skymags=None):
             return exp_tbl, frm_tbl
 
         with tempfile.TemporaryDirectory() as tmpdir:

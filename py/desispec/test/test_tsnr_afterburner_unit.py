@@ -320,10 +320,24 @@ class TestAfterburnerIntegration(unittest.TestCase):
 
     def test_multiprocessing_dispatches_exposure_loader(self):
         with patch.object(mod.multiprocessing, 'Pool') as pool:
-            pool.return_value.__enter__.return_value.map.side_effect = lambda fn, args: list(map(fn, args))
+            pool.return_value.map.side_effect = lambda fn, args: list(map(fn, args))
             self.assertEqual(self._run('--nproc', '2'), 0)
         pool.assert_called_once_with(2)
+        pool.return_value.close.assert_called_once()
         self.assertEqual(float(self._tables()[0]['TSNR2_ELG'][0]), 30.)
+
+    def test_bad_exposure_skymags_use_the_pool(self):
+        # one pool: exposure loading, then the bad-exposure sky magnitudes
+        self._add_exposure(expid=101, laststep='skysub')
+        os.makedirs(mod.os.path.dirname(mod.findfile('cframe', night=20211001, expid=101, camera='b0')))
+        with patch.object(mod.multiprocessing, 'Pool') as pool, self._no_fiberassign():
+            pool.return_value.map.side_effect = lambda fn, args: list(map(fn, args))
+            self.assertEqual(self._run('--nproc', '2', '--add-badexp'), 0)
+        pool.assert_called_once_with(2)
+        functions = [call.args[0] for call in pool.return_value.map.call_args_list]
+        self.assertEqual(functions, [mod._read_one_exposure_wrapper, mod._bad_exposure_skymags])
+        exposures, _ = self._tables()
+        self.assertEqual(float(exposures['SKY_MAG_R_SPEC'][exposures['EXPID'] == 101][0]), 21.)
 
     def test_missing_fallback_camera_is_skipped(self):
         # b0 has neither a QA value nor a cframe: skip it, as the original afterburner did
