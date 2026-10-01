@@ -75,13 +75,13 @@ class TestParse(unittest.TestCase):
         args = self._parse(['--add-badexp'])
         self.assertTrue(args.add_badexp)
 
-    def test_compute_skymags_default_false(self):
+    def test_recompute_skymags_default_false(self):
         args = self._parse([])
-        self.assertFalse(args.compute_skymags)
+        self.assertFalse(args.recompute_skymags)
 
-    def test_compute_skymags_flag(self):
-        args = self._parse(['--compute-skymags'])
-        self.assertTrue(args.compute_skymags)
+    def test_recompute_skymags_flag(self):
+        args = self._parse(['--recompute-skymags'])
+        self.assertTrue(args.recompute_skymags)
 
     # ------------------------------------------------------------------
     # Integer / string arguments with defaults

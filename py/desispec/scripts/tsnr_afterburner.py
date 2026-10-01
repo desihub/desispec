@@ -112,8 +112,9 @@ def parse(options=None):
                         help='Auxiliary tile table files (e.g. SV1 tiles).')
     parser.add_argument('--gfa-proc-dir', type=str, default=None, required=False,
                         help='Directory containing GFA offline processing files.')
-    parser.add_argument('--recompute-skymags', '--compute-skymags', action='store_true',
-                        help='Recompute sky magnitudes even when header keywords are present.')
+    parser.add_argument('--recompute-skymags', action='store_true',
+                        help='Recompute sky magnitudes from sky files even when the exposure QA already '
+                             'stores them. Missing sky magnitudes are always computed.')
     parser.add_argument('--skymags', type=str, default=None,
                         help='Table of NIGHT, EXPID, SKY_MAG_G/R/Z values to use for sky magnitudes.')
     output_group = parser.add_mutually_exclusive_group()
@@ -140,8 +141,6 @@ def parse(options=None):
                         help='Use MPI to distribute nights across nodes.')
 
     args = parser.parse_args(options)
-    # Retain the legacy Namespace attribute as well as the CLI spelling.
-    args.compute_skymags = args.recompute_skymags
     return args
 
 
@@ -1117,7 +1116,7 @@ def _get_default_for_col(table, col):
 # Bad exposure injection
 # ---------------------------------------------------------------------------
 
-def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None, compute_skymags=False):
+def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None):
     """Add zero-filled rows for EXPIDs that were not fully processed, or
     whose processed outputs could not be read.
 
@@ -1132,9 +1131,6 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
         frames_table: astropy.table.Table.
         bad_expids: list of dict, as returned by collect_science_expids().
         cameras: Optional selected camera names, also applied to bad exposures.
-        compute_skymags: If True, compute sky magnitudes for bad exposures
-            that have an exposures directory (as the original afterburner did
-            with --compute-skymags); otherwise they are NaN.
 
     Returns:
         (exposures_table, frames_table): tuple of astropy.table.Table with
@@ -1188,10 +1184,11 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
         entry = derive_targ_info(entry)
         entry['PROGRAM'] = faflavor2program(entry['FAFLAVOR'])
 
-        # -- sky mags: NaN for unprocessed exposures unless requested and the
-        # -- exposure directory exists (compute_skymag gives 99 if no sky files)
+        # -- sky mags: computed whenever the exposure directory exists, as for
+        # -- good exposures without stored values (compute_skymag gives 99 if
+        # -- there are no sky files); NaN if nothing was processed at all
         expdir = os.path.join(specprod_root(), 'exposures', str(int(be['NIGHT'])), '{:08d}'.format(expid))
-        if compute_skymags and os.path.isdir(expdir):
+        if os.path.isdir(expdir):
             entry.update(get_skymag_values(int(be['NIGHT']), expid))
         else:
             entry['SKY_MAG_G_SPEC'] = np.float32(np.nan)
@@ -1770,8 +1767,7 @@ def main(options=None):
                         'zero-filled exposures {}'.format([int(be['EXPID']) for be in zero_fill]))
         if zero_fill:
             exposures_table, frames_table = inject_bad_exposures(
-                exposures_table, frames_table, zero_fill, cameras=cameras_filter,
-                compute_skymags=args.recompute_skymags)
+                exposures_table, frames_table, zero_fill, cameras=cameras_filter)
 
     except Exception as error:
         if comm is None:
@@ -1836,7 +1832,7 @@ def main(options=None):
         return 1
 
     # An explicit sky table overrides stored values, unless recomputation was
-    # requested (the historical --compute-skymags precedence).
+    # requested with --recompute-skymags.
     if args.skymags is not None and not args.recompute_skymags:
         exposures_table = add_skymag_columns(exposures_table, Table.read(args.skymags))
 
@@ -1882,7 +1878,10 @@ def main(options=None):
 
         if os.path.isfile(args.tile_completeness):
             previous = Table.read(args.tile_completeness)
-            new_tile_table = merge_tile_completeness_table(previous, new_tile_table)
+            # An empty CSV reads back with integer text columns, so only merge
+            # when there are previous rows.
+            if len(previous) > 0:
+                new_tile_table = merge_tile_completeness_table(previous, new_tile_table)
 
         # drop tiles whose only exposures were removed above
         orphan = np.isin(new_tile_table['TILEID'], list(removed_tiles - set(exposures_table['TILEID'].tolist())))

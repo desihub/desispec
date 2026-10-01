@@ -234,6 +234,10 @@ class TestParse(unittest.TestCase):
         args = parse(['--recompute-skymags'])
         self.assertTrue(args.recompute_skymags)
 
+    def test_old_compute_skymags_name_removed(self):
+        with self.assertRaises(SystemExit):
+            parse(['--compute-skymags'])
+
 
 class TestDeriveTargInfo(unittest.TestCase):
     """Test derive_targ_info() survey/goaltype normalization."""
@@ -652,28 +656,25 @@ class TestInjectBadExposures(unittest.TestCase):
                 'SURVEY': 'main', 'FAPRGRM': 'dark', 'GOALTYPE': 'dark', 'GOALTIME': 1000.0,
                 'MINTFRAC': 0.9, 'FAFLAVOR': 'maindark', 'EBVFAC': 1.0}
 
-    def test_skymags_computed_when_requested_and_expdir_exists(self):
-        """With compute_skymags, a bad exposure with an exposures dir gets computed sky mags."""
+    def test_skymags_computed_when_expdir_exists(self):
+        """A bad exposure with an exposures dir gets computed sky mags, with no flag needed."""
+        exposures, frames = self._make_empty_tables()
         with tempfile.TemporaryDirectory() as tmpdir:
             os.makedirs(os.path.join(tmpdir, 'exposures', '20260926', '00000999'))
-            for compute, expected in ((True, 21.0), (False, np.nan)):
-                exposures, frames = self._make_empty_tables()
-                with patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value=tmpdir), \
-                     patch('desispec.scripts.tsnr_afterburner.get_skymag_values', return_value={
-                         'SKY_MAG_G_SPEC': 22.0, 'SKY_MAG_R_SPEC': 21.0, 'SKY_MAG_Z_SPEC': 20.0}) as sky:
-                    exposures, _ = inject_bad_exposures(exposures, frames, [self._bad_entry()],
-                                                        compute_skymags=compute)
-                value = float(exposures['SKY_MAG_R_SPEC'][exposures['EXPID'] == 999][0])
-                np.testing.assert_equal(value, expected)
-                self.assertEqual(sky.called, compute)
+            with patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value=tmpdir), \
+                 patch('desispec.scripts.tsnr_afterburner.get_skymag_values', return_value={
+                     'SKY_MAG_G_SPEC': 22.0, 'SKY_MAG_R_SPEC': 21.0, 'SKY_MAG_Z_SPEC': 20.0}) as sky:
+                exposures, _ = inject_bad_exposures(exposures, frames, [self._bad_entry()])
+        sky.assert_called_once_with(20260926, 999)
+        self.assertEqual(float(exposures['SKY_MAG_R_SPEC'][exposures['EXPID'] == 999][0]), 21.0)
 
     def test_skymags_nan_without_expdir(self):
-        """A bad exposure without an exposures dir keeps NaN sky mags even if requested."""
+        """A bad exposure without an exposures dir has NaN sky mags."""
         exposures, frames = self._make_empty_tables()
         with tempfile.TemporaryDirectory() as tmpdir, \
              patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value=tmpdir), \
              patch('desispec.scripts.tsnr_afterburner.get_skymag_values') as sky:
-            exposures, _ = inject_bad_exposures(exposures, frames, [self._bad_entry()], compute_skymags=True)
+            exposures, _ = inject_bad_exposures(exposures, frames, [self._bad_entry()])
         sky.assert_not_called()
         self.assertTrue(np.isnan(exposures['SKY_MAG_R_SPEC'][exposures['EXPID'] == 999][0]))
 
@@ -1662,7 +1663,7 @@ class TestMain(unittest.TestCase):
 
         # The mock must return non-empty tables; returning empty tables would cause
         # main() to hit the "No valid exposures" guard and return 1 before write_output.
-        def _inject_passthrough(exp_tbl, frm_tbl, bad_list, cameras=None, compute_skymags=False):
+        def _inject_passthrough(exp_tbl, frm_tbl, bad_list, cameras=None):
             return exp_tbl, frm_tbl
 
         with tempfile.TemporaryDirectory() as tmpdir:

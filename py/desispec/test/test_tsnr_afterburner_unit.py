@@ -464,6 +464,25 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(len(frames), 0)
         self.assertEqual(len(Table.read(str(tiles))), 0)
 
+    def test_empty_tile_csv_can_be_repopulated(self):
+        # remove the last exposure with a CSV tile file, then add a new exposure
+        tiles = self.prod / 'tiles.csv'
+        def compute(exposures, *args, **kwargs):
+            ids = np.unique(exposures['TILEID'])
+            return Table({'TILEID': ids, 'SURVEY': np.full(len(ids), 'main'),
+                          'GOALTIME': np.full(len(ids), 1000.)})
+        def merge(previous, new):
+            return vstack([previous[~np.isin(previous['TILEID'], new['TILEID'])], new])
+        with patch.object(mod, 'compute_tile_completeness_table', side_effect=compute), \
+             patch.object(mod, 'merge_tile_completeness_table', side_effect=merge):
+            self._run('--tile-completeness', str(tiles))
+            write_exptable_fixture(self.prod, 20211001, 100, laststep='ignore')
+            self.assertEqual(self._run('--tile-completeness', str(tiles)), 0)
+            self.assertEqual(len(Table.read(str(tiles))), 0)
+            self._add_exposure(night=20211002, expid=200, tileid=5678)
+            self.assertEqual(self._run('--tile-completeness', str(tiles)), 0)
+        self.assertEqual(Table.read(str(tiles))['TILEID'].tolist(), [5678])
+
     def test_all_cameras_bad_replaces_existing_rows(self):
         # CAMWORD == BADCAMWORD makes the exposure a bad exposure
         self._run()
@@ -528,7 +547,7 @@ class TestAfterburnerIntegration(unittest.TestCase):
                'SKY_MAG_R': [22.], 'SKY_MAG_Z': [21.]}).write(skyfile)
         self._run('--skymags', str(skyfile))
         self.assertEqual(float(self._tables()[0]['SKY_MAG_R_SPEC'][0]), 22.)
-        self._run('--skymags', str(skyfile), '--compute-skymags')
+        self._run('--skymags', str(skyfile), '--recompute-skymags')
         self.skymag.assert_called()
         self.assertEqual(float(self._tables()[0]['SKY_MAG_R_SPEC'][0]), 21.)
 
