@@ -33,6 +33,44 @@ try:
 except TypeError: # This can happen during documentation builds.
     C_LIGHT = 299792458.0/1000.0
 
+#- Regularization of the deconvolved calibration where some, but fewer than
+#- min_number_of_stars, stars have signal: 2nd-difference penalty with weight
+#- DECONV_SMOOTH_LAMBDA * median(diag(A)), over that region grown by
+#- DECONV_SMOOTH_GROW pixels on each side. Wavelengths without any star are
+#- interpolated instead (see _hole_interpolation_matrix).
+DECONV_SMOOTH_LAMBDA = 1.0
+DECONV_SMOOTH_GROW = 5
+
+def _add_weak_region_smoothing(A, current_ivar, nstds,
+        lam=DECONV_SMOOTH_LAMBDA, grow=DECONV_SMOOTH_GROW):
+    """Add a 2nd-difference penalty to dense normal matrix A where some,
+    but fewer than min_number_of_stars, stars have current_ivar>0
+
+    Args:
+        A: 2D[nwave, nwave] dense normal equation matrix (with epsilon prior)
+        current_ivar: 2D[nstds, nwave] ivar of the stars in the fit
+        nstds: number of standard stars
+
+    Options:
+        lam: penalty weight in units of median(diag(A))
+        grow: number of pixels to grow the weak region on each side
+
+    Returns (A, nweak) with the updated A and number of penalized pixels;
+    A is returned unchanged if no pixel needs it.
+    """
+    min_number_of_stars = min(3,max(1,nstds//2))
+    nstars_with_signal = np.sum(current_ivar>0, axis=0)
+    weak = (nstars_with_signal > 0) & (nstars_with_signal < min_number_of_stars)
+    if not np.any(weak):
+        return A, 0
+    if grow > 0:
+        weak = scipy.ndimage.binary_dilation(weak, iterations=int(grow))
+    nwave = A.shape[0]
+    D = scipy.sparse.diags([1., -2., 1.], [0, 1, 2], shape=(nwave-2, nwave)).tocsr()
+    D = scipy.sparse.diags(weak[1:-1].astype(float)).dot(D)
+    A = A + lam*np.median(np.diagonal(A))*(D.T @ D).toarray()
+    return A, int(np.sum(weak))
+
 #- Minimum median per-pixel S/N of the deconvolved calibration needed to use
 #- it for the cframe resolution C_i^-1 R C; below that keep the frame R.
 #- TODO: threshold under review, see desispec #2869
@@ -1261,6 +1299,11 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         A = epsilon*np.eye(nwave) + A   #- converts sparse A -> dense A
         B += median_calib*epsilon
 
+        #- Smoothness prior where too few (but some) stars constrain the calibration
+        A, nweak = _add_weak_region_smoothing(A, current_ivar, nstds)
+        if nweak > 0:
+            log.debug('%s iter %d smoothing prior on %d weak pixels', camera, iteration, nweak)
+
         log.info("%s iter %d solving", camera, iteration)
         # holes = wavelengths without any valid std star pixel
         hole = (np.sum(current_ivar>0,axis=0) == 0)
@@ -1421,6 +1464,10 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     minivar = np.min(current_ivar[current_ivar>0])
     epsilon = minivar/10000
     A = epsilon*np.eye(nwave) + A   #- converts sparse A -> dense A
+    A, nweak = _add_weak_region_smoothing(A, current_ivar, nstds)
+    if nweak > 0:
+        log.info(f"{camera} smoothing prior on deconvolved calibration over {nweak} pixels "
+                 f"with fewer than {min(3,max(1,nstds//2))} stars")
     # use the same parametrisation as in the fit for the covariance
     hole = (np.sum(current_ivar>0,axis=0) == 0)
     if np.any(hole) and not np.all(hole) :

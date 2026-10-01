@@ -412,6 +412,34 @@ class TestFluxCalibration(unittest.TestCase):
         self.assertEqual(qa['npix'], 0)
         self.assertTrue(np.isnan(qa['snr_med']))
 
+    def test_weak_region_smoothing(self):
+        """Test 2nd-difference prior only where some, but too few, stars have signal"""
+        from desispec.fluxcalibration import _add_weak_region_smoothing
+        nwave, nstds = 100, 4    # requires 2 stars per pixel
+        A = np.diag(np.full(nwave, 3.))
+        current_ivar = np.ones((nstds, nwave))
+
+        A2, nweak = _add_weak_region_smoothing(A, current_ivar, nstds, lam=1., grow=5)
+        self.assertEqual(nweak, 0)
+        self.assertIs(A2, A)
+
+        # no star at all: hole, handled by interpolation, not by this prior
+        current_ivar[:, 70:73] = 0
+        A2, nweak = _add_weak_region_smoothing(A, current_ivar, nstds, lam=1., grow=5)
+        self.assertEqual(nweak, 0)
+
+        current_ivar[1:, 40:43] = 0    # only 1 star at 40-42
+        A2, nweak = _add_weak_region_smoothing(A, current_ivar, nstds, lam=1., grow=5)
+        self.assertEqual(nweak, 3+2*5)
+        changed = np.where(np.any(A2 != A, axis=0))[0]
+        # 2nd-difference rows j..j+2 for weak j in 35-47 (rows start at pixel 1)
+        self.assertEqual(changed.min(), 35-1)
+        self.assertEqual(changed.max(), 47+1)
+        self.assertTrue(np.allclose(A2, A2.T))
+        # penalty does not change a linear calibration
+        x = np.arange(nwave, dtype=float)
+        self.assertTrue(np.allclose(A2.dot(x), A.dot(x)))
+
     def test_compute_fluxcalibration_deconv_qa(self):
         """Test that a deconvolved calibration failing QA is rejected"""
         frame = get_frame_data()
