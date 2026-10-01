@@ -245,6 +245,19 @@ class TestFluxCalibration(unittest.TestCase):
             ok[-halfwidth:] = False
             self.assertTrue(np.allclose(rowsum_new[ok], rowsum_old[ok]))
 
+    def test_calibration_few_stars(self):
+        """Test that wavelengths with too few (but some) std stars are only masked +-1 pixel"""
+        nstd = 10   # min_number_of_stars = 3
+        frame, wave, model, true_calib = _get_frame_narrow_resolution(nstd=nstd)
+        # only one star left at those wavelengths
+        frame.ivar[1:nstd, 200:204] = 0
+        frame.flux[1:nstd, 200:204] *= 10
+        fluxCalib = compute_flux_calibration(frame, wave, model, input_model_fibers=np.arange(nstd))
+        expected_bad = np.zeros(frame.nwave, dtype=bool)
+        expected_bad[199:205] = True
+        self.assertTrue(np.all(fluxCalib.calib[:, expected_bad] == 0))
+        self.assertTrue(np.all(fluxCalib.calib[:, ~expected_bad] > 0))
+
     def test_apply_fluxcalibration(self):
         #get frame_data
         wave = np.arange(5000, 6000)
