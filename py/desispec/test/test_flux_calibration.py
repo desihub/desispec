@@ -15,6 +15,8 @@ from desispec.frame import Frame
 from desispec.fluxcalibration import normalize_templates
 from desispec.fluxcalibration import FluxCalib
 from desispec.fluxcalibration import compute_flux_calibration, apply_flux_calibration
+from desispec.fluxcalibration import _hole_interpolation_matrix
+from desispec.resolution import Resolution
 from desiutil.log import get_logger
 import desispec.io
 from desispec.io.filters import load_legacy_survey_filter
@@ -22,6 +24,41 @@ from desispec.test.util import get_frame_data, get_models
 from desitarget.targetmask import desi_mask
 
 import speclite.filters
+
+
+def _get_frame_narrow_resolution(nspec=20, nstd=10, nwave=400, snr=30., seed=1):
+    """Return a noisy frame with a DESI-like resolution (sigma 1-1.5 pixels, 11 diagonals)
+
+    The first nstd fibers are standard stars. All fibers have the same input spectrum.
+
+    Returns:
+        frame, wave, model_flux (2D[nstd, nwave]), true calibration (1D[nwave])
+    """
+    rng = np.random.default_rng(seed)
+    wave = 9400 + 0.8 * np.arange(nwave)
+    true_calib = 50 * (1 + 0.2 * np.sin((wave - wave[0]) / 80.))
+    model = 5 + np.sin((wave - wave[0]) / 30.)
+    ndiag = 11
+    xx = np.arange(ndiag) - ndiag // 2
+    rdata = np.zeros((nspec, ndiag, nwave))
+    flux = np.zeros((nspec, nwave))
+    for i in range(nspec):
+        sigma = 1.0 + 0.3 * rng.uniform() + 0.2 * np.linspace(0, 1, nwave)
+        kernel = np.exp(-0.5 * (xx[:, None] / sigma[None, :])**2)
+        rdata[i] = kernel / kernel.sum(axis=0)
+        flux[i] = Resolution(rdata[i]).dot(model * true_calib)
+    noise_sigma = flux.mean() / snr
+    flux += rng.normal(scale=noise_sigma, size=flux.shape)
+    ivar = np.ones(flux.shape) / noise_sigma**2
+    mask = np.zeros(flux.shape, dtype=int)
+    fibermap = desispec.io.empty_fibermap(nspec, 1500)
+    fibermap['OBJTYPE'] = 'TGT'
+    fibermap['DESI_TARGET'] = desi_mask.QSO
+    fibermap['DESI_TARGET'][:nstd] = desi_mask.STD_FAINT
+    fibermap['FIBER_X'] = np.arange(nspec) * 400. / nspec
+    fibermap['FIBER_Y'] = np.arange(nspec) * 400. / nspec
+    frame = Frame(wave, flux, ivar, mask, rdata, fibermap=fibermap, meta={'EXPTIME': 1.0, 'CAMERA': 'z0'})
+    return frame, wave, np.tile(model, (nstd, 1)), true_calib
 
 
 class TestFluxCalibration(unittest.TestCase):
@@ -153,6 +190,60 @@ class TestFluxCalibration(unittest.TestCase):
 
         # the data are noise-free, so the calibration should be nearly unchanged by the masking
         self.assertTrue(np.allclose(fluxCalib.calib, refCalib.calib, rtol=1e-2))
+
+    def test_hole_interpolation_matrix(self):
+        """Test the matrix interpolating a vector over holes"""
+        hole = np.zeros(10, dtype=bool)
+        hole[[0, 3, 4, 9]] = True
+        x = np.arange(10, dtype=float)**2
+        P = _hole_interpolation_matrix(hole)
+        self.assertEqual(P.shape, (10, 6))
+        y = P @ x[~hole]
+        self.assertTrue(np.allclose(y[~hole], x[~hole]))
+        # linear interpolation between pixels 2 and 5 (values 4 and 25)
+        self.assertTrue(np.allclose(y[3:5], [11., 18.]))
+        # nearest value at the ends
+        self.assertEqual(y[0], x[1])
+        self.assertEqual(y[9], x[8])
+        with self.assertRaises(ValueError):
+            _hole_interpolation_matrix(np.ones(5, dtype=bool))
+
+    def test_calibration_hole(self):
+        """Test the calibration around wavelengths where all std stars are masked (#2869)"""
+        nstd = 10
+        frame, wave, model, true_calib = _get_frame_narrow_resolution(nstd=nstd)
+        hole = slice(200, 204)
+        frame.ivar[:nstd, hole] = 0
+        frame.flux[:nstd, hole] *= 10
+        fluxCalib = compute_flux_calibration(frame, wave, model, input_model_fibers=np.arange(nstd))
+
+        # the hole plus the half width of the resolution on each side is masked, nothing else
+        halfwidth = frame.resolution_data.shape[1] // 2
+        expected_bad = np.zeros(frame.nwave, dtype=bool)
+        expected_bad[200 - halfwidth:204 + halfwidth] = True
+        self.assertTrue(np.all(fluxCalib.calib[:, expected_bad] == 0))
+        self.assertTrue(np.all(fluxCalib.ivar[:, expected_bad] == 0))
+        self.assertTrue(np.all(fluxCalib.calib[:, ~expected_bad] > 0))
+
+        # the deconvolved calibration around the hole is not ringing:
+        # its deviations from the truth are comparable to those far from the hole
+        dev = fluxCalib.deconvolved_calib - true_calib
+        near = np.max(np.abs(dev[190:214]))
+        far = np.std(dev[20:140])
+        self.assertLess(near, 6 * far)
+
+        # the calibrated resolution matrix is normalized in the unmasked pixels
+        fluxCalib.fibercorr = {'FLAT_TO_PSF_FLUX': fluxCalib.fibercorr['FLAT_TO_PSF_FLUX']}
+        cframe = copy.deepcopy(frame)
+        cframe.fibermap = None
+        apply_flux_calibration(cframe, fluxCalib)
+        for i in range(nstd, frame.nspec):
+            rowsum_old = Resolution(frame.resolution_data[i]).dot(np.ones(frame.nwave))
+            rowsum_new = Resolution(cframe.resolution_data[i]).dot(np.ones(frame.nwave))
+            ok = (cframe.ivar[i] > 0)
+            ok[:halfwidth] = False
+            ok[-halfwidth:] = False
+            self.assertTrue(np.allclose(rowsum_new[ok], rowsum_old[ok]))
 
     def test_apply_fluxcalibration(self):
         #get frame_data
