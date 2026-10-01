@@ -161,9 +161,9 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
         hx.append( fits.ImageHDU(fluxcalib.deconvolved_calib.astype('f8'), name='DECONVOLVED_CALIB') )
         hx[-1].header['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
 
-    if getattr(fluxcalib, 'deconvolved_calib_rejected', None) is not None:
+    if getattr(fluxcalib, 'deconvolved_calib_unused', None) is not None:
         #- saved for inspection only; not used by apply_flux_calibration
-        hx.append( fits.ImageHDU(fluxcalib.deconvolved_calib_rejected.astype('f8'), name='DECONVOLVED_CALIB_REJECTED') )
+        hx.append( fits.ImageHDU(fluxcalib.deconvolved_calib_unused.astype('f8'), name='DECONVOLVED_CALIB_UNUSED') )
         hx[-1].header['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
 
     t0 = time.time()
@@ -213,10 +213,10 @@ def read_flux_calibration(filename):
         else :
             deconvolved_calib = None
 
-        if 'DECONVOLVED_CALIB_REJECTED' in fx:
-            deconvolved_calib_rejected = native_endian(fx['DECONVOLVED_CALIB_REJECTED'].data.astype('f8'))
+        if 'DECONVOLVED_CALIB_UNUSED' in fx:
+            deconvolved_calib_unused = native_endian(fx['DECONVOLVED_CALIB_UNUSED'].data.astype('f8'))
         else :
-            deconvolved_calib_rejected = None
+            deconvolved_calib_unused = None
 
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
@@ -225,7 +225,7 @@ def read_flux_calibration(filename):
                           fibercorr=fibercorr, fibercorr_comments=fibercorr_comments,
                           stdstar_fibermap = stdstar_fibermap,
                           deconvolved_calib=deconvolved_calib)
-    fluxcalib.deconvolved_calib_rejected = deconvolved_calib_rejected
+    fluxcalib.deconvolved_calib_unused = deconvolved_calib_unused
     fluxcalib.header = header
 
     return fluxcalib

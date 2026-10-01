@@ -1006,7 +1006,8 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
       nsig_flux_scale: n sigma cutoff on the flux scale among standard stars
       min_deconv_snr: minimum median S/N of the deconvolved calibration to
                 return it as deconvolved_calib (used for the cframe resolution);
-                otherwise it is returned as deconvolved_calib_rejected
+                otherwise deconvolved_calib is None (apply_flux_calibration falls back
+                to the frame resolution) and the vector is kept as deconvolved_calib_unused
 
     Returns:
          desispec.FluxCalib object
@@ -1485,7 +1486,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
 
     # QA of the deconvolved calibration, which is used by apply_flux_calibration
     # for the cframe resolution C_i^-1 R C; with too few stars it is noise dominated
-    # and rings pixel-to-pixel, so reject it and keep R instead
+    # and rings pixel-to-pixel; then don't use it, and fall back to the frame R
     night, expid, _ = _night_expid_camera(frame)
     qa = deconvolved_calib_qa(calibration, calibvar, median_calib)
     deconv_ok = bool(qa['snr_med'] >= min_deconv_snr)   #- False for nan
@@ -1495,7 +1496,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     if not deconv_ok:
         log.warning(f"{camera} night={night} expid={expid} DECONVOLVED_CALIB "
                     f"snr_med={qa['snr_med']:.3f} < {min_deconv_snr} (fneg={qa['fneg']:.4f}); "
-                    "rejecting it: cframe will keep frame resolution R instead of C_i^-1 R C")
+                    "not used: cframe falls back to frame resolution R instead of C_i^-1 R C")
     deconv_qa = dict(
         DCSNRMED=(qa['snr_med'], 'DECONVOLVED_CALIB median S/N per pixel'),
         DCFNEG=(qa['fneg'], 'DECONVOLVED_CALIB fraction of pixels < 0'),
@@ -1597,7 +1598,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
                      deconvolved_calib=deconvolved_calib if deconv_ok else None)
     fluxcalib.deconv_qa = deconv_qa
     if not deconv_ok:
-        fluxcalib.deconvolved_calib_rejected = deconvolved_calib
+        fluxcalib.deconvolved_calib_unused = deconvolved_calib
     return fluxcalib
 
 
@@ -1647,9 +1648,9 @@ class FluxCalib(object):
 
         self.deconvolved_calib = deconvolved_calib
         #- set by compute_flux_calibration: deconvolved calibration that failed
-        #- QA (not used by apply_flux_calibration), and dict of QA header
-        #- keywords -> (value, comment)
-        self.deconvolved_calib_rejected = None
+        #- QA, kept for inspection but not used by apply_flux_calibration, and
+        #- dict of QA header keywords -> (value, comment)
+        self.deconvolved_calib_unused = None
         self.deconv_qa = None
 
     def __repr__(self):
