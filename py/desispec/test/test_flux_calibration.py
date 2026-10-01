@@ -413,7 +413,7 @@ class TestFluxCalibration(unittest.TestCase):
         self.assertTrue(np.isnan(qa['snr_med']))
 
     def test_compute_fluxcalibration_deconv_qa(self):
-        """Test that a deconvolved calibration failing QA is rejected"""
+        """Test that a deconvolved calibration failing QA is not used for the resolution"""
         frame = get_frame_data()
         modelwave, modelflux = get_models()
         stdfibers = np.arange(3)
@@ -422,25 +422,25 @@ class TestFluxCalibration(unittest.TestCase):
         fc = compute_flux_calibration(frame, modelwave, modelflux[0:3],
                 input_model_fibers=stdfibers, min_deconv_snr=0.)
         self.assertIsNotNone(fc.deconvolved_calib)
-        self.assertIsNone(fc.deconvolved_calib_rejected)
+        self.assertIsNone(fc.deconvolved_calib_unused)
         self.assertTrue(fc.deconv_qa['DCQAOK'][0])
         self.assertGreater(fc.deconv_qa['DCSNRMED'][0], 0.)
 
         fc2 = compute_flux_calibration(frame, modelwave, modelflux[0:3],
                 input_model_fibers=stdfibers, min_deconv_snr=np.inf)
         self.assertIsNone(fc2.deconvolved_calib)
-        self.assertTrue(np.all(fc2.deconvolved_calib_rejected == fc.deconvolved_calib))
+        self.assertTrue(np.all(fc2.deconvolved_calib_unused == fc.deconvolved_calib))
         self.assertFalse(fc2.deconv_qa['DCQAOK'][0])
         self.assertTrue(np.all(fc2.calib == fc.calib))
 
-        # round trip of QA keywords and rejected calib
+        # round trip of QA keywords and unused calib
         import tempfile, os
         with tempfile.TemporaryDirectory() as tmpdir:
             filename = os.path.join(tmpdir, 'fluxcalib.fits')
             desispec.io.write_flux_calibration(filename, fc2)
             fc3 = desispec.io.read_flux_calibration(filename)
         self.assertIsNone(fc3.deconvolved_calib)
-        self.assertTrue(np.all(fc3.deconvolved_calib_rejected == fc2.deconvolved_calib_rejected))
+        self.assertTrue(np.all(fc3.deconvolved_calib_unused == fc2.deconvolved_calib_unused))
         self.assertFalse(fc3.header['DCQAOK'])
         self.assertAlmostEqual(fc3.header['DCSNRMED'], fc2.deconv_qa['DCSNRMED'][0])
 
