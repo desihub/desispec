@@ -130,6 +130,30 @@ class TestFluxCalibration(unittest.TestCase):
         self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
         self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)
 
+    def test_masked_star_pixels_ignored_in_median(self):
+        """Test that masked std star pixels with garbage flux do not create a calibration hole (#2869)
+        """
+        modelwave, modelflux = get_models()
+        # two standard stars only
+        nstd = 2
+        frame = get_frame_data()
+        frame.fibermap['DESI_TARGET'][nstd:] = desi_mask.QSO
+        refCalib = compute_flux_calibration(copy.deepcopy(frame), modelwave, modelflux[0:nstd],
+                                            input_model_fibers=np.arange(nstd))
+
+        # second star masked over a few pixels with garbage flux values (e.g. a bad 2D fit on a sky line)
+        frame.ivar[1, 40:44] = 0
+        frame.flux[1, 40:44] *= 10
+        fluxCalib = compute_flux_calibration(frame, modelwave, modelflux[0:nstd],
+                                             input_model_fibers=np.arange(nstd))
+
+        # the first star still has valid data at those wavelengths, so the calibration must be defined there
+        self.assertTrue(np.all(fluxCalib.calib[:, 38:46] > 0))
+        self.assertTrue(np.all(fluxCalib.ivar[:, 38:46] > 0))
+
+        # the data are noise-free, so the calibration should be nearly unchanged by the masking
+        self.assertTrue(np.allclose(fluxCalib.calib, refCalib.calib, rtol=1e-2))
+
     def test_apply_fluxcalibration(self):
         #get frame_data
         wave = np.arange(5000, 6000)
