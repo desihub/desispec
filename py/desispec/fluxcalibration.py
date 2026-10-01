@@ -870,6 +870,42 @@ def normalize_templates(stdwave, stdflux, mag, band, photsys):
 
     return normflux
 
+def _hole_interpolation_matrix(hole):
+    """Matrix expressing a vector with holes as an interpolation of its free values
+
+    Returns P such that x = P @ x_free, where the values of x in the hole are
+    the linear interpolation (in pixel index) of the nearest free values on each side,
+    or a copy of the nearest free value at the ends of the vector.
+
+    Args:
+        hole: 1D boolean array, True for the values to interpolate
+
+    Returns:
+        scipy.sparse.csr_matrix of shape (hole.size, number of False values in hole)
+    """
+    nval = hole.size
+    free = np.where(~hole)[0]
+    if free.size == 0:
+        raise ValueError('cannot interpolate, no free values')
+    col = np.full(nval, -1)
+    col[free] = np.arange(free.size)
+    rows = list(free)
+    cols = list(col[free])
+    vals = [1.] * free.size
+    for j in np.where(hole)[0]:
+        k = np.searchsorted(free, j)
+        if k == 0:
+            rows.append(j); cols.append(col[free[0]]); vals.append(1.)
+        elif k == free.size:
+            rows.append(j); cols.append(col[free[-1]]); vals.append(1.)
+        else:
+            a, b = free[k - 1], free[k]
+            t = (j - a) / (b - a)
+            rows += [j, j]
+            cols += [col[a], col[b]]
+            vals += [1. - t, t]
+    return scipy.sparse.csr_matrix((vals, (rows, cols)), shape=(nval, free.size))
+
 def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         input_model_fibers, nsig_clipping=10., deg=2, debug=False,
         highest_throughput_nstars=0, exposure_seeing_fwhm=1.1, stdcheck=True,
@@ -1146,6 +1182,10 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
 
     nout_tot=0
 
+    # at least a few stars at each wavelength; wavelengths with fewer stars are
+    # considered holes in the calibration (interpolated in the fit and masked in the output)
+    min_number_of_stars = min(3,max(1,nstds//2))
+
     for iteration in range(20) :
 
         # NOTE: this fitting code is replicated later with a final fit with updated errors
@@ -1182,15 +1222,32 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         B += median_calib*epsilon
 
         log.info("%s iter %d solving", camera, iteration)
-        w = np.diagonal(A)>0
-        A_pos_def = A[w,:]
-        A_pos_def = A_pos_def[:,w]
-        calibration = B*0
-        try:
-            calibration[w]=cholesky_solve(A_pos_def, B[w])
-        except np.linalg.LinAlgError :
-            log.info('{} cholesky fails in iteration {}, trying svd'.format(camera, iteration))
-            calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
+        hole = (np.sum(current_ivar>0,axis=0) < min_number_of_stars)
+        if np.any(hole) and not np.all(hole) :
+            # The deconvolved calibration in a hole is only constrained by the tails of
+            # the resolution of neighbouring pixels, so it would be set by noise and by
+            # the weak prior, and would ring (see #2869). Instead, fit only the values
+            # outside the holes, and set the values inside to a linear interpolation.
+            log.info("{} iter {} interpolating calibration over {} pixels with fewer than {} stars".format(
+                camera, iteration, np.sum(hole), min_number_of_stars))
+            P = _hole_interpolation_matrix(hole)
+            A_free = np.asarray(P.T @ (P.T @ np.asarray(A)).T)
+            B_free = P.T @ B
+            try:
+                calibration = P @ cholesky_solve(A_free, B_free)
+            except np.linalg.LinAlgError :
+                log.info('{} cholesky fails in iteration {}, trying svd'.format(camera, iteration))
+                calibration = P @ np.linalg.lstsq(A_free, B_free)[0]
+        else :
+            w = np.diagonal(A)>0
+            A_pos_def = A[w,:]
+            A_pos_def = A_pos_def[:,w]
+            calibration = B*0
+            try:
+                calibration[w]=cholesky_solve(A_pos_def, B[w])
+            except np.linalg.LinAlgError :
+                log.info('{} cholesky fails in iteration {}, trying svd'.format(camera, iteration))
+                calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
 
         log.info("%s iter %d fit scale per fiber", camera, iteration)
         for star in range(nstds) :
@@ -1323,7 +1380,14 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     minivar = np.min(current_ivar[current_ivar>0])
     epsilon = minivar/10000
     A = epsilon*np.eye(nwave) + A   #- converts sparse A -> dense A
-    calibcovar=np.linalg.inv(A)
+    # use the same parametrisation as in the fit for the covariance
+    hole = (np.sum(current_ivar>0,axis=0) < min_number_of_stars)
+    if np.any(hole) and not np.all(hole) :
+        P = _hole_interpolation_matrix(hole)
+        A_free = np.asarray(P.T @ (P.T @ np.asarray(A)).T)
+        calibcovar = np.asarray(P @ (P @ np.linalg.inv(A_free)).T)
+    else :
+        calibcovar=np.linalg.inv(A)
     calibvar=np.diagonal(calibcovar)
     log.info("{} mean(var)={:f}".format(camera, np.mean(calibvar)))
 
@@ -1351,14 +1415,15 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     ccalibivar=(ccalibvar>0)/(ccalibvar+(ccalibvar==0))
 
     # at least a few stars at each wavelength
-    min_number_of_stars = min(3,max(1,nstds//2))
     nstars_with_signal=np.sum(current_ivar>0,axis=0)
-    bad = (nstars_with_signal<min_number_of_stars)
+    hole = (nstars_with_signal<min_number_of_stars)
     nallbad = np.sum(nstars_with_signal==0)
-    # increase by 1 pixel
-    bad[1:-1] |= bad[2:]
-    bad[1:-1] |= bad[:-2]
-    nbad=np.sum(bad>0)
+    # The convolved calibration at pixel i, and row i of the calibrated resolution
+    # matrix C_i^-1 R C_deconv, depend on the deconvolved calibration over
+    # [i-res_halfwidth, i+res_halfwidth], so mask all pixels within that distance of a hole
+    res_halfwidth = tframe.resolution_data.shape[1] // 2
+    bad = np.convolve(hole.astype(int), np.ones(2*res_halfwidth+1, dtype=int), mode='same') > 0
+    nbad=np.sum(bad)
     log.info("{} requesting at least {} star spectra at each wavelength results in masking {} add. flux bins ({} already masked)".format(camera, min_number_of_stars,nbad-nallbad,nallbad))
 
     ccalibivar[bad]=0.
