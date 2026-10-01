@@ -15,7 +15,7 @@ from desispec.io.fluxcalibration import read_stdstar_models
 from desispec.io.fluxcalibration import write_flux_calibration
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
-from desispec.fluxcalibration import compute_flux_calibration, isStdStar
+from desispec.fluxcalibration import compute_flux_calibration, isStdStar, DECONV_MIN_SNR
 from desiutil.log import get_logger
 from desitarget.targets import main_cmx_or_sv
 from desispec.fiberbitmasking import get_fiberbitmasked_frame
@@ -64,6 +64,8 @@ def parse(options=None):
                         help = 'seeing FWHM in arcsec, used for fiberloss correction')
     parser.add_argument('--nsig-flux-scale', type = float, default = 3, required=False,
                        help = 'n sigma cutoff of the flux scale among standard stars')
+    parser.add_argument('--min-deconv-snr', type = float, default = DECONV_MIN_SNR, required=False,
+                       help = 'minimum median S/N of the deconvolved calibration to use it for the cframe resolution')
     parser.add_argument('--apply-sky-throughput-correction', action='store_true',
                         help =('Apply a throughput correction when subtraction the sky '
                                '(default: do not apply!)'))
@@ -252,7 +254,8 @@ def main(args=None) :
             model_fibers%500,
             highest_throughput_nstars=args.highest_throughput,
             exposure_seeing_fwhm=args.seeing_fwhm,
-            stdcheck=stdcheck, nsig_flux_scale= args.nsig_flux_scale)
+            stdcheck=stdcheck, nsig_flux_scale= args.nsig_flux_scale,
+            min_deconv_snr=args.min_deconv_snr)
 
     # QA
     if (args.qafile is not None):

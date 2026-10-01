@@ -127,6 +127,11 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
 
     hdr['EXTNAME'] = 'FLUXCALIB'
     hdr['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
+    if getattr(fluxcalib, 'deconv_qa', None) is not None:
+        for key, (value, comment) in fluxcalib.deconv_qa.items():
+            if isinstance(value, float) and not numpy.isfinite(value):
+                value = -1.0
+            hdr[key] = (value, comment)
     hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f8'), header=hdr) )
     hx.append( fits.ImageHDU(fluxcalib.ivar.astype('f4'), name='IVAR') )
     # hx.append( fits.CompImageHDU(fluxcalib.mask, name='MASK') )
@@ -154,6 +159,11 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
 
     if fluxcalib.deconvolved_calib is not None:
         hx.append( fits.ImageHDU(fluxcalib.deconvolved_calib.astype('f8'), name='DECONVOLVED_CALIB') )
+        hx[-1].header['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
+
+    if getattr(fluxcalib, 'deconvolved_calib_rejected', None) is not None:
+        #- saved for inspection only; not used by apply_flux_calibration
+        hx.append( fits.ImageHDU(fluxcalib.deconvolved_calib_rejected.astype('f8'), name='DECONVOLVED_CALIB_REJECTED') )
         hx[-1].header['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
 
     t0 = time.time()
@@ -203,6 +213,11 @@ def read_flux_calibration(filename):
         else :
             deconvolved_calib = None
 
+        if 'DECONVOLVED_CALIB_REJECTED' in fx:
+            deconvolved_calib_rejected = native_endian(fx['DECONVOLVED_CALIB_REJECTED'].data.astype('f8'))
+        else :
+            deconvolved_calib_rejected = None
+
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
 
@@ -210,6 +225,7 @@ def read_flux_calibration(filename):
                           fibercorr=fibercorr, fibercorr_comments=fibercorr_comments,
                           stdstar_fibermap = stdstar_fibermap,
                           deconvolved_calib=deconvolved_calib)
+    fluxcalib.deconvolved_calib_rejected = deconvolved_calib_rejected
     fluxcalib.header = header
 
     return fluxcalib

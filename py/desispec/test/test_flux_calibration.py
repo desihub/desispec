@@ -215,7 +215,9 @@ class TestFluxCalibration(unittest.TestCase):
         hole = slice(200, 204)
         frame.ivar[:nstd, hole] = 0
         frame.flux[:nstd, hole] *= 10
-        fluxCalib = compute_flux_calibration(frame, wave, model, input_model_fibers=np.arange(nstd))
+        # min_deconv_snr=0: keep the deconvolved calibration of this noisy synthetic frame
+        fluxCalib = compute_flux_calibration(frame, wave, model, input_model_fibers=np.arange(nstd),
+                                             min_deconv_snr=0.)
 
         # the hole plus the half width of the resolution on each side is masked, nothing else
         halfwidth = frame.resolution_data.shape[1] // 2
@@ -380,6 +382,67 @@ class TestFluxCalibration(unittest.TestCase):
             r_diag = frame.R[i].diagonal()
             self.assertTrue(np.allclose(r_diag, expected_diag),
                             msg='Cached sparse R diagonal does not match updated resolution_data')
+
+        # without a deconvolved calib, the resolution is unchanged
+        frame = Frame(wave, flux.copy(), ivar.copy(),
+                      resolution_data=resolution_data.copy(), spectrograph=0)
+        fc = FluxCalib(wave, calib, fcivar, mask, fibercorr=fibercorr)
+        apply_flux_calibration(frame, fc)
+        self.assertTrue(np.all(frame.resolution_data == resolution_data))
+
+    def test_deconvolved_calib_qa(self):
+        """Test deconvolved_calib_qa metrics and pixel selection"""
+        from desispec.fluxcalibration import deconvolved_calib_qa
+        nwave = 200
+        median_calib = np.full(nwave, 10.)
+        median_calib[100:110] = 1.     # < 20% of median -> excluded
+        calibration = np.full(nwave, 10.)
+        calibration[50:60] = -1.       # 10 negative pixels
+        calibration[100:110] = -1.     # excluded
+        calibvar = np.full(nwave, 4.)  # S/N = 5 for calibration=10
+        calibvar[150] = 0.             # excluded
+
+        qa = deconvolved_calib_qa(calibration, calibvar, median_calib, trim=20)
+        npix = nwave - 2*20 - 10 - 1
+        self.assertEqual(qa['npix'], npix)
+        self.assertAlmostEqual(qa['fneg'], 10/npix)
+        self.assertAlmostEqual(qa['snr_med'], 5.)
+
+        qa = deconvolved_calib_qa(calibration, np.zeros(nwave), median_calib)
+        self.assertEqual(qa['npix'], 0)
+        self.assertTrue(np.isnan(qa['snr_med']))
+
+    def test_compute_fluxcalibration_deconv_qa(self):
+        """Test that a deconvolved calibration failing QA is rejected"""
+        frame = get_frame_data()
+        modelwave, modelflux = get_models()
+        stdfibers = np.arange(3)
+        frame.fibermap['DESI_TARGET'][stdfibers] = desi_mask.STD_FAINT
+
+        fc = compute_flux_calibration(frame, modelwave, modelflux[0:3],
+                input_model_fibers=stdfibers, min_deconv_snr=0.)
+        self.assertIsNotNone(fc.deconvolved_calib)
+        self.assertIsNone(fc.deconvolved_calib_rejected)
+        self.assertTrue(fc.deconv_qa['DCQAOK'][0])
+        self.assertGreater(fc.deconv_qa['DCSNRMED'][0], 0.)
+
+        fc2 = compute_flux_calibration(frame, modelwave, modelflux[0:3],
+                input_model_fibers=stdfibers, min_deconv_snr=np.inf)
+        self.assertIsNone(fc2.deconvolved_calib)
+        self.assertTrue(np.all(fc2.deconvolved_calib_rejected == fc.deconvolved_calib))
+        self.assertFalse(fc2.deconv_qa['DCQAOK'][0])
+        self.assertTrue(np.all(fc2.calib == fc.calib))
+
+        # round trip of QA keywords and rejected calib
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = os.path.join(tmpdir, 'fluxcalib.fits')
+            desispec.io.write_flux_calibration(filename, fc2)
+            fc3 = desispec.io.read_flux_calibration(filename)
+        self.assertIsNone(fc3.deconvolved_calib)
+        self.assertTrue(np.all(fc3.deconvolved_calib_rejected == fc2.deconvolved_calib_rejected))
+        self.assertFalse(fc3.header['DCQAOK'])
+        self.assertAlmostEqual(fc3.header['DCSNRMED'], fc2.deconv_qa['DCSNRMED'][0])
 
     def test_isStdStar(self):
         """test isStdStar works for cmx, main, and sv1 fibermaps"""
