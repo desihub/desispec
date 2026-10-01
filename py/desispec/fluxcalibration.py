@@ -73,8 +73,9 @@ def _add_weak_region_smoothing(A, current_ivar, nstds,
 
 #- Minimum median per-pixel S/N of the deconvolved calibration needed to use
 #- it for the cframe resolution C_i^-1 R C; below that keep the frame R.
-#- TODO: threshold under review, see desispec #2869
-DECONV_MIN_SNR = 2.5
+#- 3.0 separates few-star / low-S/N calibrations (amplified R') from normal
+#- frames (snr_med >~ 3.5), see desispec #2869
+DECONV_MIN_SNR = 3.0
 
 def deconvolved_calib_qa(calibration, calibvar, median_calib, trim=20):
     """Quality metrics of a deconvolved calibration vector
