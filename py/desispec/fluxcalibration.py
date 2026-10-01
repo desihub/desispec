@@ -1081,7 +1081,15 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
 
     #- Start with a first pass median rejection
     calib = (convolved_model_flux!=0)*(stdstars.flux/(convolved_model_flux + (convolved_model_flux==0)))
-    median_calib = np.median(calib, axis=0)
+    # only use valid star pixels for the median calibration, because the flux of masked
+    # pixels can be arbitrary and would otherwise bias the median and the first pass
+    # outlier rejection (see #2869); wavelengths without any valid star pixel are interpolated
+    valid = (current_ivar > 0) & (convolved_model_flux != 0)
+    median_calib = np.ma.median(np.ma.array(calib, mask=~valid), axis=0).filled(0.)
+    has_valid = np.any(valid, axis=0)
+    if np.any(has_valid) and not np.all(has_valid):
+        median_calib[~has_valid] = np.interp(stdstars.wave[~has_valid], stdstars.wave[has_valid],
+                                             median_calib[has_valid])
 
     # Fit one normalization per fiber, and 10% model error to variance,  and perform first outlier rejection
     scale=np.ones((nstds))
@@ -1183,16 +1191,6 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
         except np.linalg.LinAlgError :
             log.info('{} cholesky fails in iteration {}, trying svd'.format(camera, iteration))
             calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
-
-        wmask = (np.diagonal(A)<=0)
-        if np.sum(wmask)>0 :
-            wmask = wmask.astype(float)
-            wmask = R.dot(R.dot(wmask))
-            bad = np.where(wmask!=0)[0]
-            log.info("{} nbad={}".format(camera, bad.size))
-            good = np.where(wmask==0)[0]
-            calibration[bad] = np.interp(bad,good,calibration[good],left=0,right=0)
-
 
         log.info("%s iter %d fit scale per fiber", camera, iteration)
         for star in range(nstds) :
