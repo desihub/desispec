@@ -22,6 +22,8 @@ import scipy, scipy.sparse, scipy.ndimage
 import sys
 import time
 from astropy import units
+from astropy.io import fits
+import fitsio
 import multiprocessing
 from importlib import resources
 import numpy.linalg
@@ -32,6 +34,68 @@ try:
     C_LIGHT = constants.c/1000.0
 except TypeError: # This can happen during documentation builds.
     C_LIGHT = 299792458.0/1000.0
+
+def deconvolved_calib_qa(calibration, calibvar, median_calib, hole=None, trim=20):
+    """Quality metrics of a deconvolved calibration vector
+
+    Args:
+        calibration: 1D[nwave] deconvolved calibration
+        calibvar: 1D[nwave] its variance (diagonal of the fit covariance)
+        median_calib: 1D[nwave] reference calibration used to select pixels
+
+    Options:
+        hole: 1D[nwave] boolean, True where the calibration was interpolated
+            because no standard star had valid data
+        trim: number of pixels excluded at each end
+
+    Returns:
+        dict with keys snr_med (median of calibration/sqrt(calibvar)),
+        snr_p10 (10th percentile of the same), fneg (fraction of pixels
+        with calibration < 0), npix (number of pixels used) and nhole
+        (number of hole pixels, over the full vector).
+
+    The statistics use pixels with median_calib > 20% of its median and
+    calibvar > 0, excluding trim pixels at each end; snr_med, snr_p10 and
+    fneg are nan if no pixel qualifies. calibvar is the formal variance,
+    which underestimates the actual pixel-to-pixel scatter of calibration
+    by about a factor 2-3 (desispec #2869).
+    """
+    nhole = 0 if hole is None else int(np.sum(hole))
+    positive = median_calib > 0
+    ok = (calibvar > 0)
+    if np.any(positive):
+        ok &= median_calib > 0.2*np.median(median_calib[positive])
+    else:
+        ok[:] = False
+    ok[:trim] = False
+    ok[-trim:] = False
+    npix = int(np.sum(ok))
+    if npix == 0:
+        return dict(snr_med=np.nan, snr_p10=np.nan, fneg=np.nan, npix=0, nhole=nhole)
+    snr = calibration[ok]/np.sqrt(calibvar[ok])
+    return dict(snr_med=float(np.median(snr)),
+                snr_p10=float(np.percentile(snr, 10)),
+                fneg=float(np.mean(calibration[ok] < 0)),
+                npix=npix, nhole=nhole)
+
+#- Header keywords for the deconvolved calibration quality metrics
+DECONV_QA_COMMENTS = dict(
+    DCSNRMED='Median S/N per pixel of DECONVOLVED_CALIB',
+    DCSNRP10='10th percentile S/N/pix of DECONVOLVED_CALIB',
+    DCFNEG='Frac of DECONVOLVED_CALIB pixels < 0',
+    DCNHOLE='N DECONVOLVED_CALIB pix interp, no std stars',
+    )
+
+def _header_value(value):
+    """FITS header compatible value: -1 for nan, since headers can't store nan"""
+    if isinstance(value, float) and not np.isfinite(value):
+        return -1.0
+    return value
+
+def _night_expid_camera(frame):
+    """(night, expid, camera) from frame.meta, with '?' for missing values"""
+    meta = frame.meta if frame.meta is not None else dict()
+    return tuple(meta.get(key, '?') for key in ('NIGHT', 'EXPID', 'CAMERA'))
 
 def isStdStar(fibermap, bright=None):
     """
@@ -1392,6 +1456,20 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     # apply the mean (as in the iterative loop)
     calibivar=(calibvar>0)/(calibvar+(calibvar==0))
 
+    # quality metrics of the deconvolved calibration, saved as diagnostics.
+    # With few or low S/N standard stars it is noise dominated and rings
+    # pixel-to-pixel (desispec #2869); apply_flux_calibration can optionally
+    # use these to decide whether to use it for the cframe resolution
+    night, expid, _ = _night_expid_camera(frame)
+    hole = (np.sum(current_ivar>0,axis=0) == 0)
+    if np.all(hole):
+        hole[:] = False
+    qa = deconvolved_calib_qa(calibration, calibvar, median_calib,
+                              hole=hole[margin:-margin])
+    log.info(f"{camera} night={night} expid={expid} DECONVOLVED_CALIB QA "
+             f"snr_med={qa['snr_med']:.3f} snr_p10={qa['snr_p10']:.3f} "
+             f"fneg={qa['fneg']:.4f} npix={qa['npix']} nhole={qa['nhole']}")
+
     # we also want to save the convolved calibration and a calibration variance
     # first compute average resolution
     mean_res_data=np.mean(tframe.resolution_data,axis=0)
@@ -1482,13 +1560,16 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     # return calibration, calibivar, mask, ccalibration, ccalibivar
     return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, mccalibration,
                      fibercorr=fibercorr, stdstar_fibermap=stdstar_fibermap,
-                     deconvolved_calib=calibration[margin:-margin])
+                     deconvolved_calib=calibration[margin:-margin],
+                     deconvolved_calib_ivar=calibivar[margin:-margin],
+                     deconv_qa=dict(DCSNRMED=qa['snr_med'], DCSNRP10=qa['snr_p10'],
+                                    DCFNEG=qa['fneg'], DCNHOLE=qa['nhole']))
 
 
 class FluxCalib(object):
     def __init__(self, wave, calib, ivar, mask, meancalib=None,
                  fibercorr=None, fibercorr_comments=None, stdstar_fibermap=None,
-                 deconvolved_calib=None):
+                 deconvolved_calib=None, deconvolved_calib_ivar=None, deconv_qa=None):
         """Lightweight wrapper object for flux calibration vectors
 
         Args:
@@ -1501,6 +1582,9 @@ class FluxCalib(object):
             fibercorr_comments : dictionnary of string (explaining the fibercorr)
             stdstar_fibermap : table with the fibermap of the std stars actually used
             deconvolved_calib : 1D[nwave] estimated deconvolved calibration vector C (optional)
+            deconvolved_calib_ivar : 1D[nwave] formal inverse variance of deconvolved_calib (optional)
+            deconv_qa : dict of deconvolved_calib quality metrics, keyed by header keyword
+                (DCSNRMED, DCSNRP10, DCFNEG, DCNHOLE; optional)
         All arguments become attributes, plus nspec,nwave = calib.shape
 
         The calib vector should be such that
@@ -1518,6 +1602,9 @@ class FluxCalib(object):
             assert deconvolved_calib.ndim == 1
             assert deconvolved_calib.shape[0] == wave.shape[0]
 
+        if deconvolved_calib_ivar is not None:
+            assert deconvolved_calib_ivar.shape == (wave.shape[0],)
+
         self.nspec, self.nwave = calib.shape
         self.wave = wave
         self.calib = calib
@@ -1530,6 +1617,8 @@ class FluxCalib(object):
         self.meta = dict(units='photons/(erg/s/cm^2)')
 
         self.deconvolved_calib = deconvolved_calib
+        self.deconvolved_calib_ivar = deconvolved_calib_ivar
+        self.deconv_qa = deconv_qa
 
     def __repr__(self):
         txt = '<{:s}: nspec={:d}, nwave={:d}, units={:s}'.format(
@@ -1540,7 +1629,56 @@ class FluxCalib(object):
         return (txt)
 
 
-def apply_flux_calibration(frame, fluxcalib):
+def _use_calibrated_resolution(fluxcalib, min_deconv_snr=None, max_deconv_fneg=None):
+    """Check whether a deconvolved calibration passes the requested quality cuts
+
+    Args:
+        fluxcalib: FluxCalib object
+
+    Options:
+        min_deconv_snr: minimum DCSNRMED, or None for no cut
+        max_deconv_fneg: maximum DCFNEG, or None for no cut
+
+    Returns:
+        (ok, reason): ok is True if fluxcalib.deconvolved_calib and
+        fluxcalib.fibercorr exist and the deconvolved calibration passes all
+        requested cuts; reason is a string explaining a failure
+    """
+    if fluxcalib.deconvolved_calib is None:
+        return False, 'no DECONVOLVED_CALIB'
+    if fluxcalib.fibercorr is None:
+        return False, 'no FIBERCORR'
+
+    qa = fluxcalib.deconv_qa if fluxcalib.deconv_qa is not None else dict()
+    cuts = list()
+    if min_deconv_snr is not None:
+        cuts.append(('DCSNRMED', min_deconv_snr, 'min'))
+    if max_deconv_fneg is not None:
+        cuts.append(('DCFNEG', max_deconv_fneg, 'max'))
+
+    for key, threshold, kind in cuts:
+        value = qa.get(key)
+        #- missing, nan, or -1 (written for undefined values) fail any cut
+        if value is None or not np.isfinite(value) or value < 0:
+            return False, f'{key} missing or undefined, needed for the {kind} cut {threshold}'
+        if kind == 'min' and value < threshold:
+            return False, f'{key}={value:.3f} < {threshold}'
+        if kind == 'max' and value > threshold:
+            return False, f'{key}={value:.4f} > {threshold}'
+
+    return True, ''
+
+def _set_meta(meta, key, value, comment):
+    """Set meta[key] to value, with a comment if meta is a FITS header"""
+    if isinstance(meta, fits.Header):
+        meta[key] = (value, comment)
+    elif isinstance(meta, fitsio.FITSHDR):
+        meta.add_record(dict(name=key, value=value, comment=comment))
+    else:
+        meta[key] = value
+
+def apply_flux_calibration(frame, fluxcalib, calibrated_resolution=False,
+                           min_deconv_snr=None, max_deconv_fneg=None):
     """
     Applies flux calibration to input flux and ivar
 
@@ -1548,10 +1686,48 @@ def apply_flux_calibration(frame, fluxcalib):
         frame: Spectra object with attributes wave, flux, ivar, resolution_data
         fluxcalib : FluxCalib object with wave, calib, ...
 
-    Modifies frame.flux and frame.ivar
+    Options:
+        calibrated_resolution: if True, replace the frame resolution R by the
+            calibrated resolution C_i^-1 R C_deconv (PR #2642), using
+            fluxcalib.deconvolved_calib; default False keeps R
+        min_deconv_snr: with calibrated_resolution, only use C_deconv if its
+            DCSNRMED quality metric is at least this value (default None: no cut)
+        max_deconv_fneg: with calibrated_resolution, only use C_deconv if its
+            DCFNEG quality metric is at most this value (default None: no cut)
+
+    Modifies frame.flux and frame.ivar, and frame.resolution_data if the
+    calibrated resolution is used.  Records RCALIB (True if the calibrated
+    resolution was used) and the C_deconv quality metrics in frame.meta.
+
+    If calibrated_resolution is requested but fluxcalib has no deconvolved
+    calibration, or it fails a requested cut, or a quality metric needed for
+    a cut is missing, the frame resolution R is kept and a warning is logged.
     """
     log=get_logger()
     log.info("starting")
+    night, expid, camera = _night_expid_camera(frame)
+
+    use_cdeconv = False
+    if frame.resolution_data is not None:
+        if calibrated_resolution:
+            use_cdeconv, reason = _use_calibrated_resolution(
+                fluxcalib, min_deconv_snr=min_deconv_snr, max_deconv_fneg=max_deconv_fneg)
+            if use_cdeconv:
+                log.info(f"{camera} night={night} expid={expid} using calibrated "
+                         "resolution C_i^-1 R C_deconv")
+            else:
+                log.warning(f"{camera} night={night} expid={expid} calibrated resolution "
+                            f"requested but not used ({reason}); keeping frame resolution R")
+        elif (min_deconv_snr is not None) or (max_deconv_fneg is not None):
+            log.warning("min_deconv_snr / max_deconv_fneg are ignored without calibrated_resolution")
+
+    if frame.meta is not None:
+        _set_meta(frame.meta, 'RCALIB', use_cdeconv, 'True if resolution is C_i^-1 R C_deconv')
+        if fluxcalib.deconv_qa is not None:
+            for key in ('DCSNRMED', 'DCFNEG'):
+                if key in fluxcalib.deconv_qa:
+                    _set_meta(frame.meta, key, _header_value(fluxcalib.deconv_qa[key]),
+                              DECONV_QA_COMMENTS[key])
 
     # check same wavelength, die if not the case
     mval=np.max(np.abs(frame.wave-fluxcalib.wave))
@@ -1573,7 +1749,7 @@ def apply_flux_calibration(frame, fluxcalib):
     """
 
     C = fluxcalib.calib
-    C_deconvolved = fluxcalib.deconvolved_calib
+    C_deconvolved = fluxcalib.deconvolved_calib if use_cdeconv else None
     good = (fluxcalib.ivar > 0) & (C > 0) & (frame.ivar > 0)
     for i in range(nfibers) :
         ok = good[i]
