@@ -58,10 +58,16 @@ def detect_spots_in_image(image) :
     y = x.T.copy()
     kernel = np.exp(-(x**2+y**2)/2/sigma**2)
     kernel /= np.sum(kernel)
+    kernel2 = kernel**2
     simg   = fftconvolve(image.ivar*image.pix,kernel,mode='same')
-    denom  = fftconvolve(image.ivar,kernel**2,mode='same')
+    denom  = fftconvolve(image.ivar,kernel2,mode='same')
     eps    = 1e-20
     snr    = simg/np.sqrt(denom*(denom>0)+eps)
+
+    # mask out regions affected by bad pixels
+    good_ivar = image.ivar > 0
+    bad_frac  = fftconvolve((~good_ivar).astype(float), kernel2, mode='same') / kernel2.sum()
+    snr      *= (bad_frac < 0.01)
 
     log.info("detections")
     nsig = 10
