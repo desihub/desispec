@@ -15,11 +15,13 @@ from scipy.signal import fftconvolve
 from desiutil.log import get_logger
 
 
-def detect_spots_in_image(image) :
+def detect_spots_in_image(image, nsig=70) :
     '''
     Detection of spots in preprocessed arc lamp image
     Args:
         image : preprocessed arc lamp image (desispec.Image object)
+    Options:
+        nsig : detection threshold in units of the noise of the smoothed image
     returns:
         xc: 1D float numpy array with xccd spot coordinates in the image (CCD column number)
         yc: 1D float numpy array with yccd spot coordinates in the image (CCD row number)
@@ -52,8 +54,13 @@ def detect_spots_in_image(image) :
     ok = (bad_frac < 0.01) & (var_conv > 0)
     sivar = ok / (var_conv + ~ok)
 
+    # Only bright spots are wanted, to match against the brightest expected
+    # lines. Before the variance fix in PR #2832 (tag 0.72.0), conv(ivar, k2) overestimated
+    # S/N by up to 1/sum(k2) ~ 12.6 (less where ivar varies across the kernel),
+    # so nsig=6 then was roughly 45-75 true sigma. nsig=70 reproduces the
+    # pre-0.72 spot count to a few percent; a true 6 sigma cut finds >1e5
+    # background peaks on z camera arcs.
     log.info("detections")
-    nsig = 6
     detections = (simg*np.sqrt(sivar))>nsig
     peaks=np.zeros(simg.shape)
     peaks[1:-1,1:-1] = (detections[1:-1,1:-1]>0)\
