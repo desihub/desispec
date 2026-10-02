@@ -18,10 +18,13 @@ from desiutil.log import get_logger
 def detect_spots_in_image(image, nsig=70) :
     '''
     Detection of spots in preprocessed arc lamp image
+
     Args:
         image : preprocessed arc lamp image (desispec.Image object)
+
     Options:
         nsig : detection threshold in units of the noise of the smoothed image
+
     returns:
         xc: 1D float numpy array with xccd spot coordinates in the image (CCD column number)
         yc: 1D float numpy array with yccd spot coordinates in the image (CCD row number)
