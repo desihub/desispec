@@ -32,6 +32,23 @@ def detect_spots_in_image(image) :
     image.ivar *= (image.ivar>0)
     image.pix  *= (image.ivar>0)
 
+    '''
+    fitting a PSF flux (f) at a given location in an image consists in minimizing the following
+    chi2 = sum ivar*(pix - f*psf)**2
+
+    the best fit flux is given by :
+    f = sum(ivar*pix*psf)/sum(ivar*psf**2)
+    the error on f is:
+    err = sqrt(1/sum(ivar*psf**2))
+    the signal to noise is:
+    s/n=f/err=sum(ivar*pix*psf)/sqrt(sum(ivar*psf**2))
+
+    we can extend that over the whole image with a convolution
+    of kernel that has the same shape as the psf
+
+    s/n = convolution(ivar*pix,kernel)/sqrt(convolution(ivar,kernel**2))
+    '''
+
     # convolve with Gaussian kernel
     hw = 3
     sigma = 1.
@@ -39,28 +56,26 @@ def detect_spots_in_image(image) :
     y = x.T.copy()
     kernel = np.exp(-(x**2+y**2)/2/sigma**2)
     kernel /= np.sum(kernel)
-    simg  = fftconvolve(image.pix,kernel,mode='same')
+    simg   = fftconvolve(image.ivar*image.pix,kernel,mode='same')
+    denom  = fftconvolve(image.ivar,kernel**2,mode='same')
+    eps    = 1e-20
+    snr    = simg/np.sqrt(denom*(denom>0)+eps)
 
-    good_ivar = image.ivar > 0
-    var = good_ivar / (image.ivar + ~good_ivar)
-    # 1/ivar where good, 0 where not
-    k2 = kernel ** 2
-    var_conv = np.maximum(fftconvolve(var, k2, mode='same'), 0)
-
-    # a bad input pixel poisons every output pixel its kernel reaches
-    bad_frac = fftconvolve((~good_ivar).astype(float), k2, mode='same') / k2.sum()
-    ok = (bad_frac < 0.01) & (var_conv > 0)
-    sivar = ok / (var_conv + ~ok)
+    import fitsio
+    fitsio.write("snr.fits",snr,overwrite=True)
 
     log.info("detections")
-    nsig = 6
-    detections = (simg*np.sqrt(sivar))>nsig
+    nsig = 10
+    detections = snr>nsig
     peaks=np.zeros(simg.shape)
     peaks[1:-1,1:-1] = (detections[1:-1,1:-1]>0)\
         *(simg[1:-1,1:-1]>simg[2:,1:-1])\
         *(simg[1:-1,1:-1]>simg[:-2,1:-1])\
         *(simg[1:-1,1:-1]>simg[1:-1,2:])\
         *(simg[1:-1,1:-1]>simg[1:-1,:-2])
+
+    fitsio.write("detections.fits",detections.astype(int),overwrite=True)
+    fitsio.write("peaks.fits",peaks.astype(int),overwrite=True)
 
     log.info("peak coordinates")
     x=np.tile(np.arange(simg.shape[1]),(simg.shape[0],1))
