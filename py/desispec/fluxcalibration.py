@@ -44,8 +44,7 @@ def deconvolved_calib_qa(calibration, calibvar, median_calib, hole=None, trim=20
         median_calib: 1D[nwave] reference calibration used to select pixels
 
     Options:
-        hole: 1D[nwave] boolean, True where the calibration was interpolated
-            because no standard star had valid data
+        hole: 1D[nwave] boolean, True where the calibration was interpolated because no standard star had valid data
         trim: number of pixels excluded at each end
 
     Returns:
