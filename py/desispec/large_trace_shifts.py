@@ -47,6 +47,8 @@ def detect_spots_in_image(image) :
     of kernel that has the same shape as the psf
 
     s/n = convolution(ivar*pix,kernel)/sqrt(convolution(ivar,kernel**2))
+
+    we detect spots by applying a threshold on this s/n image
     '''
 
     # convolve with Gaussian kernel
@@ -61,9 +63,6 @@ def detect_spots_in_image(image) :
     eps    = 1e-20
     snr    = simg/np.sqrt(denom*(denom>0)+eps)
 
-    import fitsio
-    fitsio.write("snr.fits",snr,overwrite=True)
-
     log.info("detections")
     nsig = 10
     detections = snr>nsig
@@ -73,9 +72,6 @@ def detect_spots_in_image(image) :
         *(simg[1:-1,1:-1]>simg[:-2,1:-1])\
         *(simg[1:-1,1:-1]>simg[1:-1,2:])\
         *(simg[1:-1,1:-1]>simg[1:-1,:-2])
-
-    fitsio.write("detections.fits",detections.astype(int),overwrite=True)
-    fitsio.write("peaks.fits",peaks.astype(int),overwrite=True)
 
     log.info("peak coordinates")
     x=np.tile(np.arange(simg.shape[1]),(simg.shape[0],1))
