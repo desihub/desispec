@@ -66,8 +66,9 @@ def deconvolved_calib_qa(calibration, calibvar, median_calib, hole=None, trim=20
         ok &= median_calib > 0.2*np.median(median_calib[positive])
     else:
         ok[:] = False
-    ok[:trim] = False
-    ok[-trim:] = False
+    if trim > 0:
+        ok[:trim] = False
+        ok[-trim:] = False
     npix = int(np.sum(ok))
     if npix == 0:
         return dict(snr_med=np.nan, snr_p10=np.nan, fneg=np.nan, npix=0, nhole=nhole)
