@@ -1300,6 +1300,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
                 log.info('{} cholesky fails in iteration {}, trying svd'.format(camera, iteration))
                 calibration = P @ np.linalg.lstsq(A_free, B_free)[0]
         else :
+            # A should already be positive definite, but belt-and-suspenders guarantee that
             w = np.diagonal(A)>0
             A_pos_def = A[w,:]
             A_pos_def = A_pos_def[:,w]
@@ -1494,7 +1495,7 @@ def compute_flux_calibration(frame, input_model_wave, input_model_flux,
     nstars_with_signal=np.sum(current_ivar>0,axis=0)
     bad = (nstars_with_signal<min_number_of_stars)
     nallbad = np.sum(nstars_with_signal==0)
-    # increase by 1 pixel
+    # increase by 1 pixel; this will get further expanded by resolution halfwidth for actual holes below
     bad[1:-1] |= bad[2:]
     bad[1:-1] |= bad[:-2]
     # For holes without any valid std star pixel, the calibration was interpolated in the fit.
