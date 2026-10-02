@@ -59,6 +59,15 @@ def parse(options=None):
                         help = 'Do not apply fiber crosstalk correction')
     parser.add_argument('--alpha_only', action='store_true',
                         help = 'Only compute alpha of tsnr calc.')
+    parser.add_argument('--calibrated-resolution', action='store_true',
+                        help = ('Replace the frame resolution R by C_i^-1 R C_deconv using the '
+                                'DECONVOLVED_CALIB of --calib (default: keep R)'))
+    parser.add_argument('--min-deconv-snr', type = float, default = None,
+                        help = ('With --calibrated-resolution, only use DECONVOLVED_CALIB if its '
+                                'DCSNRMED is at least this value (default: no cut)'))
+    parser.add_argument('--max-deconv-fneg', type = float, default = None,
+                        help = ('With --calibrated-resolution, only use DECONVOLVED_CALIB if its '
+                                'DCFNEG is at most this value (default: no cut)'))
 
     args = parser.parse_args(options)
     return args
@@ -145,7 +154,10 @@ def main(args):
         # read calibration
         fluxcalib=read_flux_calibration(args.calib)
         # apply calibration
-        apply_flux_calibration(frame, fluxcalib)
+        apply_flux_calibration(frame, fluxcalib,
+                               calibrated_resolution=args.calibrated_resolution,
+                               min_deconv_snr=args.min_deconv_snr,
+                               max_deconv_fneg=args.max_deconv_fneg)
 
         # Ensure that ivars are set to 0 for all values if any designated
         # fibermask bit is set. Also flips a bits for each frame.mask value using specmask.BADFIBER

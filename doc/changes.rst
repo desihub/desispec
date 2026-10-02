@@ -2,10 +2,16 @@
 desispec Change Log
 ===================
 
-0.72.3 (unreleased)
+0.73.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Improve flux calibration around bad stdstar pixels (PR `#2871`_).
+* Revert PR `#2642`_, i.e. do not apply flux calibration updates to
+  resolution matrix (PR `#2871`_).
+* Fix dark reset end bookkeeping bug (PR `#2867`_).
+
+.. _`#2867`: https://github.com/desihub/desispec/pull/2867
+.. _`#2871`: https://github.com/desihub/desispec/pull/2871
 
 0.72.2 (2026-09-29)
 -------------------

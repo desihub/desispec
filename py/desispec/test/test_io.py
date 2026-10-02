@@ -738,6 +738,21 @@ class TestIO(unittest.TestCase):
         # DECONVOLVED_CALIB HDU: round-trip equality and dtype; note no f8 -> f4 -> f8; it is saved as f8
         self.assertEqual(fx.deconvolved_calib.dtype, np.float64)
         self.assertTrue(np.all(fx.deconvolved_calib == fc.deconvolved_calib))
+        # no IVAR or QA metrics written if not provided
+        self.assertIsNone(fx.deconvolved_calib_ivar)
+        self.assertIsNone(fx.deconv_qa)
+
+        # DECONVOLVED_CALIB_IVAR is saved as f4; QA metrics as header keywords, nan -> -1
+        deconvolved_calib_ivar = np.random.uniform(size=nwave)
+        deconv_qa = dict(DCSNRMED=4.5, DCSNRP10=np.nan, DCFNEG=0.02, DCNHOLE=3)
+        fc = FluxCalib(wave, calib, ivar, mask, deconvolved_calib=deconvolved_calib,
+                       deconvolved_calib_ivar=deconvolved_calib_ivar, deconv_qa=deconv_qa)
+        write_flux_calibration(self.testfile, fc)
+        fx = read_flux_calibration(self.testfile)
+        self.assertTrue(np.all(fx.deconvolved_calib == fc.deconvolved_calib))
+        self.assertTrue(np.all(fx.deconvolved_calib_ivar == deconvolved_calib_ivar.astype('f4').astype('f8')))
+        self.assertEqual(fx.deconv_qa, dict(DCSNRMED=4.5, DCSNRP10=-1.0, DCFNEG=0.02, DCNHOLE=3))
+        self.assertTrue(len(fx.header.comments['DCSNRMED']) > 0)
 
     def test_image_rw(self):
         """Test reading and writing of Image objects.
