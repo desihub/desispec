@@ -58,20 +58,12 @@ def detect_spots_in_image(image, nsig=70) :
     sivar = ok / (var_conv + ~ok)
 
     # Only bright spots are wanted, to match against the brightest expected
-<<<<<<< HEAD
     # lines. Before the variance fix in PR #2832 (tag 0.72.0), conv(ivar, k2)
     # underestimated sivar, so the reported S/N was sum(k2) ~ 1/12.6 of the
     # true S/N for constant ivar (less of an underestimate where ivar varies
     # across the kernel). The old cut nsig=6 was thus roughly 35-75 true sigma.
     # nsig=70 reproduces the pre-0.72 spot count to a few percent; a true
     # 6 sigma cut finds >1e5 background peaks on z camera arcs.
-=======
-    # lines. Before the variance fix in PR #2832 (tag 0.72.0), conv(ivar, k2) overestimated
-    # S/N by up to 1/sum(k2) ~ 12.6 (less where ivar varies across the kernel),
-    # so nsig=6 then was roughly 45-75 true sigma. nsig=70 reproduces the
-    # pre-0.72 spot count to a few percent; a true 6 sigma cut finds >1e5
-    # background peaks on z camera arcs.
->>>>>>> ec13860a6b8dbee04e00e0ced0eb04aaab609b78
     log.info("detections")
     detections = (simg*np.sqrt(sivar))>nsig
     peaks=np.zeros(simg.shape)
