@@ -2,8 +2,15 @@
 desispec Change Log
 ===================
 
-0.73.0 (unreleased)
+0.73.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.73.0 (2026-10-02)
+-------------------
+
+First tag for Nevis / DR3 production.
 
 * Improve flux calibration around bad stdstar pixels (PR `#2871`_).
 * Revert PR `#2642`_, i.e. do not apply flux calibration updates to
