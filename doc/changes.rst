@@ -2,10 +2,22 @@
 desispec Change Log
 ===================
 
-0.73.1 (unreleased)
+0.73.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.73.1 (2026-10-02)
+-------------------
+
+* Add ``desi_use_reservation --deps-ok`` option to allow moving jobs into
+  reservation even if waiting on dependencies (PR `#2872`_).
+* Update trace shift peak finding to be weighted matched filter and adjust
+  detection threshold. Fixes crash of too many spots. (PRs `#2874`_, `#2875`_).
+
+.. _`#2872`: https://github.com/desihub/desispec/pull/2872
+.. _`#2874`: https://github.com/desihub/desispec/pull/2874
+.. _`#2875`: https://github.com/desihub/desispec/pull/2875
 
 0.73.0 (2026-10-02)
 -------------------
