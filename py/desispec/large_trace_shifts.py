@@ -72,16 +72,16 @@ def detect_spots_in_image(image) :
     log.info("detections")
     nsig = 10
     detections = snr>nsig
-    peaks=np.zeros(simg.shape)
+    peaks=np.zeros(snr.shape)
     peaks[1:-1,1:-1] = (detections[1:-1,1:-1]>0)\
-        *(simg[1:-1,1:-1]>simg[2:,1:-1])\
-        *(simg[1:-1,1:-1]>simg[:-2,1:-1])\
-        *(simg[1:-1,1:-1]>simg[1:-1,2:])\
-        *(simg[1:-1,1:-1]>simg[1:-1,:-2])
+        *(snr[1:-1,1:-1]>snr[2:,1:-1])\
+        *(snr[1:-1,1:-1]>snr[:-2,1:-1])\
+        *(snr[1:-1,1:-1]>snr[1:-1,2:])\
+        *(snr[1:-1,1:-1]>snr[1:-1,:-2])
 
     log.info("peak coordinates")
-    x=np.tile(np.arange(simg.shape[1]),(simg.shape[0],1))
-    y=np.tile(np.arange(simg.shape[0]),(simg.shape[1],1)).T
+    x=np.tile(np.arange(snr.shape[1]),(snr.shape[0],1))
+    y=np.tile(np.arange(snr.shape[0]),(snr.shape[1],1)).T
     xp=x[peaks>0]
     yp=y[peaks>0]
 
