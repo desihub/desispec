@@ -383,11 +383,11 @@ def create_summary_catalog(specgroup, indir=None, specprod=None,
 
             ###############################################################################################
 
-            # Sanity check that the TARGETIDs match in the row-matched catalogs
-            if file_extension=='ZCATALOG':
-                targetid_arr = np.array(tab['TARGETID']).copy()
-            else:
-                assert np.all(tab['TARGETID']==targetid_arr)
+        # Sanity check that the TARGETIDs match in the row-matched catalogs
+        if file_extension=='ZCATALOG':
+            targetid_arr = np.array(tab['TARGETID']).copy()
+        else:
+            assert np.all(tab['TARGETID']==targetid_arr)
 
         ## Convert the masked column table to normal astropy table and select required columns
         final_table = update_table_columns(tab, columns_list=columns_list)
