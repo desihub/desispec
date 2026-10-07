@@ -5,7 +5,10 @@ desispec Change Log
 0.73.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Skip stucksky check if FIBER_RA/DEC=0.
+* Patch zcatalog TARGETID check (commit `#0e7fd54`_).
+
+.. _`#0e7fd54`: https://github.com/desihub/desispec/commit/0e7fd546a40917a0f43b2225295996d4438c5931
 
 0.73.1 (2026-10-02)
 -------------------
