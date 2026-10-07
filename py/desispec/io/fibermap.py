@@ -985,6 +985,8 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
             #- Skybricks/Skyhealpixs (which require their env vars to be set)
             #- when there is nothing for them to look up.
             log.info('No SKY on stuck positioners to check')
+        elif np.all(fibermap['FIBER_RA'][stucksky] == 0.0) or np.all(fibermap['FIBER_DEC'][stucksky] == 0.0):
+            log.warning(f'All {num_stucksky} SKY on stuck positioners have FIBER_RA/DEC=0.0; skipping check for SKY locations')
         else:
             log.info('Checking if SKY on stuck positioners are still on SKY locations')
 
