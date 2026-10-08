@@ -518,6 +518,7 @@ class TestFiberFlatObject(unittest.TestCase):
                     ff.header['CAMERA'] = f'r{petal}'
                     ff.fibermap = fibermaps[petal]
                     if rescale:
+                        ff.convolved_meanspec = ff.convolved_meanspec * scales[petal]
                         ff.meanspec = ff.meanspec * scales[petal]
                         ff.fiberflat = ff.fiberflat / scales[petal]
                         ff.ivar = ff.ivar * scales[petal]**2
