@@ -61,6 +61,8 @@ def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     hdus.append(fits.ImageHDU(ff.ivar.astype('f4'),     name='IVAR'))
     hdus.append(fits.ImageHDU(ff.mask,              name='MASK'))
     hdus.append(fits.ImageHDU(ff.meanspec.astype('f4'), name='MEANSPEC'))
+    if ff.convolved_meanspec is not None:
+        hdus.append(fits.ImageHDU(ff.convolved_meanspec.astype('f4'), name='CONVMEANSPEC'))
     hdus.append(fits.ImageHDU(ff.wave.astype('f4'),     name='WAVELENGTH'))
     if fibermap is None :
         fibermap=ff.fibermap
@@ -71,6 +73,8 @@ def write_fiberflat(outfile,fiberflat,header=None, fibermap=None):
     hdus[0].header['BUNIT'] = ("","adimensional quantity to divide to flatfield a frame")
     hdus["IVAR"].header['BUNIT'] = ("","inverse variance, adimensional")
     hdus["MEANSPEC"].header['BUNIT'] = ("electron/Angstrom")
+    if ff.convolved_meanspec is not None:
+        hdus["CONVMEANSPEC"].header['BUNIT'] = ("electron/Angstrom")
     hdus["WAVELENGTH"].header['BUNIT'] = 'Angstrom'
 
     t0 = time.time()
@@ -91,11 +95,11 @@ def read_fiberflat(filename):
 
     Returns:
         FiberFlat object with attributes
-            fiberflat, ivar, mask, meanspec, wave, header
+            fiberflat, ivar, mask, meanspec, convolved_meanspec, wave, header
 
     Notes:
         fiberflat, ivar, mask are 2D [nspec, nwave]
-        meanspec and wave are 1D [nwave]
+        meanspec, convolved_meanspec, and wave are 1D [nwave]
     """
     #- check if outfile is (night, expid, camera) tuple instead
     if isinstance(filename, (tuple, list)) and len(filename) == 3:
@@ -111,6 +115,10 @@ def read_fiberflat(filename):
         ivar      = native_endian(fx["IVAR"].data.astype('f8'))
         mask      = native_endian(fx["MASK"].data)
         meanspec  = native_endian(fx["MEANSPEC"].data.astype('f8'))
+        if "CONVMEANSPEC" in fx:
+            convolved_meanspec = native_endian(fx["CONVMEANSPEC"].data.astype('f8'))
+        else:
+            convolved_meanspec = None
         wave      = native_endian(fx["WAVELENGTH"].data.astype('f8'))
         if 'FIBERMAP' in fx:
             fibermap = read_fibermap(fx)
@@ -120,4 +128,5 @@ def read_fiberflat(filename):
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
 
-    return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header, fibermap=fibermap)
+    return FiberFlat(wave, fiberflat, ivar, mask, meanspec, convolved_meanspec=convolved_meanspec,
+                     header=header, fibermap=fibermap)

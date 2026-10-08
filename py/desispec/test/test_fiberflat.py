@@ -391,13 +391,15 @@ class TestFiberFlatObject(unittest.TestCase):
         self.random = np.random.RandomState(42)
         self.nspec = 5
         self.nwave = 10
-        self.wave = np.arange(self.nwave)
+        self.wave = np.arange(self.nwave, dtype=float)
         self.fiberflat = self.random.uniform(size=(self.nspec, self.nwave))
         self.ivar = np.ones(self.fiberflat.shape)
         self.mask = np.zeros(self.fiberflat.shape, dtype=np.uint32)
         self.meanspec = self.random.uniform(size=self.nwave)
+        self.convolved_meanspec = self.random.uniform(size=self.nwave)
         self.header = dict(blat=1, foo=2)
-        self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec, header=self.header)
+        self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec,
+                            convolved_meanspec=self.convolved_meanspec, header=self.header)
 
     def _get_fibermap(self, petal, nspec):
         """Return a basic fibermap for the requested `petal` with `nspec` rows"""
@@ -518,6 +520,7 @@ class TestFiberFlatObject(unittest.TestCase):
                     ff.header['CAMERA'] = f'r{petal}'
                     ff.fibermap = fibermaps[petal]
                     if rescale:
+                        ff.convolved_meanspec = ff.convolved_meanspec * scales[petal]
                         ff.meanspec = ff.meanspec * scales[petal]
                         ff.fiberflat = ff.fiberflat / scales[petal]
                         ff.ivar = ff.ivar * scales[petal]**2
