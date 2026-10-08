@@ -391,7 +391,7 @@ class TestFiberFlatObject(unittest.TestCase):
         self.random = np.random.RandomState(42)
         self.nspec = 5
         self.nwave = 10
-        self.wave = np.arange(self.nwave)
+        self.wave = np.arange(self.nwave, dtype=float)
         self.fiberflat = self.random.uniform(size=(self.nspec, self.nwave))
         self.ivar = np.ones(self.fiberflat.shape)
         self.mask = np.zeros(self.fiberflat.shape, dtype=np.uint32)
