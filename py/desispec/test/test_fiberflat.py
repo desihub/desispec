@@ -396,8 +396,10 @@ class TestFiberFlatObject(unittest.TestCase):
         self.ivar = np.ones(self.fiberflat.shape)
         self.mask = np.zeros(self.fiberflat.shape, dtype=np.uint32)
         self.meanspec = self.random.uniform(size=self.nwave)
+        self.convolved_meanspec = self.random.uniform(size=self.nwave)
         self.header = dict(blat=1, foo=2)
-        self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec, header=self.header)
+        self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec,
+                            convolved_meanspec=self.convolved_meanspec, header=self.header)
 
     def _get_fibermap(self, petal, nspec):
         """Return a basic fibermap for the requested `petal` with `nspec` rows"""

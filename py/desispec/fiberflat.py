@@ -599,6 +599,13 @@ def autocalib_fiberflat(fiberflats):
         log.warning("only one fiberflat to average??")
         return fiberflats[0]
 
+    # check convolved_meanspec is available
+    for fflat in fiberflats :
+        if fflat.convolved_meanspec is None :
+            message = "fiberflat is missing convolved_meanspec; rerun compute_fiberflat to regenerate it"
+            log.critical(message)
+            raise ValueError(message)
+
     # check wavelength range
     for fflat in fiberflats[1:] :
         if not np.allclose(fiberflats[0].wave, fflat.wave):
@@ -989,9 +996,6 @@ class FiberFlat(object):
 
         if meanspec is None:
             meanspec = np.ones_like(wave)
-
-        if convolved_meanspec is None:
-            convolved_meanspec = np.ones_like(wave)
 
         self.wave = wave
         self.fiberflat = fiberflat
