@@ -847,7 +847,7 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20)
     # good fibers at each pixel
     good = (ivar > 0)
     num_good_fibers = np.sum(good, axis=0)
-    enough_fibers = (num_good_fibers >= min_fibers)
+    enough_fibers = (num_good_fibers >= min(min_fibers, flux.shape[0]))
 
     # masked pixels are set to NaN so that they are ignored by nanmedian;
     # pixels with no good fibers at all would warn about all-NaN slices
