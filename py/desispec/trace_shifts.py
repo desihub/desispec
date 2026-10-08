@@ -10,6 +10,7 @@ import os
 import sys
 import argparse
 import time
+import warnings
 import numpy as np
 from numpy.linalg import LinAlgError
 import astropy.io.fits as pyfits
@@ -813,7 +814,7 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers, wid
     return ref_wave, ref_spectrum
 
 
-def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
+def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20):
     """
     Compute the median spectrum after continuum subtraction
 
@@ -822,11 +823,18 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
         ivar: (nfibers, npix)-shaped np.array of inverser variances
         continuum_win: integer. How-many pixels around are used to get continuum.
             Here we use the 1d annulus from continuum_win/2 to continuum_win
+        min_fibers: integer. Minimum number of fibers with ivar>0 at a given
+            pixel for the median at that pixel to get non-zero weight
 
     Returns:
         mfux: npix np.array of median spectrum
         mivar: npix np.array with ivar of the median spectrum
         flux: (nfibers, npix) continuum subtracted original flux array
+
+    Notes:
+        The median at each pixel only uses fibers with ivar>0 at that pixel,
+        so that masked pixels (e.g. from a masked amplifier) do not enter
+        the median as zeros.
     """
     # here we get rid of continuum by applying a median filter
     continuum_foot = np.abs(np.arange(-continuum_win,continuum_win+1))>continuum_win /2.
@@ -835,29 +843,44 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
     for ii in range(flux.shape[0]):
         flux[ii] = flux[ii] - median_filter(flux[ii], footprint=continuum_foot)
 
-    # boolean mask of fibers with good data
-    good_fibers = (np.sum(ivar>0, axis=1) > 0)
-    num_good_fibers = np.sum(good_fibers)
+    # boolean mask of good data per fiber and pixel, and number of
+    # good fibers at each pixel
+    good = (ivar > 0)
+    num_good_fibers = np.sum(good, axis=0)
+    enough_fibers = (num_good_fibers >= min_fibers)
 
-    # median flux used as internal spectral reference
-    mflux = np.median(flux[good_fibers], axis=0)
+    # masked pixels are set to NaN so that they are ignored by nanmedian;
+    # pixels with no good fibers at all would warn about all-NaN slices
+    masked_flux = np.where(good, flux, np.nan)
+    masked_ivar = np.where(good, ivar, np.nan)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='All-NaN slice encountered', category=RuntimeWarning)
 
-    # we use data variance and MAD from different spectra
-    # to assign variance to a spectrum (1.48 is MAD factor,
-    # pi/2 is a factor from Stddev[median(N(0,1))]
-    mad_factor = 1.48
-    mad = np.maximum(np.median(np.abs(flux[good_fibers] - mflux[None, :]),
-                               axis=0), 1e-100)
-    # I prevent it from being zero to avoid the warning below
-    # The exact value does not matter as we're comparing to actual
-    # median(ivar)
+        # median flux used as internal spectral reference
+        mflux = np.nan_to_num(np.nanmedian(masked_flux, axis=0))
+
+        # we use data variance and MAD from different spectra
+        # to assign variance to a spectrum (1.48 is MAD factor,
+        # pi/2 is a factor from Stddev[median(N(0,1))]
+        mad_factor = 1.48
+        mad = np.maximum(np.nan_to_num(np.nanmedian(np.abs(masked_flux - mflux[None, :]),
+                                                    axis=0)), 1e-100)
+        # I prevent it from being zero to avoid the warning below
+        # The exact value does not matter as we're comparing to actual
+        # median(ivar)
+        median_ivar = np.nan_to_num(np.nanmedian(masked_ivar, axis=0))
+
     mivar = np.minimum(
-        np.median(ivar[good_fibers], axis=0) ,
+        median_ivar,
         1./mad_factor**2 / mad**2) * num_good_fibers * (2. / np.pi)
     # finally use use the MAD of the background subtracted spectra to
     # assign further variance limit
     # this is sort of "effective" noise in the continuum subtracted spectrum
-    mivar = np.minimum(mivar, 1. / mad_factor**2 / np.median(np.abs(mflux))**2)
+    # (only using pixels with enough fibers)
+    if np.any(enough_fibers):
+        mivar = np.minimum(mivar, 1. / mad_factor**2 / np.median(np.abs(mflux[enough_fibers]))**2)
+    # no weight for pixels with too few good fibers
+    mivar[~enough_fibers] = 0.
     # do not allow negatives
     mflux[mflux <  0] = 0
     return mflux, mivar, flux
