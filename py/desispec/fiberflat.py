@@ -43,7 +43,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
     Returns:
         desispec.FiberFlat object with attributes
-            wave, fiberflat, ivar, mask, meanspec
+            wave, fiberflat, ivar, mask, meanspec, convolved_meanspec
 
     Notes:
     - we first iteratively :
@@ -445,12 +445,19 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     log.info("add a systematic error of 0.0035 to fiberflat variance (calibrated on sims)")
     fiberflat_ivar = (fiberflat_ivar>0)/( 1./ (fiberflat_ivar+(fiberflat_ivar==0) ) + 0.0035**2)
 
+    log.info("compute convolved mean spectrum")
+    mean_res_data=np.mean(frame.resolution_data,axis=0)
+    mean_R = Resolution(mean_res_data)
+    convolved_mean_spectrum = mean_R.dot(mean_spectrum)
+
     # update mask based upon final ivar=0
     bad = fiberflat_ivar == 0
     mask[bad] |= fiberflat_mask
 
-    fiberflat = FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
-                     chi2pdf=chi2pdf,header=frame.meta,fibermap=frame.fibermap)
+    fiberflat = FiberFlat(wave, fiberflat, fiberflat_ivar, mask,
+                          meanspec=mean_spectrum,
+                          convolved_meanspec=convolved_mean_spectrum,
+                          chi2pdf=chi2pdf,header=frame.meta,fibermap=frame.fibermap)
 
     #for broken_fiber in broken_fibers :
     #    log.info("mask broken fiber {} in flat".format(broken_fiber))
@@ -547,8 +554,27 @@ def average_fiberflat(fiberflats):
             meanspec = np.zeros(fiberflats[0].meanspec.shape)
             meanspec[ok] = swf[ok]/sw[ok]
 
+    # average convolved mean spec
+    convolved_meanspec = None
+    if fiberflats[0].convolved_meanspec is not None :
+        swf = np.zeros(fiberflats[0].convolved_meanspec.shape)
+        sw  = np.zeros(fiberflats[0].convolved_meanspec.shape)
+        for tmp in fiberflats :
+            # try to use same weigths as above
+            if len(fiberflats) > 2 :
+                w = np.sum((tmp.ivar>0)*(tmp.mask==0),axis=0)
+            else : # was weigthed average
+                w = np.sum(tmp.ivar*(tmp.mask==0),axis=0)
+            sw  += w
+            swf += w*tmp.convolved_meanspec
+        ok=(sw>0)
+        if np.sum(ok)>0 :
+            convolved_meanspec = np.zeros(fiberflats[0].convolved_meanspec.shape)
+            convolved_meanspec[ok] = swf[ok]/sw[ok]
+
     return FiberFlat(wave,fiberflat,ivar,mask,
                      meanspec=meanspec,
+                     convolved_meanspec=convolved_meanspec,
                      header=fiberflats[0].header,
                      fibers=fiberflats[0].fibers,
                      fibermap=fiberflats[0].fibermap,
@@ -598,20 +624,20 @@ def autocalib_fiberflat(fiberflats):
     for ee in np.unique(expid) :
         log.info("Fit fiberflats of exposure #{}".format(ee))
         ii = np.where(expid==ee)[0]
-        nwave = fiberflats[ii[0]].meanspec.size
+        nwave = fiberflats[ii[0]].convolved_meanspec.size
 
         # same mean spectrum for all petals of same exposure
         mmspec=np.zeros(nwave)
         for i in ii :
             fflat=fiberflats[i]
-            mmspec += fflat.meanspec
+            mmspec += fflat.convolved_meanspec
         mmspec /= ii.size
         for i in ii :
             fflat=fiberflats[i]
-            scale = fflat.meanspec/(mmspec+(mmspec==0))
+            scale = fflat.convolved_meanspec/(mmspec+(mmspec==0))
             fflat.fiberflat *= scale
             # rescaling the fiberflat rescales its uncertainty: var -> var*scale**2
-            # scale=0 where meanspec=0; no information there, so ivar=0
+            # scale=0 where convolved_meanspec=0; no information there, so ivar=0
             fflat.ivar *= (scale!=0)/(scale**2+(scale==0))
 
         # fit a 2D polynomial per wavelenght to get the fiberflat at the center of the focal plane
@@ -649,6 +675,7 @@ def autocalib_fiberflat(fiberflats):
         var       = np.zeros_like(fflat0.ivar)
         mask      = np.zeros_like(fflat0.mask)
         meanspec  = np.zeros_like(fflat0.meanspec)
+        convolved_meanspec  = np.zeros_like(fflat0.convolved_meanspec)
 
         for i in ii :
             ee = expid[i]
@@ -657,11 +684,13 @@ def autocalib_fiberflat(fiberflats):
             var       += corr**2/(fiberflats[i].ivar+(fiberflats[i].ivar==0))+1e12*(fiberflats[i].ivar==0)
             mask      |=  fiberflats[i].mask
             meanspec  +=  fiberflats[i].meanspec*corr # this is quite artificial now
+            convolved_meanspec  +=  fiberflats[i].convolved_meanspec*corr # this is quite artificial now
 
         var /= (ii.size)**2
         ivar      = (var>0)/(var+(var==0))
         fiberflat /= ii.size
         meanspec /= ii.size
+        convolved_meanspec /= ii.size
 
         # set tiny ivars back to 0; leftover from not propagaging inf, 1/inf, nan...
         ivar[ivar<1e-8] = 0.0
@@ -675,6 +704,7 @@ def autocalib_fiberflat(fiberflats):
 
         fflat = FiberFlat(fflat0.wave,fiberflat,ivar,mask,
                           meanspec=meanspec,
+                          convolved_meanspec=convolved_meanspec,
                           header=fflat0.header,
                           fibers=fflat0.fibers,
                           fibermap=fibermap,
@@ -901,7 +931,7 @@ def apply_fiberflat(frame, fiberflat):
 
 
 class FiberFlat(object):
-    def __init__(self, wave, fiberflat, ivar, mask=None, meanspec=None,
+    def __init__(self, wave, fiberflat, ivar, mask=None, meanspec=None, convolved_meanspec=None,
             chi2pdf=None, header=None, fibers=None, fibermap=None, spectrograph=0):
         """
         Creates a lightweight data wrapper for fiber flats
@@ -914,6 +944,7 @@ class FiberFlat(object):
         Optional inputs:
             mask: 2D[nspec, nwave] mask where 0=good; default ivar==0; 32-bit
             meanspec: (optional) 1D[nwave] mean deconvolved average flat lamp spectrum
+            convolved_meanspec: (optional) 1D[nwave] mean convolved average flat lamp spectrum
             chi2pdf: (optional) Normalized chi^2 for fit to mean spectrum
             header: (optional) FITS header from HDU0
             fibers: (optional) fiber indices
@@ -938,11 +969,17 @@ class FiberFlat(object):
         if meanspec is not None and meanspec.ndim != 1:
             raise ValueError("meanspec should be 1D")
 
+        if convolved_meanspec is not None and convolved_meanspec.ndim != 1:
+            raise ValueError("convolved_meanspec should be 1D")
+
         if mask is not None and fiberflat.shape != mask.shape:
             raise ValueError("fiberflat and mask must have the same shape")
 
         if meanspec is not None and wave.shape != meanspec.shape:
             raise ValueError("wrong size/shape for meanspec {}".format(meanspec.shape))
+
+        if convolved_meanspec is not None and wave.shape != convolved_meanspec.shape:
+            raise ValueError("wrong size/shape for convolved_meanspec {}".format(convolved_meanspec.shape))
 
         if wave.shape[0] != fiberflat.shape[1]:
             raise ValueError("nwave mismatch between wave.shape[0] and flux.shape[1]")
@@ -953,11 +990,15 @@ class FiberFlat(object):
         if meanspec is None:
             meanspec = np.ones_like(wave)
 
+        if convolved_meanspec is None:
+            convolved_meanspec = np.ones_like(wave)
+
         self.wave = wave
         self.fiberflat = fiberflat
         self.ivar = ivar
         self.mask = util.mask32(mask)
         self.meanspec = meanspec
+        self.convolved_meanspec = convolved_meanspec
 
         self.nspec, self.nwave = self.fiberflat.shape
         self.header = header
@@ -995,7 +1036,7 @@ class FiberFlat(object):
             fibermap = None
 
         result = FiberFlat(self.wave, self.fiberflat[index], self.ivar[index],
-                           self.mask[index], self.meanspec, header=self.header,
+                           self.mask[index], self.meanspec, convolved_meanspec=self.convolved_meanspec, header=self.header,
                            fibers=self.fibers[index], fibermap=fibermap,  spectrograph=self.spectrograph)
 
         #- TODO:
@@ -1041,9 +1082,9 @@ def qa_fiberflat(param, frame, fiberflat):
     qadict = {}
 
     # Check amplitude of the meanspectrum
-    qadict['MAX_MEANSPEC'] = float(np.max(fiberflat.meanspec))
+    qadict['MAX_MEANSPEC'] = float(np.max(fiberflat.convolved_meanspec))
     if qadict['MAX_MEANSPEC'] < 100000:
-        log.warning("Low counts in meanspec = {:g}".format(qadict['MAX_MEANSPEC']))
+        log.warning("Low counts in convolved_meanspec = {:g}".format(qadict['MAX_MEANSPEC']))
 
     # Record chi2pdf
     try:
@@ -1058,7 +1099,7 @@ def qa_fiberflat(param, frame, fiberflat):
 
     # Scale (search for low/high throughput)
     gdp = fiberflat.mask == 0
-    rtio = (frame.flux / np.outer(norm_area, np.ones(npix))) / np.outer(np.ones(fiberflat.nspec),fiberflat.meanspec)
+    rtio = (frame.flux / np.outer(norm_area, np.ones(npix))) / np.outer(np.ones(fiberflat.nspec),fiberflat.convolved_meanspec)
     scale = np.median(rtio*gdp,axis=1)
     MAX_SCALE_OFF = float(np.max(np.abs(scale-1.)))
     fiber = int(np.argmax(np.abs(scale-1.)))
