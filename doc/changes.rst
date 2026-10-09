@@ -7,6 +7,7 @@ desispec Change Log
 
 * Skip stucksky check if FIBER_RA/DEC=0.
 * Patch zcatalog TARGETID check (commit `#0e7fd54`_).
+* Improve trace shifts when one amp is masked.
 
 .. _`#0e7fd54`: https://github.com/desihub/desispec/commit/0e7fd546a40917a0f43b2225295996d4438c5931
 

@@ -10,7 +10,7 @@ import unittest
 import numpy as np
 from numpy.polynomial.legendre import legval
 from desispec.large_trace_shifts import detect_spots_in_image
-from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles, legx
+from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles, legx, _continuum_subtract_median
 
 # dummy class to mimic Image object
 class ImageLite:
@@ -73,3 +73,31 @@ class TestTraceShift(unittest.TestCase):
                                        err_msg=f'y vs. wave image_rebin={image_rebin}')
             np.testing.assert_allclose(x, legval(rwave, xcoef[0]), atol=0.01,
                                        err_msg=f'x vs. wave image_rebin={image_rebin}')
+
+    def test_continuum_subtract_median_masked_amp(self):
+        """Test that pixels masked in some fibers (e.g. one masked amp) do not bias the median"""
+        nfibers, npix = 100, 400
+        rnd = np.random.RandomState(0)
+        lines = np.zeros(npix)
+        lines[50::50] = 100.
+        flux = 10 + lines[None, :] + rnd.normal(size=(nfibers, npix))
+        ivar = np.ones((nfibers, npix))
+
+        mflux0, mivar0, _ = _continuum_subtract_median(flux, ivar)
+
+        # mask half the fibers over the second half of the spectrum,
+        # like a masked amplifier, plus a few more over a short range
+        flux[50:, 200:] = 0.
+        ivar[50:, 200:] = 0.
+        flux[:45, 300:320] = 0.
+        ivar[:45, 300:320] = 0.
+
+        mflux, mivar, _ = _continuum_subtract_median(flux, ivar)
+
+        # lines in the masked half are recovered from the unmasked fibers
+        np.testing.assert_allclose(mflux[250::50], mflux0[250::50], rtol=0.05)
+        self.assertTrue(np.all(mivar[200:300] > 0))
+
+        # pixels with fewer than min_fibers good fibers get no weight
+        self.assertTrue(np.all(mivar[300:320] == 0))
+        self.assertTrue(np.all(mivar[320:] > 0))
