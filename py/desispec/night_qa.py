@@ -1316,9 +1316,11 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
         mydicts = pool.starmap(_read_sframesky, myargs)
     # AR creating pdf (+ removing temporary files)
     cmap = matplotlib.cm.Greys_r
+    num_sframes = 0
     with PdfPages(tmp_outpdf) as pdf:
         for mydict in mydicts:
             if mydict is not None:
+                num_sframes += 1
                 fig = plt.figure(figsize=(20, 10))
                 gs = gridspec.GridSpec(len(cameras), 1, hspace=0.025)
                 clim = (-100, 100)
@@ -1366,7 +1368,7 @@ def create_sframesky_pdf(outpdf, night, prod, expids, nproc):
                 plt.close()
 
     # AR move to final location
-    os.rename(tmp_outpdf, outpdf)
+    if num_sframes > 0: os.rename(tmp_outpdf, outpdf)
 
 
 def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
@@ -1414,8 +1416,8 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
             pdf.savefig(fig, bbox_inches="tight", dpi=300)
             plt.close()
 
-    # AR move to final location
-    os.rename(tmp_outpdf, outpdf)
+    # DG - If there are no fns, then no pdf will be written so don't try move it
+    if len(fn) > 0: os.rename(tmp_outpdf, outpdf)
 
 
 def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group="cumulative"):
