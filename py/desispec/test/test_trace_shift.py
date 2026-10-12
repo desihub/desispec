@@ -11,6 +11,7 @@ import numpy as np
 from numpy.polynomial.legendre import legval
 from desispec.large_trace_shifts import detect_spots_in_image
 from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles, legx, _continuum_subtract_median
+from desispec.trace_shifts import select_sky_dominated_fibers
 
 # dummy class to mimic Image object
 class ImageLite:
@@ -101,3 +102,44 @@ class TestTraceShift(unittest.TestCase):
         # pixels with fewer than min_fibers good fibers get no weight
         self.assertTrue(np.all(mivar[300:320] == 0))
         self.assertTrue(np.all(mivar[320:] > 0))
+
+    def test_select_sky_dominated_fibers(self):
+        """Test selection of fibers not much brighter than sky fibers"""
+        nfibers, npix = 200, 1000
+        rnd = np.random.RandomState(1)
+        sky = 100 + 50 * np.sin(np.arange(npix) / 30.)**2
+        scale = np.ones(nfibers)
+        skyfibers = np.arange(0, nfibers, 5)              # 40 sky fibers
+        targets = np.setdiff1d(np.arange(nfibers), skyfibers)
+        scale[targets[:80]] = 1.2                          # faint targets
+        scale[targets[80:]] = 3.0                          # bright targets
+        flux = scale[:, None] * sky[None, :] + rnd.normal(scale=5, size=(nfibers, npix))
+        ivar = np.ones((nfibers, npix)) / 25.
+
+        selected, ratio = select_sky_dominated_fibers(flux, ivar, skyfibers)
+        self.assertTrue(np.all(selected[skyfibers]))
+        self.assertTrue(np.all(selected[targets[:80]]))
+        self.assertFalse(np.any(selected[targets[80:]]))
+        np.testing.assert_allclose(ratio, scale, rtol=0.02)
+
+        # masked amp (half of fibers masked over half of the wavelengths,
+        # with zero flux) and cosmics do not change the selection
+        flux[nfibers//2:, npix//2:] = 0.
+        ivar[nfibers//2:, npix//2:] = 0.
+        flux[10, 100:105] = 1e5
+        ivar[10, 100:105] = 0.
+        selected2, ratio2 = select_sky_dominated_fibers(flux, ivar, skyfibers)
+        np.testing.assert_array_equal(selected2, selected)
+        np.testing.assert_allclose(ratio2, scale, rtol=0.02)
+
+        # fully masked fibers are not selected
+        ivar[5] = 0.
+        selected3, ratio3 = select_sky_dominated_fibers(flux, ivar, skyfibers)
+        self.assertFalse(selected3[5])
+        self.assertTrue(np.isnan(ratio3[5]))
+
+        # too few sky fibers or selected fibers -> all fibers
+        selected4, _ = select_sky_dominated_fibers(flux, ivar, skyfibers[:10])
+        self.assertTrue(np.all(selected4))
+        selected5, _ = select_sky_dominated_fibers(flux, ivar, skyfibers, max_sky_ratio=0.5)
+        self.assertTrue(np.all(selected5))

@@ -432,7 +432,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
     return x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy, dwave_list, dwave_err_list
 
 def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy=2,
-                                           continuum_subtract = False):
+                                           continuum_subtract = False, fiber_mask = None):
     """
     Measures y offsets (internal wavelength calibration) from a preprocessed image and a trace set using a cross-correlation of boxcar extracted spectra.
     Uses boxcar_extraction , resample_boxcar_frame , compute_dy_from_spectral_cross_correlations_of_frame
@@ -446,6 +446,8 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
         width  : int, extraction boxcar width, default is 7
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
         continuum_subtract : bool if true subtract continuum before cross-correlation
+        fiber_mask : 1D boolean np.array, same size as fibers; if set, only use fibers with fiber_mask=True
+            for the median spectrum and the measured offsets (e.g. fibers dominated by sky)
 
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
@@ -466,6 +468,12 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     oversampling = 4
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=oversampling)
     flux0 = flux * 1 # for debugging
+
+    # unselected fibers get ivar=0 so that they are not used in the median
+    # nor in the measured offsets
+    if fiber_mask is not None:
+        ivar = ivar * np.asarray(fiber_mask)[:, None]
+
     if continuum_subtract:
         mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win = oversampling * 9)
         flux[flux<0] = 0
@@ -885,9 +893,88 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20)
     mflux[mflux <  0] = 0
     return mflux, mivar, flux
 
+def select_sky_dominated_fibers(flux, ivar, skyfibers, max_sky_ratio=1.5,
+                                min_fibers=20, nbin=20):
+    """
+    Select fibers whose spectra are dominated by sky, i.e. that are not much
+    brighter than the sky fibers
+
+    Args:
+        flux: (nfibers, nwave) array of spectra on a common wavelength grid
+        ivar: (nfibers, nwave) array of inverse variances of flux
+        skyfibers: array of indices of sky fibers (rows of flux)
+
+    Options:
+        max_sky_ratio: keep fibers with a flux ratio to the median sky fiber
+            spectrum less than max_sky_ratio times the median ratio of the
+            sky fibers themselves
+        min_fibers: if there are fewer than min_fibers sky fibers with data,
+            or fewer than min_fibers selected fibers, select all fibers
+        nbin: number of wavelength pixels per bin for computing flux ratios
+
+    Returns:
+        selected: boolean array of length nfibers, True for selected fibers
+        ratio: array of length nfibers with the flux ratio of each fiber to
+            the median sky fiber spectrum (NaN if it could not be computed)
+
+    Notes:
+        The median sky spectrum at each wavelength only uses sky fibers with
+        ivar>0 at that wavelength.  The ratio of a fiber to the median sky
+        spectrum is the median over wavelength bins of sum(flux)/sum(sky),
+        summed over the same unmasked pixels, so that masked amplifiers,
+        cosmics, and noisy individual pixels do not bias the ratio.
+        Fibers fainter than the sky fibers (e.g. low throughput) are kept
+        since their spectra are still dominated by sky.
+    """
+    log = get_logger()
+
+    nfibers, nwave = flux.shape
+    good = (ivar > 0)
+    allfibers = np.ones(nfibers, dtype=bool)
+    ratio = np.full(nfibers, np.nan)
+
+    skyfibers = np.asarray(skyfibers, dtype=int)
+    skyfibers = skyfibers[np.any(good[skyfibers], axis=1)]
+    if skyfibers.size < min_fibers:
+        log.warning(f'Only {skyfibers.size} sky fibers with data; using all fibers')
+        return allfibers, ratio
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='All-NaN slice encountered', category=RuntimeWarning)
+
+        # median sky spectrum, only using sky fibers with ivar>0 at each
+        # wavelength, and requiring at least 3 of them
+        skyflux = np.nanmedian(np.where(good[skyfibers], flux[skyfibers], np.nan), axis=0)
+        skyflux[np.sum(good[skyfibers], axis=0) < 3] = np.nan
+
+        # flux ratios in wavelength bins, summing fiber and sky flux over
+        # the same unmasked pixels; bins need at least half of their pixels
+        # and a positive sky flux
+        usable = good & np.isfinite(skyflux)[None, :]
+        nb = nwave // nbin
+        shape = (nfibers, nb, nbin)
+        num = np.sum(np.where(usable, flux, 0.)[:, :nb*nbin].reshape(shape), axis=2)
+        den = np.sum(np.where(usable, np.nan_to_num(skyflux)[None, :], 0.)[:, :nb*nbin].reshape(shape), axis=2)
+        npix = np.sum(usable[:, :nb*nbin].reshape(shape), axis=2)
+        okbin = (npix >= nbin // 2) & (den > 0)
+        binratio = np.where(okbin, num / np.where(okbin, den, 1.), np.nan)
+        ratio = np.nanmedian(binratio, axis=1)
+
+    skyratio = np.nanmedian(ratio[skyfibers])
+    selected = np.zeros(nfibers, dtype=bool)
+    selected[np.isfinite(ratio)] = (ratio[np.isfinite(ratio)] < max_sky_ratio * skyratio)
+
+    log.info(f'Selected {np.sum(selected)}/{nfibers} fibers with flux < {max_sky_ratio} x sky '
+             f'({skyfibers.size} sky fibers)')
+    if np.sum(selected) < min_fibers:
+        log.warning(f'Only {np.sum(selected)} sky dominated fibers; using all fibers')
+        return allfibers, ratio
+
+    return selected, ratio
+
 def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
                                         spectrum_filename, degyy=2, width=7,
-                                        prior_width_dy=0.1):
+                                        prior_width_dy=0.1, fiber_mask=None):
     """
     Measure y offsets (external wavelength calibration) from a preprocessed image , a PSF + trace set using a cross-correlation of boxcar extracted spectra
     and an external well-calibrated spectrum.
@@ -905,6 +992,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         width  : int, extraction boxcar width, default is 7
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
         prior_width_dy: float with of the Gaussian prior on dy
+        fiber_mask : 1D boolean np.array, same size as fibers; if set, only use fibers with fiber_mask=True
+            for the median spectrum (e.g. fibers dominated by sky)
 
     Returns:
         ycoef  : 2D np.array of same shape as input, with modified Legendre coefficients for each fiber to convert wavelength to YCCD
@@ -933,6 +1022,10 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     # resampling on common finer wavelength grid
     oversampling = 2 #
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=oversampling)
+
+    # unselected fibers get ivar=0 so that they are not used in the median
+    if fiber_mask is not None:
+        ivar = ivar * np.asarray(fiber_mask)[:, None]
 
     mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9)
 

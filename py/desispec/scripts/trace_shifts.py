@@ -24,6 +24,8 @@ from desispec.io import shorten_filename
 from desiutil.log import get_logger
 from desispec.util import parse_int_args
 from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients,recompute_legendre_coefficients_for_x,recompute_legendre_coefficients_for_y,list_of_expected_spot_positions,compute_x_offset_from_central_band_cross_dispersion_profile
+from desispec.trace_shifts import resample_boxcar_frame,select_sky_dominated_fibers
+from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.large_trace_shifts import detect_spots_in_image,match_same_system
 
 def parse(options=None):
@@ -75,6 +77,9 @@ Two methods are implemented.
                         help = "rebinning of CCD rows to run faster")
     parser.add_argument('--no-large-shift-scan', action="store_true",
                         help = "do not perform a large shift scan for arc lamp or continuum exposures")
+    parser.add_argument('--max-sky-ratio', type = float, default = 1.5, required=False,
+                        help = "with --sky, only use fibers with flux less than this ratio times the "
+                               "sky fiber flux to measure y shifts; <=0 to use all fibers")
     args = parser.parse_args(options)
 
     return args
@@ -387,12 +392,47 @@ def fit_ycoeff(dy,ey,x_for_dy,y_for_dy,degyx,degyy,tset,max_error) :
 
     return new_ycoeff
 
-def fit_trace_shifts(image, args):
+def compute_sky_dominated_fiber_mask(tset, image, fibers, fibermap, width=7, max_sky_ratio=1.5):
+    """
+    Identify fibers dominated by sky, i.e. not much brighter than sky fibers
+
+    Args:
+        tset : XYTraceSet object
+        image : DESI preprocessed image object
+        fibers : 1D np.array of fiber indices (within the petal)
+        fibermap : fibermap Table with FIBER and OBJTYPE columns
+
+    Optional:
+        width : int, boxcar extraction width
+        max_sky_ratio : float, select fibers with flux less than max_sky_ratio
+            times the flux of sky fibers
+
+    Returns:
+        1D boolean np.array of size fibers.size, True for sky dominated fibers
+    """
+    log = get_logger()
+    if ('FIBER' not in fibermap.colnames) or ('OBJTYPE' not in fibermap.colnames) :
+        log.warning("fibermap is missing FIBER or OBJTYPE; using all fibers for y shifts")
+        return np.ones(fibers.size, dtype=bool)
+
+    skyfibers = np.asarray(fibermap['FIBER'][fibermap['OBJTYPE'] == 'SKY']) % 500
+    skyfibers = np.where(np.isin(fibers, skyfibers))[0]
+
+    qframe = qproc_boxcar_extraction(tset, image, fibers=fibers, width=width)
+    flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=1)
+    selected, ratio = select_sky_dominated_fibers(flux, ivar, skyfibers, max_sky_ratio=max_sky_ratio)
+
+    return selected
+
+def fit_trace_shifts(image, args, fibermap=None):
     """
     Perform the fitting of shifts of spectral traces
     This consists of two steps, one is internal, by
     cross-correlating spectra to themselves, and then
     cross-correlating to external (ususally sky) spectrum
+
+    If fibermap is provided, the y shifts measured with the sky spectrum
+    only use fibers dominated by sky (see args.max_sky_ratio)
 
     Return updated traceset and two dictionaies with offset information
     to be written in the PSF file
@@ -553,6 +593,7 @@ def fit_trace_shifts(image, args):
     fibers=np.arange(nfibers)
     internal_offset_info = None
     specter_psf = None
+    yfiber_mask = None
 
     if lines is not None :
 
@@ -612,11 +653,18 @@ def fit_trace_shifts(image, args):
             if maxdx<0.001 :
                 break
 
+        # for sky spectra, measure y shifts only with fibers dominated by sky,
+        # since spectra of bright targets (e.g. stars) don't match the sky.
+        # x shifts use all fibers.
+        if args.sky and fibermap is not None and args.max_sky_ratio > 0 :
+            yfiber_mask = compute_sky_dominated_fiber_mask(tset, image, fibers, fibermap,
+                                                           width=args.width, max_sky_ratio=args.max_sky_ratio)
+
         if internal_wavelength_calib and (degyx>0 or degyy>0) :
 
             for iteration in range(10) :
                 # measure y shifts
-                x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy,dwave,dwave_err  = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width, continuum_subtract=continuum_subtract)
+                x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy,dwave,dwave_err  = compute_dy_using_boxcar_extraction(tset, image=image, fibers=fibers, width=args.width, continuum_subtract=continuum_subtract, fiber_mask=yfiber_mask)
                 mdy = np.median(dy)
                 log.info("Subtract median(dy)={}".format(mdy))
                 dy -= mdy # remove median, because this is an internal calibration
@@ -681,7 +729,8 @@ def fit_trace_shifts(image, args):
          wave_external, dwave_external, dwave_err_external) = shift_ycoef_using_external_spectrum(psf=psf, xytraceset=tset,
                                                                              image=image, fibers=fibers,
                                                                              spectrum_filename=spectrum_filename,
-                                                                             degyy=args.degyy, width=7)
+                                                                             degyy=args.degyy, width=7,
+                                                                             fiber_mask=yfiber_mask)
         external_offset_info = dict(wave=wave_external,
                                     dwave=dwave_external,
                                     dwave_err=dwave_err_external)
@@ -732,7 +781,15 @@ def main(args=None) :
         log.critical(f"Entire {os.path.basename(args.image)} image is masked; can't fit traceshifts")
         sys.exit(1)
 
-    tset, internal_offset_info, external_offset_info = fit_trace_shifts(image=image, args=args)
+    # fibermap is used to identify sky fibers
+    fibermap = None
+    with pyfits.open(args.image) as hdus :
+        if 'FIBERMAP' in hdus :
+            fibermap = Table(hdus['FIBERMAP'].data)
+    if fibermap is None and args.sky :
+        log.warning(f"No FIBERMAP in {os.path.basename(args.image)}; using all fibers for y shifts")
+
+    tset, internal_offset_info, external_offset_info = fit_trace_shifts(image=image, args=args, fibermap=fibermap)
     tset.meta['IN_PSF'] = shorten_filename(args.psf)
     tset.meta['IN_IMAGE'] = shorten_filename(args.image)
 
