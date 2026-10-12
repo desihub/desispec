@@ -1417,7 +1417,7 @@ def create_tileqa_pdf(outpdf, night, prod, expids, tileids, group='cumulative'):
             plt.close()
 
     # DG - If there are no fns, then no pdf will be written so don't try move it
-    if len(fn) > 0: os.rename(tmp_outpdf, outpdf)
+    if len(fns) > 0: os.rename(tmp_outpdf, outpdf)
 
 
 def create_skyzfiber_png(outpng, night, prod, tileids, dchi2_threshold=9, group="cumulative"):
