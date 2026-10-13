@@ -954,11 +954,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         width  : int, extraction boxcar width, default is 7
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
         prior_width_dy: float with of the Gaussian prior on dy
-        contamination_frac: float or None, fractional amplitude of object
-            continuum features used to down-weight bright objects when
-            computing the median spectrum (see _continuum_subtract_median)
-        sky_fibers: 1D np.array of sky fiber indices or None, used to
-            estimate the continuum common to all fibers
+        contamination_frac: float or None, fractional amplitude of object continuum features used to down-weight bright objects in the median spectrum (see _continuum_subtract_median)
+        sky_fibers: 1D np.array of sky fiber indices or None, used to estimate the continuum common to all fibers
 
     Returns:
         ycoef  : 2D np.array of same shape as input, with modified Legendre coefficients for each fiber to convert wavelength to YCCD
