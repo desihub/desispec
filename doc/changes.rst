@@ -2,14 +2,21 @@
 desispec Change Log
 ===================
 
-0.73.2 (unreleased)
+0.73.3 (unreleased)
 -------------------
 
-* Skip stucksky check if FIBER_RA/DEC=0.
+* No changes yet.
+
+0.73.2 (2026-10-13)
+-------------------
+
+* Skip stucksky check if FIBER_RA/DEC=0 (PR `#2883`_).
 * Patch zcatalog TARGETID check (commit `#0e7fd54`_).
-* Improve trace shifts when one amp is masked.
+* Improve trace shifts when one amp is masked (PR `#2887`_).
 
 .. _`#0e7fd54`: https://github.com/desihub/desispec/commit/0e7fd546a40917a0f43b2225295996d4438c5931
+.. _`#2883`: https://github.com/desihub/desispec/pull/2883
+.. _`#2887`: https://github.com/desihub/desispec/pull/2887
 
 0.73.1 (2026-10-02)
 -------------------
