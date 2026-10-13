@@ -133,7 +133,7 @@ class TestTraceShift(unittest.TestCase):
         star = 500 * (1 - sum(0.3 * np.exp(-0.5 * ((x - c - 1) / 2.)**2) for c in centers))
 
         # first nsky fibers are sky fibers, the others bright stars (like on backup tiles);
-        # same noise for all fibers so that only the contamination term distinguishes them
+        # same noise for all fibers so that only the continuum error term distinguishes them
         is_sky_fiber = np.arange(nfibers) < nsky
         model = sky[None, :] + (~is_sky_fiber)[:, None] * star[None, :]
         flux = model + rnd.normal(size=model.shape) * 3.
@@ -148,12 +148,12 @@ class TestTraceShift(unittest.TestCase):
 
         # the weighted median recovers them, with or without sky fibers identified
         for is_sky in (is_sky_fiber, None):
-            mflux, mivar, _ = _continuum_subtract_median(flux, ivar, contamination_frac=0.3, is_sky_fiber=is_sky)
+            mflux, mivar, _ = _continuum_subtract_median(flux, ivar, continuum_error_frac=0.3, is_sky_fiber=is_sky)
             np.testing.assert_allclose(mflux[peaks], mflux_sky[peaks], rtol=0.1)
             self.assertTrue(np.all(mivar[peaks] > 0))
 
         # without bright objects the weighted median matches the plain median
         flux_sky, ivar_sky = flux[is_sky_fiber], ivar[is_sky_fiber]
-        mflux, _, _ = _continuum_subtract_median(flux_sky, ivar_sky, contamination_frac=0.3,
+        mflux, _, _ = _continuum_subtract_median(flux_sky, ivar_sky, continuum_error_frac=0.3,
                                                  is_sky_fiber=np.ones(nsky, dtype=bool))
         np.testing.assert_allclose(mflux[peaks], mflux_sky[peaks], rtol=0.05)
