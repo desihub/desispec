@@ -814,7 +814,27 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers, wid
     return ref_wave, ref_spectrum
 
 
-def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20):
+def _weighted_median(flux, weights):
+    """
+    Weighted median along the first axis
+
+    Arguments:
+        flux: (nfibers, npix) np.array
+        weights: (nfibers, npix) np.array of non-negative weights
+
+    Returns:
+        npix np.array of weighted medians (0 where all weights are 0)
+    """
+    order = np.argsort(flux, axis=0)
+    sorted_flux = np.take_along_axis(flux, order, axis=0)
+    cumweights = np.cumsum(np.take_along_axis(weights, order, axis=0), axis=0)
+    total = cumweights[-1]
+    index = np.argmax(cumweights >= 0.5 * total[None, :], axis=0)
+    res = np.take_along_axis(sorted_flux, index[None, :], axis=0)[0]
+    return np.where(total > 0, res, 0.)
+
+def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20,
+                               contamination_frac = None, sky_mask = None):
     """
     Compute the median spectrum after continuum subtraction
 
@@ -825,6 +845,14 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20)
             Here we use the 1d annulus from continuum_win/2 to continuum_win
         min_fibers: integer. Minimum number of fibers with ivar>0 at a given
             pixel for the median at that pixel to get non-zero weight
+        contamination_frac: float or None. If set, use a weighted median
+            where each fiber's variance includes
+            (contamination_frac * object continuum)**2, to down-weight
+            bright objects whose continuum-subtracted absorption features
+            can otherwise dominate the median (e.g. stars on backup tiles)
+        sky_mask: (nfibers,) boolean np.array or None. Sky fibers, used to
+            estimate the continuum common to all fibers when
+            contamination_frac is set
 
     Returns:
         mfux: npix np.array of median spectrum
@@ -835,6 +863,10 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20)
         The median at each pixel only uses fibers with ivar>0 at that pixel,
         so that masked pixels (e.g. from a masked amplifier) do not enter
         the median as zeros.
+        The object continuum is the fiber continuum minus the continuum
+        common to all fibers (the median of sky fibers, or a low percentile
+        across fibers where no sky fiber is available), so that a bright
+        sky continuum (e.g. moonlight) does not change the weights.
     """
     # here we get rid of continuum by applying a median filter
     continuum_foot = np.abs(np.arange(-continuum_win,continuum_win+1))>continuum_win /2.
@@ -857,7 +889,23 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20)
         warnings.filterwarnings('ignore', message='All-NaN slice encountered', category=RuntimeWarning)
 
         # median flux used as internal spectral reference
-        mflux = np.nan_to_num(np.nanmedian(masked_flux, axis=0))
+        if contamination_frac is None:
+            mflux = np.nan_to_num(np.nanmedian(masked_flux, axis=0))
+        else:
+            continuum = np.where(good, flux0 - flux, np.nan)
+            # continuum common to all fibers (sky, including moonlight),
+            # which should not affect the weights
+            if sky_mask is not None and np.any(sky_mask):
+                common_continuum = np.nanmedian(continuum[sky_mask], axis=0)
+            else:
+                # without sky fibers, use a low percentile across fibers:
+                # sky fibers are ~10% of fibers and usually the faintest.
+                # An underestimate only adds a similar term to all variances
+                common_continuum = np.nanpercentile(continuum, 5, axis=0)
+            common_continuum = np.nan_to_num(common_continuum)
+            object_continuum = np.nan_to_num(np.maximum(continuum - common_continuum[None, :], 0))
+            var = 1. / (ivar + (~good)) + (contamination_frac * object_continuum)**2
+            mflux = _weighted_median(np.where(good, flux, 0.), good / var)
 
         # we use data variance and MAD from different spectra
         # to assign variance to a spectrum (1.48 is MAD factor,
@@ -887,7 +935,8 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20)
 
 def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
                                         spectrum_filename, degyy=2, width=7,
-                                        prior_width_dy=0.1):
+                                        prior_width_dy=0.1, contamination_frac=0.3,
+                                        sky_fibers=None):
     """
     Measure y offsets (external wavelength calibration) from a preprocessed image , a PSF + trace set using a cross-correlation of boxcar extracted spectra
     and an external well-calibrated spectrum.
@@ -905,6 +954,11 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         width  : int, extraction boxcar width, default is 7
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
         prior_width_dy: float with of the Gaussian prior on dy
+        contamination_frac: float or None, fractional amplitude of object
+            continuum features used to down-weight bright objects when
+            computing the median spectrum (see _continuum_subtract_median)
+        sky_fibers: 1D np.array of sky fiber indices or None, used to
+            estimate the continuum common to all fibers
 
     Returns:
         ycoef  : 2D np.array of same shape as input, with modified Legendre coefficients for each fiber to convert wavelength to YCCD
@@ -934,7 +988,13 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     oversampling = 2 #
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=oversampling)
 
-    mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9)
+    sky_mask = None
+    if sky_fibers is not None:
+        sky_mask = np.isin(fibers, sky_fibers)
+        log.info(f"use {np.sum(sky_mask)} sky fibers for the common continuum")
+    mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9,
+                                                    contamination_frac=contamination_frac,
+                                                    sky_mask=sky_mask)
 
     ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar), width=width)
 
