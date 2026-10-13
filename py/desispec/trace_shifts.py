@@ -437,25 +437,32 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     Measures y offsets (internal wavelength calibration) from a preprocessed image and a trace set using a cross-correlation of boxcar extracted spectra.
     Uses boxcar_extraction , resample_boxcar_frame , compute_dy_from_spectral_cross_correlations_of_frame
 
-    Args:
-        xytraceset : XYTraceset object
-        image : DESI preprocessed image object
+    Parameters
+    ----------
+    xytraceset : XYTraceset object
+    image : DESI preprocessed image object
+    fibers : 1D np.array of int, optional
+        Fibers to use (default is all fibers, the first fiber is always = 0)
+    width : int, optional
+        Extraction boxcar width, default is 7
+    degyy : int, optional
+        Degree of polynomial fit of shifts as a function of y, used to reject outliers.
+    continuum_subtract : bool, optional
+        If true subtract continuum before cross-correlation
+    fiber_mask : 1D boolean np.array, optional
+        Same size as fibers; if set, only use fibers with fiber_mask=True
+        for the median spectrum and the measured offsets (e.g. fibers dominated by sky)
 
-    Optional:
-        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
-        width  : int, extraction boxcar width, default is 7
-        degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
-        continuum_subtract : bool if true subtract continuum before cross-correlation
-        fiber_mask : 1D boolean np.array, same size as fibers; if set, only use fibers with fiber_mask=True
-            for the median spectrum and the measured offsets (e.g. fibers dominated by sky)
-
-    Returns:
-        x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
-        y  : 1D array of y coordinates on CCD (axis=0 in numpy image array, AXIS=1 in FITS, wavelength dispersion axis)
-        dy : 1D array of shifts along y coordinates on CCD
-        ey : 1D array of uncertainties on dy
-        fiber : 1D array of fiber ID (first fiber = 0)
-        wave  : 1D array of wavelength
+    Returns
+    -------
+    x : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS,
+        cross-dispersion axis = fiber number direction)
+    y : 1D array of y coordinates on CCD (axis=0 in numpy image array, AXIS=1 in FITS,
+        wavelength dispersion axis)
+    dy : 1D array of shifts along y coordinates on CCD
+    ey : 1D array of uncertainties on dy
+    fiber : 1D array of fiber ID (first fiber = 0)
+    wave : 1D array of wavelength
 
     """
 
@@ -899,32 +906,36 @@ def select_sky_dominated_fibers(flux, ivar, skyfibers, max_sky_ratio=1.5,
     Select fibers whose spectra are dominated by sky, i.e. that are not much
     brighter than the sky fibers
 
-    Args:
-        flux: (nfibers, nwave) array of spectra on a common wavelength grid
-        ivar: (nfibers, nwave) array of inverse variances of flux
-        skyfibers: array of indices of sky fibers (rows of flux)
+    Parameters
+    ----------
+    flux : (nfibers, nwave) array of spectra on a common wavelength grid
+    ivar : (nfibers, nwave) array of inverse variances of flux
+    skyfibers : array of indices of sky fibers (rows of flux)
+    max_sky_ratio : float, optional
+        Keep fibers with a flux ratio to the median sky fiber
+        spectrum less than max_sky_ratio times the median ratio of the
+        sky fibers themselves
+    min_fibers : int, optional
+        If there are fewer than min_fibers sky fibers with data,
+        or fewer than min_fibers selected fibers, select all fibers
+    nbin : int, optional
+        Number of wavelength pixels per bin for computing flux ratios
 
-    Options:
-        max_sky_ratio: keep fibers with a flux ratio to the median sky fiber
-            spectrum less than max_sky_ratio times the median ratio of the
-            sky fibers themselves
-        min_fibers: if there are fewer than min_fibers sky fibers with data,
-            or fewer than min_fibers selected fibers, select all fibers
-        nbin: number of wavelength pixels per bin for computing flux ratios
+    Returns
+    -------
+    selected : boolean array of length nfibers, True for selected fibers
+    ratio : array of length nfibers with the flux ratio of each fiber to
+        the median sky fiber spectrum (NaN if it could not be computed)
 
-    Returns:
-        selected: boolean array of length nfibers, True for selected fibers
-        ratio: array of length nfibers with the flux ratio of each fiber to
-            the median sky fiber spectrum (NaN if it could not be computed)
-
-    Notes:
-        The median sky spectrum at each wavelength only uses sky fibers with
-        ivar>0 at that wavelength.  The ratio of a fiber to the median sky
-        spectrum is the median over wavelength bins of sum(flux)/sum(sky),
-        summed over the same unmasked pixels, so that masked amplifiers,
-        cosmics, and noisy individual pixels do not bias the ratio.
-        Fibers fainter than the sky fibers (e.g. low throughput) are kept
-        since their spectra are still dominated by sky.
+    Notes
+    -----
+    The median sky spectrum at each wavelength only uses sky fibers with
+    ivar>0 at that wavelength.  The ratio of a fiber to the median sky
+    spectrum is the median over wavelength bins of sum(flux)/sum(sky),
+    summed over the same unmasked pixels, so that masked amplifiers,
+    cosmics, and noisy individual pixels do not bias the ratio.
+    Fibers fainter than the sky fibers (e.g. low throughput) are kept
+    since their spectra are still dominated by sky.
     """
     log = get_logger()
 
@@ -981,25 +992,32 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     The PSF shape is used to convolve the input spectrum. It could also be used to correct for the PSF asymetry (disabled for now).
     A relative flux calibration of the spectra is performed internally.
 
-    Args:
-        psf : specter PSF
-        xytraceset : XYTraceset object
-        image : DESI preprocessed image object
-        fibers : 1D np.array of fiber indices
-        spectrum_filename : path to input spectral file ( read with np.loadtxt , first column is wavelength (in vacuum and Angstrom) , second column in flux (arb. units)
+    Parameters
+    ----------
+    psf : specter PSF
+    xytraceset : XYTraceset object
+    image : DESI preprocessed image object
+    fibers : 1D np.array of fiber indices
+    spectrum_filename : str
+        Path to input spectral file (read with np.loadtxt); first column is
+        wavelength (in vacuum and Angstrom), second column is flux (arb. units)
+    degyy : int, optional
+        Degree of polynomial fit of shifts as a function of y, used to reject outliers.
+    width : int, optional
+        Extraction boxcar width, default is 7
+    prior_width_dy : float, optional
+        Width of the Gaussian prior on dy
+    fiber_mask : 1D boolean np.array, optional
+        Same size as fibers; if set, only use fibers with fiber_mask=True
+        for the median spectrum (e.g. fibers dominated by sky)
 
-    Optional:
-        width  : int, extraction boxcar width, default is 7
-        degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
-        prior_width_dy: float with of the Gaussian prior on dy
-        fiber_mask : 1D boolean np.array, same size as fibers; if set, only use fibers with fiber_mask=True
-            for the median spectrum (e.g. fibers dominated by sky)
-
-    Returns:
-        ycoef  : 2D np.array of same shape as input, with modified Legendre coefficients for each fiber to convert wavelength to YCCD
-        wave:  : 1D array of wavelengths for which offsets are computed
-        dwave: : 1D array of wavelength offsets
-        dwave_err: 1D array of wavelength offset uncertainties
+    Returns
+    -------
+    ycoef : 2D np.array of same shape as input, with modified Legendre coefficients
+        for each fiber to convert wavelength to YCCD
+    wave : 1D array of wavelengths for which offsets are computed
+    dwave : 1D array of wavelength offsets
+    dwave_err : 1D array of wavelength offset uncertainties
 
     """
     log = get_logger()

@@ -404,8 +404,7 @@ def compute_sky_dominated_fiber_mask(tset, image, fibers, fibermap, width=7, max
 
     Optional:
         width : int, boxcar extraction width
-        max_sky_ratio : float, select fibers with flux less than max_sky_ratio
-            times the flux of sky fibers
+        max_sky_ratio : float, select fibers with flux less than max_sky_ratio times the flux of sky fibers
 
     Returns:
         1D boolean np.array of size fibers.size, True for sky dominated fibers
