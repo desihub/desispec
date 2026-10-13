@@ -10,7 +10,7 @@ import unittest
 import numpy as np
 from numpy.polynomial.legendre import legval
 from desispec.large_trace_shifts import detect_spots_in_image
-from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles, legx, _continuum_subtract_median
+from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles, legx, _continuum_subtract_median, _weighted_median
 
 # dummy class to mimic Image object
 class ImageLite:
@@ -101,3 +101,59 @@ class TestTraceShift(unittest.TestCase):
         # pixels with fewer than min_fibers good fibers get no weight
         self.assertTrue(np.all(mivar[300:320] == 0))
         self.assertTrue(np.all(mivar[320:] > 0))
+
+    def test_weighted_median(self):
+        """Test the weighted median along the fiber axis"""
+        rnd = np.random.RandomState(0)
+        x = rnd.normal(size=(11, 5))
+
+        # equal weights give the ordinary median
+        np.testing.assert_allclose(_weighted_median(x, np.ones_like(x)), np.median(x, axis=0))
+
+        # zero-weight entries are ignored
+        w = np.ones_like(x)
+        w[:4] = 0
+        np.testing.assert_allclose(_weighted_median(x, w), np.median(x[4:], axis=0))
+
+        # a dominant weight selects that entry
+        w = np.ones_like(x)
+        w[3] = 100
+        np.testing.assert_allclose(_weighted_median(x, w), x[3])
+
+        # no weight at all gives 0
+        np.testing.assert_allclose(_weighted_median(x, np.zeros_like(x)), 0)
+
+    def test_continuum_subtract_median_bright_stars(self):
+        """Test that sky lines on top of stellar absorption in most fibers are recovered (issue #2891)"""
+        nfibers, npix, nsky = 100, 400, 30
+        rnd = np.random.RandomState(0)
+        x = np.arange(npix)
+        centers = (100, 200, 300)
+        sky = 20 + sum(50 * np.exp(-0.5 * ((x - c) / 1.5)**2) for c in centers)
+        star = 500 * (1 - sum(0.3 * np.exp(-0.5 * ((x - c - 1) / 2.)**2) for c in centers))
+
+        # first nsky fibers are sky fibers, the others bright stars (like on backup tiles);
+        # same noise for all fibers so that only the contamination term distinguishes them
+        is_sky_fiber = np.arange(nfibers) < nsky
+        model = sky[None, :] + (~is_sky_fiber)[:, None] * star[None, :]
+        flux = model + rnd.normal(size=model.shape) * 3.
+        ivar = np.ones_like(model) / 3.**2
+
+        mflux_sky, _, _ = _continuum_subtract_median(flux[is_sky_fiber], ivar[is_sky_fiber])
+        mflux_plain, _, _ = _continuum_subtract_median(flux, ivar)
+        peaks = np.array(centers)
+
+        # the plain median is dominated by the stellar absorption and erases the sky lines
+        self.assertTrue(np.all(mflux_plain[peaks] < 0.2 * mflux_sky[peaks]))
+
+        # the weighted median recovers them, with or without sky fibers identified
+        for is_sky in (is_sky_fiber, None):
+            mflux, mivar, _ = _continuum_subtract_median(flux, ivar, contamination_frac=0.3, is_sky_fiber=is_sky)
+            np.testing.assert_allclose(mflux[peaks], mflux_sky[peaks], rtol=0.1)
+            self.assertTrue(np.all(mivar[peaks] > 0))
+
+        # without bright objects the weighted median matches the plain median
+        flux_sky, ivar_sky = flux[is_sky_fiber], ivar[is_sky_fiber]
+        mflux, _, _ = _continuum_subtract_median(flux_sky, ivar_sky, contamination_frac=0.3,
+                                                 is_sky_fiber=np.ones(nsky, dtype=bool))
+        np.testing.assert_allclose(mflux[peaks], mflux_sky[peaks], rtol=0.05)
