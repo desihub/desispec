@@ -549,8 +549,8 @@ def fit_trace_shifts(image, args):
 
     if args.nfibers is not None :
         nfibers = args.nfibers # FOR DEBUGGING
+        fibers = fibers[fibers < nfibers]
 
-    fibers=np.arange(nfibers)
     internal_offset_info = None
     specter_psf = None
 
@@ -564,7 +564,8 @@ def fit_trace_shifts(image, args):
         if specter_psf is None :
             specter_psf = read_specter_psf(args.psf)
 
-        x,y,dx,ex,dy,ey,fiber_xy,wave_xy=compute_dx_dy_using_psf(specter_psf,image,fibers,lines)
+        # compute_dx_dy_using_psf assumes contiguous fibers starting at 0
+        x,y,dx,ex,dy,ey,fiber_xy,wave_xy=compute_dx_dy_using_psf(specter_psf,image,np.arange(nfibers),lines)
         x_for_dx=x
         y_for_dx=y
         fiber_for_dx=fiber_xy

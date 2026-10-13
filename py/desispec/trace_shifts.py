@@ -26,6 +26,7 @@ from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
 from desispec.qproc.qextract import qproc_boxcar_extraction
+from desispec.xytraceset import XYTraceSet
 
 def write_traces_in_psf(input_psf_filename,output_psf_filename,xytraceset, internal_offset_info=None,
                         external_offset_info=None) :
@@ -431,6 +432,33 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
 
     return x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy, dwave_list, dwave_err_list
 
+def _select_traces(xytraceset, fibers):
+    """
+    Traces of a subset of fibers
+
+    Args:
+        xytraceset: XYTraceSet object
+        fibers: 1D np.array of fiber indices or None
+
+    Returns:
+        XYTraceSet with the traces of fibers, in that order (xytraceset if fibers is None)
+
+    Notes:
+        qproc_boxcar_extraction uses the traces in the order of its fibers
+        argument, so it needs this to extract a subset of fibers.
+    """
+    if fibers is None:
+        return xytraceset
+    rows = np.asarray(fibers) % 500
+    xsig = xytraceset.xsig_vs_wave_traceset
+    ysig = xytraceset.ysig_vs_wave_traceset
+    return XYTraceSet(xytraceset.x_vs_wave_traceset._coeff[rows],
+                      xytraceset.y_vs_wave_traceset._coeff[rows],
+                      xytraceset.wavemin, xytraceset.wavemax, xytraceset.npix_y,
+                      xsigcoef=None if xsig is None else xsig._coeff[rows],
+                      ysigcoef=None if ysig is None else ysig._coeff[rows],
+                      meta=xytraceset.meta)
+
 def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy=2,
                                            continuum_subtract = False):
     """
@@ -460,7 +488,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     log=get_logger()
 
     # boxcar extraction
-    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=width)
+    qframe = qproc_boxcar_extraction(_select_traces(xytraceset, fibers), image, fibers=fibers, width=width)
 
     # resampling on common finer wavelength grid
     oversampling = 4
@@ -477,12 +505,18 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
         mflux=np.median(flux[good_fibers],axis=0)
 
     # measure y shifts
+    # the rows of flux are the extracted fibers, which can be a subset
+    # (e.g. without broken fibers), so select the matching traces
+    rows_fibers = np.asarray(qframe.fibers) % 500
     wavemin = xytraceset.wavemin
     wavemax = xytraceset.wavemax
-    xcoef   = xytraceset.x_vs_wave_traceset._coeff
-    ycoef   = xytraceset.y_vs_wave_traceset._coeff
+    xcoef   = xytraceset.x_vs_wave_traceset._coeff[rows_fibers]
+    ycoef   = xytraceset.y_vs_wave_traceset._coeff[rows_fibers]
 
-    return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
+    x, y, dy, ey, fiber, wave, dwave, dwave_err = compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
+    # convert row indices into fiber indices
+    fiber = rows_fibers[fiber.astype(int)].astype(float)
+    return x, y, dy, ey, fiber, wave, dwave, dwave_err
 
 @numba.jit
 def numba_cross_profile(image_flux, image_ivar, y, x, wave, hw=3) :
@@ -979,7 +1013,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     log.info("rextract spectra with boxcar")
 
     # boxcar extraction
-    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=width)
+    qframe = qproc_boxcar_extraction(_select_traces(xytraceset, fibers), image, fibers=fibers, width=width)
 
     # resampling on common finer wavelength grid
     oversampling = 2 #
@@ -1005,7 +1039,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     dwave_list = np.array([])
     dwave_err_list = np.array([])
     n_fibers_for_psf = min(20, flux.shape[0])
-    fibers_for_psf_evaluation = np.unique(np.linspace(0, flux.shape[0] - 1, n_fibers_for_psf).astype(int))  # flux.shape[0] // 2
+    rows_for_psf_evaluation = np.unique(np.linspace(0, flux.shape[0] - 1, n_fibers_for_psf).astype(int))
+    fibers_for_psf_evaluation = np.asarray(qframe.fibers)[rows_for_psf_evaluation] % 500
     wavelength_bins = np.linspace(wave[0], wave[-1], n_wavelength_bins+1)
     for b in range(n_wavelength_bins) :
         wmin, wmax = [wavelength_bins[_] for _ in [b, b + 1]]
