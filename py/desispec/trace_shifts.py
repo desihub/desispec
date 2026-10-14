@@ -462,12 +462,15 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     # boxcar extraction of all fibers, then keep the rows of the requested
     # fibers (qproc_boxcar_extraction indexes the traces by position in
     # its fibers argument, so it cannot be given a subset directly)
-    qframe = qproc_boxcar_extraction(xytraceset, image, width=width)
-    rows_fibers = np.arange(qframe.flux.shape[0]) if fibers is None else np.asarray(fibers) % 500
+    qframe_all = qproc_boxcar_extraction(xytraceset, image, width=width)
+
+    # fibers = trace-set rows to use; below, flux, ivar, xcoef, ... have one row per selected fiber
+    if fibers is None:
+        fibers = np.arange(xytraceset.nspec)
 
     # resampling on common finer wavelength grid
     oversampling = 4
-    flux, ivar, wave = resample_boxcar_frame(qframe.flux[rows_fibers], qframe.ivar[rows_fibers], qframe.wave[rows_fibers], oversampling=oversampling)
+    flux, ivar, wave = resample_boxcar_frame(qframe_all.flux[fibers], qframe_all.ivar[fibers], qframe_all.wave[fibers], oversampling=oversampling)
     flux0 = flux * 1 # for debugging
     if continuum_subtract:
         mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win = oversampling * 9)
@@ -480,16 +483,15 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
         mflux=np.median(flux[good_fibers],axis=0)
 
     # measure y shifts
-    # the rows of flux are the selected fibers, which can be a subset
-    # (e.g. without broken fibers), so select the matching traces
+    # traces of the selected fibers, one row per row of flux
     wavemin = xytraceset.wavemin
     wavemax = xytraceset.wavemax
-    xcoef   = xytraceset.x_vs_wave_traceset._coeff[rows_fibers]
-    ycoef   = xytraceset.y_vs_wave_traceset._coeff[rows_fibers]
+    xcoef   = xytraceset.x_vs_wave_traceset._coeff[fibers]
+    ycoef   = xytraceset.y_vs_wave_traceset._coeff[fibers]
 
     x, y, dy, ey, fiber, wave, dwave, dwave_err = compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
     # convert row indices into fiber indices
-    fiber = rows_fibers[fiber.astype(int)].astype(float)
+    fiber = fibers[fiber.astype(int)].astype(float)
     return x, y, dy, ey, fiber, wave, dwave, dwave_err
 
 @numba.jit
@@ -1012,12 +1014,15 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
 
     # boxcar extraction of all fibers, then keep the rows of the requested
     # fibers (see compute_dy_using_boxcar_extraction)
-    qframe = qproc_boxcar_extraction(xytraceset, image, width=width)
-    rows_fibers = np.arange(qframe.flux.shape[0]) if fibers is None else np.asarray(fibers) % 500
+    qframe_all = qproc_boxcar_extraction(xytraceset, image, width=width)
+
+    # fibers = trace-set rows to use; below, flux, ivar, xcoef, ... have one row per selected fiber
+    if fibers is None:
+        fibers = np.arange(xytraceset.nspec)
 
     # resampling on common finer wavelength grid
     oversampling = 2 #
-    flux, ivar, wave = resample_boxcar_frame(qframe.flux[rows_fibers], qframe.ivar[rows_fibers], qframe.wave[rows_fibers], oversampling=oversampling)
+    flux, ivar, wave = resample_boxcar_frame(qframe_all.flux[fibers], qframe_all.ivar[fibers], qframe_all.wave[fibers], oversampling=oversampling)
 
     is_sky_fiber = None
     if sky_fibers is not None:
@@ -1049,7 +1054,7 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     dwave_err_list = np.array([])
     n_fibers_for_psf = min(20, flux.shape[0])
     rows_for_psf_evaluation = np.unique(np.linspace(0, flux.shape[0] - 1, n_fibers_for_psf).astype(int))
-    fibers_for_psf_evaluation = rows_fibers[rows_for_psf_evaluation]
+    fibers_for_psf_evaluation = fibers[rows_for_psf_evaluation]
     wavelength_bins = np.linspace(wave[0], wave[-1], n_wavelength_bins+1)
     for b in range(n_wavelength_bins) :
         wmin, wmax = [wavelength_bins[_] for _ in [b, b + 1]]
