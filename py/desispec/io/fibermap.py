@@ -406,7 +406,10 @@ def compare_fiberassign(fa1, fa2, compare_all=False):
 
     Returns list of columns with mismatches; empty list if all agree
 
-    Note: if both are NaN, it is considered a match
+    Notes:
+
+      * if both are NaN, it is considered a match
+      * tile 83063 special case TARGETID is not compared (see desitarget #892)
     """
     log = get_logger()
     if compare_all:
@@ -419,7 +422,7 @@ def compare_fiberassign(fa1, fa2, compare_all=False):
 
     #- Special case tile 83063 with purposefully changed TARGETID;
     #- See https://github.com/desihub/desitarget/issues/892
-    if 'TILEID' in fa1.meta and fa1.meta['TILEID'] == 83063:
+    if hasattr(fa1, 'meta') and ('TILEID' in fa1.meta) and (fa1.meta['TILEID'] == 83063):
         log.warning('Tile 83063 special case, not checking TARGETID (See desitarget #892)')
         compare_columns = [c for c in compare_columns if c != 'TARGETID']
 
