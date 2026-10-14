@@ -682,6 +682,9 @@ def fit_trace_shifts(image, args):
         # continuum common to all fibers when building the median spectrum
         sky_fibers = None
         fibermap = getattr(image, 'fibermap', None)
+        if fibermap is not None and len(fibermap) != tset.nspec:
+            log.warning(f"fibermap has {len(fibermap)} rows for {tset.nspec} fibers, cannot identify sky fibers")
+            fibermap = None
         if fibermap is not None and 'OBJTYPE' in fibermap.dtype.names:
             sky_fibers = np.asarray(fibermap['FIBER'][fibermap['OBJTYPE'] == 'SKY']) % 500
         (tset.y_vs_wave_traceset._coeff,
