@@ -967,10 +967,22 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20,
     mflux[mflux <  0] = 0
     return mflux, mivar, flux
 
+# Wavelength ranges (vacuum, Angstrom) of absorption features in the sky
+# continuum, ignored in the external calibration against the sky
+# spectrum. In bright moonlight or twilight the sky continuum is scattered
+# sunlight with solar (Na D) and telluric (O2 B band, H2O) absorption
+# lines. The continuum subtraction turns them into spurious features that
+# the cross-correlation can lock onto, several Angstroms away from the
+# true sky lines.
+SKY_ABSORPTION_WAVELENGTH_MASKS = [(5886., 5900., 'Na D'),
+                                   (6862., 6960., 'O2 B band'),
+                                   (7150., 7400., 'H2O')]
+
 def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
                                         spectrum_filename, degyy=2, width=7,
                                         prior_width_dy=0.1, continuum_error_frac=0.3,
-                                        sky_fibers=None):
+                                        sky_fibers=None, mask_sky_absorption=False,
+                                        apply_throughput=False):
     """
     Measure y offsets (external wavelength calibration) from a preprocessed image , a PSF + trace set using a cross-correlation of boxcar extracted spectra
     and an external well-calibrated spectrum.
@@ -990,6 +1002,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         prior_width_dy: float with of the Gaussian prior on dy
         continuum_error_frac: float or None, fraction of the object continuum added in quadrature to the pixel uncertainties when computing the median spectrum (see _continuum_subtract_median)
         sky_fibers: 1D np.array of sky fiber indices or None, used to estimate the continuum common to all fibers
+        mask_sky_absorption: bool, if True ignore the wavelength ranges of absorption features of a bright sky continuum (SKY_ABSORPTION_WAVELENGTH_MASKS) in the cross-correlation. Only for a sky spectrum reference (not arc lamps).
+        apply_throughput: bool, if True multiply the reference spectrum by the hardware throughput of the camera arm (from desimodel, arm from image.meta["CAMERA"]), so that its lines have the same relative strengths as in the extracted (uncalibrated) spectra. Matters at the arm edges where the throughput drops by more than an order of magnitude. For a reference spectrum given in physical flux units (sky spectrum).
 
     Returns:
         ycoef  : 2D np.array of same shape as input, with modified Legendre coefficients for each fiber to convert wavelength to YCCD
@@ -1010,6 +1024,16 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     ref_spectrum=tmp[1]
     log.info("read reference spectrum in %s with %d entries"%(spectrum_filename,ref_wave.size))
 
+    if apply_throughput:
+        # the extracted spectra are not flux calibrated: give the reference
+        # spectrum the same throughput so that the relative strengths of its
+        # lines match the data (in particular at the arm edges)
+        import desimodel.io
+        arm = str(image.meta.get("CAMERA", "")).strip().lower()[:1]
+        throughput = desimodel.io.load_throughput(arm)
+        ref_spectrum = ref_spectrum * throughput.hardware_throughput(ref_wave)
+        log.info(f"multiplied the reference spectrum by the {arm} arm hardware throughput")
+
     log.info("rextract spectra with boxcar")
 
     # boxcar extraction
@@ -1028,6 +1052,15 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
                                                     is_sky_fiber=is_sky_fiber)
 
     ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar), width=width)
+
+    # ignore wavelength ranges where a bright sky continuum (moon, twilight)
+    # produces spurious features (see SKY_ABSORPTION_WAVELENGTH_MASKS)
+    if mask_sky_absorption:
+        for wmin, wmax, label in SKY_ABSORPTION_WAVELENGTH_MASKS:
+            masked = (wave >= wmin) & (wave <= wmax)
+            if np.any(masked & (mivar > 0)):
+                log.info(f"ignore {wmin:.0f}-{wmax:.0f}A ({label}) in the external wavelength calibration")
+            mivar[masked] = 0.
 
     log.info("fit shifts on wavelength bins")
     # define bins

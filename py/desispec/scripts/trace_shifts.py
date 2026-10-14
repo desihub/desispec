@@ -689,7 +689,9 @@ def fit_trace_shifts(image, args):
                                                                              image=image, fibers=fibers,
                                                                              spectrum_filename=spectrum_filename,
                                                                              degyy=args.degyy, width=7,
-                                                                             sky_fibers=sky_fibers)
+                                                                             sky_fibers=sky_fibers,
+                                                                             mask_sky_absorption=args.sky,
+                                                                             apply_throughput=args.sky)
         external_offset_info = dict(wave=wave_external,
                                     dwave=dwave_external,
                                     dwave_err=dwave_err_external)
