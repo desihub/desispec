@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.73.3 (unreleased)
+0.73.4 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.73.3 (2026-10-14)
 -------------------
 
 * special case tile 83063 skip TARGETID check (PR `#2897`_, see `desitarget #892`_).
