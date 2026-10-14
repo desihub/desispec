@@ -5,7 +5,10 @@ desispec Change Log
 0.73.3 (unreleased)
 -------------------
 
-* No changes yet.
+* special case tile 83063 skip TARGETID check (PR `#2897`_, see `desitarget #892`_).
+
+.. _`#2897`: https://github.com/desihub/desispec/pull/2897
+.. _`desitarget #892`: https://github.com/desihub/desitarget/issues/892
 
 0.73.2 (2026-10-13)
 -------------------
