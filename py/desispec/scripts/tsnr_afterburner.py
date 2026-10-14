@@ -70,6 +70,22 @@ _CAMERA_BANDS = ('b', 'r', 'z')
 _PETALS = list(range(10))
 _TSNR2_TRACERS = ('ELG', 'QSO', 'LRG', 'LYA', 'BGS', 'GPBDARK', 'GPBBRIGHT', 'GPBBACKUP')
 
+#: Columns stored as float64 in production exposures files; other float
+#: columns are float32. EXPTIME is float64 in EXPOSURES but float32 in FRAMES.
+_FLOAT64_COLS = frozenset({
+    'TILERA', 'TILEDEC', 'MJD', 'EXPTIME', 'EFFTIME_SPEC', 'TSNR2_LYA', 'LYA_EFFTIME_DARK',
+    'SKY_MAG_G_SPEC', 'SKY_MAG_R_SPEC', 'SKY_MAG_Z_SPEC',
+})
+
+
+def _tsnr2_value(tracer, value):
+    """Return a TSNR2 value with the dtype used in production files.
+
+    TSNR2_LYA is float64 and the other tracers are float32.
+    """
+    return np.float64(value) if tracer == 'LYA' else np.float32(value)
+
+
 #: Default values for targeting metadata fields.
 _TARG_DEFAULTS = {
     'SURVEY': 'unknown',
@@ -331,9 +347,9 @@ def _median_tsnr_values(table, band):
             finite = np.isfinite(vals)
             positive = finite & (vals > 0)
             if positive.any():
-                values['TSNR2_' + tracer] = np.float32(np.median(vals[positive]))
+                values['TSNR2_' + tracer] = _tsnr2_value(tracer, np.float32(np.median(vals[positive])))
             elif finite.any():
-                values['TSNR2_' + tracer] = np.float32(0.0)
+                values['TSNR2_' + tracer] = _tsnr2_value(tracer, 0.0)
     return values
 
 
@@ -448,8 +464,8 @@ def read_one_camera(night, expid, camera, alpha_only=False, details_dir=None,
     entry['NIGHT'] = np.int32(night)
     entry['EXPID'] = np.int32(expid)
     entry['TILEID'] = np.int32(hdr0.get('TILEID', 0))
-    entry['TILERA'] = np.float32(hdr0.get('TILERA', 0.0))
-    entry['TILEDEC'] = np.float32(hdr0.get('TILEDEC', 0.0))
+    entry['TILERA'] = np.float64(hdr0.get('TILERA', 0.0))
+    entry['TILEDEC'] = np.float64(hdr0.get('TILEDEC', 0.0))
     entry['MJD'] = np.float64(hdr0.get('MJD-OBS', 0.0))
     entry['EXPTIME'] = np.float32(hdr0.get('EXPTIME', 0.0))
     entry['AIRMASS'] = np.float32(hdr0.get('AIRMASS', 0.0))
@@ -682,11 +698,14 @@ def _read_exposureqa(night, expid, recompute_skymags=False, exptab_entry=None, c
     entry['NIGHT'] = np.int32(night)
     entry['EXPID'] = np.int32(expid)
     entry['TILEID'] = np.int32(fiberqa_hdr.get('TILEID', 0))
-    entry['TILERA'] = np.float32(fiberqa_hdr.get('TILERA', 0.0))
-    entry['TILEDEC'] = np.float32(fiberqa_hdr.get('TILEDEC', 0.0))
+    entry['TILERA'] = np.float64(fiberqa_hdr.get('TILERA', 0.0))
+    entry['TILEDEC'] = np.float64(fiberqa_hdr.get('TILEDEC', 0.0))
+    # MJD-OBS and EXPTIME are exposure-level header values. The original
+    # afterburner used each cframe's own values in FRAMES and their mean for
+    # EXPOSURES EXPTIME, which differ from these by up to ~1 second.
     if exptab_entry is None:
         exptab_entry = {}
-    for key, hdrkey, dtype in (('MJD', 'MJD-OBS', np.float64), ('EXPTIME', 'EXPTIME', np.float32),
+    for key, hdrkey, dtype in (('MJD', 'MJD-OBS', np.float64), ('EXPTIME', 'EXPTIME', np.float64),
                                ('AIRMASS', 'AIRMASS', np.float32)):
         if hdrkey in fiberqa_hdr:
             entry[key] = dtype(fiberqa_hdr[hdrkey])
@@ -718,15 +737,25 @@ def _read_exposureqa(night, expid, recompute_skymags=False, exptab_entry=None, c
     entry = derive_targ_info(entry)
 
     # -- EBV from FIBERQA data column ---------------------------------------
+    # EXPOSURES uses the median over all fibers with EBV > 0.  FRAMES uses the
+    # median over each petal's fibers (PETAL_EBV), as the original
+    # afterburner did from each cframe's fibermap; the original EXPOSURES
+    # value was instead copied from the first camera's petal.
     entry['EBV'] = np.float32(0.0)
+    entry['PETAL_EBV'] = {}
     try:
-        fiberqa_data = fitsio.read(filename, 'FIBERQA', columns=['EBV'])
+        fiberqa_data = fitsio.read(filename, 'FIBERQA')
         ebv_vals = fiberqa_data['EBV']
         sel = ebv_vals > 0
         if sel.sum() > 0:
             entry['EBV'] = np.float32(np.median(ebv_vals[sel]))
         else:
             log.warning('No positive EBV values in FIBERQA for expid={}, using 0.0'.format(expid))
+        if 'PETAL_LOC' in fiberqa_data.dtype.names:
+            for petal in np.unique(fiberqa_data['PETAL_LOC']):
+                petal_sel = sel & (fiberqa_data['PETAL_LOC'] == petal)
+                entry['PETAL_EBV'][int(petal)] = np.float32(np.median(ebv_vals[petal_sel])
+                                                            if petal_sel.any() else 0.0)
     except Exception as e:
         log.warning('Could not read EBV from FIBERQA for expid={}: {}. Using 0.0'.format(expid, e))
 
@@ -735,7 +764,7 @@ def _read_exposureqa(night, expid, recompute_skymags=False, exptab_entry=None, c
     have_all = all(k in fiberqa_hdr for k in sky_keys)
     if not recompute_skymags and have_all:
         for k in sky_keys:
-            entry[k] = np.float32(fiberqa_hdr[k])
+            entry[k] = np.float64(fiberqa_hdr[k])
     else:
         skymags = get_skymag_values(night, expid)
         entry.update(skymags)
@@ -764,7 +793,7 @@ def _petalqa_camera_values(petalqa, camera):
         camera: Camera name, e.g. 'b5'.
 
     Returns:
-        dict: TSNR2_{tracer} -> np.float32 for finite values; empty if the
+        dict: TSNR2_{tracer} -> value for finite values; empty if the
         camera was not recorded (the caller then falls back to the cframe).
     """
     values = {}
@@ -778,7 +807,7 @@ def _petalqa_camera_values(petalqa, camera):
         if col in petalqa.dtype.names:
             value = petalqa[col][matches][0]
             if np.isfinite(value):
-                values['TSNR2_' + tracer] = np.float32(value)
+                values['TSNR2_' + tracer] = _tsnr2_value(tracer, value)
     if values and all(value == 0 for value in values.values()):
         return {}
     return values
@@ -859,6 +888,9 @@ def build_tables(exposure_rows, camword_map):
     are accumulated so the EXPOSURES row can be appended immediately.
     Per-exposure TSNR2 is the sum over bands per petal, mean over petals.
 
+    FRAMES rows carry per-camera TSNR2 and per-petal EBV; the other metadata,
+    including EXPTIME and MJD, are the exposure values copied to every camera.
+
     In addition:
     - tsnr2_to_efftime() is called once per EXPID for the EXPOSURES row.
     - faflavor2program() is called once per EXPID for the PROGRAM column.
@@ -902,12 +934,18 @@ def build_tables(exposure_rows, camword_map):
 
             frame_row = _make_metadata_row(row)
             frame_row['CAMERA'] = camera
+            # per-petal EBV: from the cframe fibermap if this camera was read
+            # from its cframe, else from FIBERQA, else the exposure value
+            if 'EBV' in camera_rows[camera]:
+                frame_row['EBV'] = np.float32(camera_rows[camera]['EBV'])
+            elif petal in row.get('PETAL_EBV', {}):
+                frame_row['EBV'] = row['PETAL_EBV'][petal]
 
             if petal not in petal_tsnr2:
                 petal_tsnr2[petal] = {t: 0.0 for t in _TSNR2_TRACERS}
             for tracer in _TSNR2_TRACERS:
                 val = float(camera_rows[camera]['TSNR2_' + tracer])
-                frame_row['TSNR2_{}'.format(tracer)] = np.float32(val)
+                frame_row['TSNR2_{}'.format(tracer)] = _tsnr2_value(tracer, val)
                 petal_tsnr2[petal][tracer] += val
 
             # QA summaries do not store alpha; keep the column with NaN.
@@ -920,12 +958,12 @@ def build_tables(exposure_rows, camword_map):
         # build EXPOSURES row from aggregated per-petal TSNR2
         exp_row = _make_metadata_row(row)
         exp_row['PROGRAM'] = faflavor2program(exp_row['FAFLAVOR'])
-        exp_row['SKY_MAG_G_SPEC'] = np.float32(row.get('SKY_MAG_G_SPEC', 99.0))
-        exp_row['SKY_MAG_R_SPEC'] = np.float32(row.get('SKY_MAG_R_SPEC', 99.0))
-        exp_row['SKY_MAG_Z_SPEC'] = np.float32(row.get('SKY_MAG_Z_SPEC', 99.0))
+        exp_row['SKY_MAG_G_SPEC'] = np.float64(row.get('SKY_MAG_G_SPEC', 99.0))
+        exp_row['SKY_MAG_R_SPEC'] = np.float64(row.get('SKY_MAG_R_SPEC', 99.0))
+        exp_row['SKY_MAG_Z_SPEC'] = np.float64(row.get('SKY_MAG_Z_SPEC', 99.0))
         for tracer in _TSNR2_TRACERS:
-            exp_row['TSNR2_{}'.format(tracer)] = np.float32(
-                np.mean([petal_tsnr2[p][tracer] for p in petal_tsnr2]))
+            exp_row['TSNR2_{}'.format(tracer)] = _tsnr2_value(
+                tracer, np.mean([petal_tsnr2[p][tracer] for p in petal_tsnr2]))
 
         exp_row = _add_efftimes(exp_row)
         exp_row = _add_gfa_zero_cols(exp_row)
@@ -939,6 +977,8 @@ def build_tables(exposure_rows, camword_map):
         return _empty_tables()
 
     frames_table = Table(rows=frames_rows)
+    # FRAMES stores EXPTIME as float32, unlike EXPOSURES (see _FLOAT64_COLS)
+    frames_table['EXPTIME'] = np.asarray(frames_table['EXPTIME'], dtype=np.float32)
     frames_table.meta['EXTNAME'] = 'FRAMES'
 
     # -- enforce column order on EXPOSURES ----------------------------------
@@ -988,15 +1028,16 @@ def _empty_tables():
             dtype = 'U32'
         elif col in int_cols:
             dtype = 'i4'
-        elif col == 'MJD':
+        elif col in _FLOAT64_COLS or col.endswith('_GFA'):
             dtype = 'f8'
         else:
             dtype = 'f4'
         exposures[col] = np.array([], dtype=dtype)
     frames = exposures[list(_make_metadata_row({col: None for col in exposures.colnames}))].copy()
     frames['CAMERA'] = np.array([], dtype='U2')
+    frames['EXPTIME'] = np.array([], dtype='f4')
     for tracer in _TSNR2_TRACERS:
-        frames['TSNR2_' + tracer] = np.array([], dtype='f4')
+        frames['TSNR2_' + tracer] = np.array([], dtype='f8' if tracer == 'LYA' else 'f4')
     frames['TSNR2_ALPHA'] = np.array([], dtype='f4')
     frames.meta['EXTNAME'] = 'FRAMES'
     exposures.meta['EXTNAME'] = 'EXPOSURES'
@@ -1015,7 +1056,7 @@ def _add_efftimes(row):
     row['LRG_EFFTIME_DARK'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_LRG', 0.0), 'LRG'))
     row['ELG_EFFTIME_DARK'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_ELG', 0.0), 'ELG'))
     row['BGS_EFFTIME_BRIGHT'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_BGS', 0.0), 'BGS'))
-    row['LYA_EFFTIME_DARK'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_LYA', 0.0), 'LYA'))
+    row['LYA_EFFTIME_DARK'] = np.float64(tsnr2_to_efftime(row.get('TSNR2_LYA', 0.0), 'LYA'))
     row['GPB_EFFTIME_DARK'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_GPBDARK', 0.0), 'GPBDARK'))
     row['GPB_EFFTIME_BRIGHT'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_GPBBRIGHT', 0.0), 'GPBBRIGHT'))
     row['GPB_EFFTIME_BACKUP'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_GPBBACKUP', 0.0), 'GPBBACKUP'))
@@ -1035,7 +1076,7 @@ def _add_efftimes(row):
         else:
             efftime_spec = row['LRG_EFFTIME_DARK']
 
-    row['EFFTIME_SPEC'] = np.float32(efftime_spec)
+    row['EFFTIME_SPEC'] = np.float64(efftime_spec)
     return row
 
 
@@ -1090,7 +1131,7 @@ def _reorder_exposures(table):
         elif col in _STR_COLS:
             new_table[col] = np.full(len(table), '', dtype='U32')
         else:
-            new_table[col] = np.zeros(len(table), dtype=np.float32)
+            new_table[col] = np.zeros(len(table), dtype=np.float64 if col in _FLOAT64_COLS else np.float32)
     for col in extra_cols:
         new_table[col] = table[col]
 
@@ -1128,8 +1169,8 @@ def _bad_exposure_skymags(args_tuple):
     expdir = os.path.join(specprod_root(), 'exposures', str(int(night)), '{:08d}'.format(int(expid)))
     if os.path.isdir(expdir):
         return get_skymag_values(int(night), int(expid))
-    return {'SKY_MAG_G_SPEC': np.float32(np.nan), 'SKY_MAG_R_SPEC': np.float32(np.nan),
-            'SKY_MAG_Z_SPEC': np.float32(np.nan)}
+    return {'SKY_MAG_G_SPEC': np.float64(np.nan), 'SKY_MAG_R_SPEC': np.float64(np.nan),
+            'SKY_MAG_Z_SPEC': np.float64(np.nan)}
 
 
 def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None, skymags=None):
@@ -1174,8 +1215,8 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
             'EBV': np.float32(0.0),
             'SEEING_ETC': np.float32(0.0),
             'EFFTIME_ETC': np.float32(float(be.get('EFFTIME_ETC', 0.0))),
-            'TILERA': np.float32(-999.0),
-            'TILEDEC': np.float32(-999.0),
+            'TILERA': np.float64(-999.0),
+            'TILEDEC': np.float64(-999.0),
         }
 
         # -- EBV from EBVFAC ------------------------------------------------
@@ -1195,8 +1236,8 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
         if exists:
             fa_hdr = fitsio.read_header(fa_filename, 0)
             entry = _fill_targ_from_header(entry, fa_hdr)
-            entry['TILERA'] = np.float32(fa_hdr['TILERA'])
-            entry['TILEDEC'] = np.float32(fa_hdr['TILEDEC'])
+            entry['TILERA'] = np.float64(fa_hdr['TILERA'])
+            entry['TILEDEC'] = np.float64(fa_hdr['TILEDEC'])
         else:
             log.error('No fiberassign for TILEID={} expid={}'.format(be['TILEID'], expid))
 
@@ -1210,7 +1251,7 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
             entry.update(_bad_exposure_skymags((be['NIGHT'], expid)))
 
         for tracer in _TSNR2_TRACERS:
-            entry['TSNR2_{}'.format(tracer)] = np.float32(0.0)
+            entry['TSNR2_{}'.format(tracer)] = _tsnr2_value(tracer, 0.0)
         entry['TSNR2_ALPHA'] = np.float32(np.nan)
         entry = _add_efftimes(entry)
         entry = _add_gfa_zero_cols(entry)
@@ -1525,7 +1566,7 @@ def update_exposure_tsnr(exposures_table, frames_table, expids):
         for tracer in _TSNR2_TRACERS:
             col = 'TSNR2_' + tracer
             sums = [sum(float(frame[col]) for frame in frames) for frames in petals.values()]
-            row[col] = np.float32(np.mean(sums) if sums else 0.0)
+            row[col] = _tsnr2_value(tracer, np.mean(sums) if sums else 0.0)
         row = _add_efftimes(row)
         for col in result.colnames:
             if col.startswith('TSNR2_') or ('EFFTIME' in col and not col.endswith(('_GFA', '_ETC'))):

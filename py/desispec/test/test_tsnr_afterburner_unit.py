@@ -94,6 +94,66 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('--recompute-skymags', result.stdout)
 
+    def test_output_dtypes_match_production(self):
+        # production exposures files store these columns as float64; EXPTIME
+        # is float64 in EXPOSURES but float32 in FRAMES
+        float64 = {'EXPOSURES': ['TILERA', 'TILEDEC', 'MJD', 'EXPTIME', 'EFFTIME_SPEC', 'TSNR2_LYA',
+                                 'LYA_EFFTIME_DARK', 'SKY_MAG_G_SPEC', 'SKY_MAG_R_SPEC', 'SKY_MAG_Z_SPEC'],
+                   'FRAMES': ['TILERA', 'TILEDEC', 'MJD', 'TSNR2_LYA']}
+        float32 = {'EXPOSURES': ['TSNR2_ELG', 'LRG_EFFTIME_DARK', 'EBV'],
+                   'FRAMES': ['EXPTIME', 'TSNR2_ELG', 'EBV']}
+        self._add_exposure(expid=101, laststep='skysub')
+        with self._no_fiberassign():
+            self.assertEqual(self._run('--add-badexp'), 0)
+        exposures, frames = self._tables()
+        for name, table in (('EXPOSURES', exposures), ('FRAMES', frames)):
+            for col in float64[name]:
+                self.assertEqual(table[col].dtype.kind + str(table[col].dtype.itemsize), 'f8', name + ' ' + col)
+            for col in float32[name]:
+                self.assertEqual(table[col].dtype.kind + str(table[col].dtype.itemsize), 'f4', name + ' ' + col)
+        # header values keep full float64 precision
+        self.assertEqual(float(exposures['TILERA'][exposures['EXPID'] == 100][0]), 180.)
+
+    def test_empty_tables_dtypes_match_production(self):
+        frames, exposures = mod._empty_tables()
+        for col in ('TILERA', 'EXPTIME', 'EFFTIME_SPEC', 'TSNR2_LYA', 'SKY_MAG_R_SPEC', 'EFFTIME_GFA'):
+            self.assertEqual(exposures[col].dtype.itemsize, 8, col)
+        for col in ('TILERA', 'TSNR2_LYA'):
+            self.assertEqual(frames[col].dtype.itemsize, 8, col)
+        for col in ('EXPTIME', 'TSNR2_ELG'):
+            self.assertEqual(frames[col].dtype.itemsize, 4, col)
+
+    def test_frames_ebv_is_per_petal(self):
+        # FRAMES gets each petal's median EBV; EXPOSURES the median over all fibers
+        write_exptable_fixture(self.prod, 20211001, 100, camword='a01')
+        write_qa_fixture(self.prod, 20211001, 100, fiber_ebv={0: [.01, .02, .03, 0.], 1: [.10, .11, .12]})
+        petalqa = fits.getdata(mod.findfile('exposureqa', night=20211001, expid=100), 'PETALQA')
+        table = Table(petalqa)
+        table.add_row(table[0])
+        table['PETAL_LOC'][1] = 1
+        with fits.open(mod.findfile('exposureqa', night=20211001, expid=100), mode='update') as hdus:
+            hdus['PETALQA'] = fits.BinTableHDU(table, name='PETALQA')
+        self.assertEqual(self._run(), 0)
+        exposures, frames = self._tables()
+        self.assertAlmostEqual(float(exposures['EBV'][0]), .065, places=6)
+        for camera, expected in (('b0', .02), ('z0', .02), ('r1', .11)):
+            self.assertAlmostEqual(float(frames['EBV'][frames['CAMERA'] == camera][0]), expected, places=6)
+
+    def test_frames_ebv_from_cframe_fibermap(self):
+        # a camera read from its cframe keeps that cframe's fibermap EBV
+        write_qa_fixture(self.prod, 20211001, 100, missing=['TSNR2_ELG_B'], fiber_ebv={0: [.01, .02, .03]})
+        write_cframe_fixture(self.prod, 20211001, 100, 'b0')
+        self.assertEqual(self._run(), 0)
+        _, frames = self._tables()
+        self.assertAlmostEqual(float(frames['EBV'][frames['CAMERA'] == 'b0'][0]), .05, places=6)
+        self.assertAlmostEqual(float(frames['EBV'][frames['CAMERA'] == 'r0'][0]), .02, places=6)
+
+    def test_frames_ebv_falls_back_to_exposure_value(self):
+        # FIBERQA without PETAL_LOC (fixture default): every camera gets the exposure EBV
+        self.assertEqual(self._run(), 0)
+        exposures, frames = self._tables()
+        np.testing.assert_allclose(frames['EBV'], exposures['EBV'][0])
+
     def test_qa_fast_path_needs_no_cframes(self):
         with patch.object(mod, 'read_one_camera') as camera:
             self.assertEqual(self._run(), 0)

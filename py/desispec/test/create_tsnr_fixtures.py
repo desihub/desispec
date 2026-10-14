@@ -56,15 +56,21 @@ def write_exptable_fixture(prod, night, expid, tileid=1234, laststep='all', camw
 
 
 def write_qa_fixture(prod, night, expid, tileid=1234, value=10., missing=(), petal_hdu=True, zeros=(),
-                     drop_keys=()):
+                     drop_keys=(), fiber_ebv=None):
     """Write QA with one petal; missing names remove selected TSNR2 columns,
     zeros names set selected TSNR2 columns to 0, and drop_keys removes
-    FIBERQA header keywords (as in older QA files)."""
+    FIBERQA header keywords (as in older QA files).  fiber_ebv, a dict of
+    petal -> list of fiber EBV values, adds PETAL_LOC and EBV to FIBERQA."""
     filename = findfile('exposureqa', night=night, expid=expid, specprod_dir=str(prod))
     header = exposure_header(night, expid, tileid)
     for key in drop_keys:
         del header[key]
-    fiber = fits.BinTableHDU(Table({'EBV': [.05, .05]}), header=header, name='FIBERQA')
+    if fiber_ebv is None:
+        fiber_table = Table({'EBV': [.05, .05]})
+    else:
+        fiber_table = Table({'PETAL_LOC': np.concatenate([[p] * len(v) for p, v in fiber_ebv.items()]),
+                             'EBV': np.concatenate([v for v in fiber_ebv.values()]).astype(np.float32)})
+    fiber = fits.BinTableHDU(fiber_table, header=header, name='FIBERQA')
     petal = Table({'PETAL_LOC': [0]})
     for tracer in _TRACERS:
         for band in ('B', 'R', 'Z'):
