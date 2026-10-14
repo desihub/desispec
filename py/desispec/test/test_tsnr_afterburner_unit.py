@@ -154,6 +154,19 @@ class TestAfterburnerIntegration(unittest.TestCase):
         exposures, frames = self._tables()
         np.testing.assert_allclose(frames['EBV'], exposures['EBV'][0])
 
+    def test_night_without_science_keeps_string_widths(self):
+        # a night with no science exposures merges an empty table; stored
+        # string widths must not change
+        self._run()
+        before, before_frames = self._tables()
+        write_exptable_fixture(self.prod, 20211002, 200, tileid=0)
+        self.assertEqual(self._run('--nights', '20211002'), 0)
+        after, after_frames = self._tables()
+        for old, new in ((before, after), (before_frames, after_frames)):
+            for col in old.colnames:
+                if old[col].dtype.kind in 'US':
+                    self.assertEqual(new[col].dtype, old[col].dtype, col)
+
     def test_qa_fast_path_needs_no_cframes(self):
         with patch.object(mod, 'read_one_camera') as camera:
             self.assertEqual(self._run(), 0)

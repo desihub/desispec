@@ -30,6 +30,7 @@ from desispec.scripts.tsnr_afterburner import (
     _reorder_exposures,
     _read_etc_values,
     _petalqa_camera_values,
+    _empty_tables,
     _fill_targ_from_header,
     find_processed_nights,
     _EXP_SUMMARY_COLUMN_ORDER,
@@ -1108,6 +1109,41 @@ class TestWriteOutput(unittest.TestCase):
                     val = float(csv[col][0])
                     self.assertAlmostEqual(val, round(val, 3), places=8,
                                            msg='Column {} not rounded to 3 dp'.format(col))
+
+
+class TestKeepStringWidths(unittest.TestCase):
+    """Merging must not widen stored string columns unnecessarily."""
+
+    def _existing(self):
+        return Table({'EXPID': np.array([1, 2], dtype=np.int32),
+                      'SURVEY': np.array(['main', 'sv1'], dtype='U7'),
+                      'FAPRGRM': np.array(['dark', 'bright'], dtype='U19')})
+
+    def test_empty_wide_table_keeps_widths(self):
+        """Merging an empty table with 32-character strings keeps the existing widths."""
+        frames, exposures = _empty_tables()
+        merged = merge_exposures(self._existing(), exposures)
+        self.assertEqual(merged['SURVEY'].dtype.str[1:], 'U7')
+        self.assertEqual(merged['FAPRGRM'].dtype.str[1:], 'U19')
+        self.assertEqual(merged['SURVEY'].tolist(), ['main', 'sv1'])
+
+    def test_longer_value_widens(self):
+        """A new value longer than the existing width widens the column to fit it."""
+        new = Table({'EXPID': np.array([3], dtype=np.int32),
+                     'SURVEY': np.array(['special-long'], dtype='U32'),
+                     'FAPRGRM': np.array(['dark'], dtype='U32')})
+        merged = merge_exposures(self._existing(), new)
+        self.assertEqual(merged['SURVEY'].dtype.str[1:], 'U12')
+        self.assertEqual(merged['FAPRGRM'].dtype.str[1:], 'U19')
+        self.assertEqual(merged['SURVEY'].tolist(), ['main', 'sv1', 'special-long'])
+
+    def test_frames_keep_widths(self):
+        existing = Table({'EXPID': np.array([1], dtype=np.int32), 'CAMERA': np.array(['b0'], dtype='U2'),
+                          'SURVEY': np.array(['main'], dtype='U7')})
+        new = Table({'EXPID': np.array([2], dtype=np.int32), 'CAMERA': np.array(['r0'], dtype='U2'),
+                     'SURVEY': np.array(['sv3'], dtype='U32')})
+        merged = merge_frames(existing, new)
+        self.assertEqual(merged['SURVEY'].dtype.str[1:], 'U7')
 
 
 class TestPetalqaCameraValues(unittest.TestCase):

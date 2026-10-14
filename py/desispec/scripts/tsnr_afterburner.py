@@ -1423,6 +1423,35 @@ def add_gfa_efftimes(exposures_table):
 # Merge with pre-existing output
 # ---------------------------------------------------------------------------
 
+def _keep_string_widths(merged, existing_table):
+    """Return merged with the string column widths of existing_table.
+
+    vstack widens string columns to the widest input, so merging an empty
+    table with wide placeholder strings (e.g. from _empty_tables()) would
+    widen the stored columns.  Each string column keeps its existing width,
+    and is widened only if a value is actually longer.
+
+    Args:
+        merged: astropy.table.Table produced by merging existing_table.
+        existing_table: astropy.table.Table read from the existing output.
+
+    Returns:
+        astropy.table.Table: merged with adjusted string column widths.
+    """
+    for col in existing_table.colnames:
+        if col not in merged.colnames or existing_table[col].dtype.kind not in 'US':
+            continue
+        if merged[col].dtype.kind not in 'US':
+            continue
+        width = existing_table[col].dtype.itemsize
+        if existing_table[col].dtype.kind == 'U':
+            width //= 4
+        values = np.asarray(merged[col]).astype(str)
+        longest = max((len(value) for value in values), default=0)
+        merged[col] = values.astype('U{}'.format(max(width, longest)))
+    return merged
+
+
 def merge_exposures(existing_table, new_table):
     """Upsert new rows into an existing EXPOSURES table by EXPID.
 
@@ -1472,6 +1501,7 @@ def merge_exposures(existing_table, new_table):
     else:
         merged = new_table.copy()
 
+    merged = _keep_string_widths(merged, existing_table)
     merged.meta['EXTNAME'] = 'EXPOSURES'
     ii = np.argsort(merged['EXPID'])
     return merged[ii]
@@ -1535,6 +1565,7 @@ def merge_frames(existing_table, new_table, replace_expids=None, cameras=None):
     else:
         merged = new_table.copy()
 
+    merged = _keep_string_widths(merged, existing_table)
     merged.meta['EXTNAME'] = 'FRAMES'
     sort_keys = np.array(_joint_key(merged))
     ii = np.argsort(sort_keys)
