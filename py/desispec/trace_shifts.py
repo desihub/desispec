@@ -17,6 +17,8 @@ import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve
 from scipy.ndimage import median_filter
+from scipy.interpolate import CubicSpline
+from scipy.optimize import minimize
 import numba
 from importlib import resources
 
@@ -243,9 +245,11 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
 
 
 # @numba.jit no real gain
+CROSS_CORRELATION_ERROR_FLOOR = 0.01 # A, added in quadrature to the wavelength shift uncertainty
+
 def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
                                                hw=3., calibrate=False,
-                                               prior_width_dy=None) :
+                                               prior_width_dy=None, return_chi2=False) :
     """
     Measure y offsets from two spectra expected to be on the same wavelength grid.
     refflux is the assumed well calibrated spectrum.
@@ -260,6 +264,7 @@ def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
         ivar   : 1D array of inverse variance of flux
         hw     : half width in Angstrom of the cross-correlation chi2 scan, default=3A corresponding approximatly to 5 pixels for DESI
         prior_width_dy: applied sigma of the Gaussian prior on dy
+        return_chi2: also return the scanned shifts and the chi2 values (data term only, no prior)
 
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
@@ -283,20 +288,22 @@ def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
             refflux *= scale
 
 
-    error_floor=0.01 #A
+    error_floor=CROSS_CORRELATION_ERROR_FLOOR
 
     if ivar is None :
         ivar = np.ones(flux.shape)
     dwave = wave[1] - wave[0]
     ihw = int(hw / dwave)+1
-    chi2 = np.zeros((2 * ihw + 1))
+    shifts = dwave * np.arange(-ihw, ihw + 1)
+    chi2_data = np.zeros((2 * ihw + 1))
     for d in range(-ihw, ihw + 1) :
         b = d + ihw
         e = wave.size + d - ihw
-        chi2[ihw + d] = np.sum(ivar[ihw:-ihw] *
-                               (flux[ihw:-ihw] - refflux[b:e])**2)
-        if prior_width_dy is not None:
-            chi2[ihw + d] += (dwave * d / prior_width_dy)**2
+        chi2_data[ihw + d] = np.sum(ivar[ihw:-ihw] *
+                                    (flux[ihw:-ihw] - refflux[b:e])**2)
+    chi2 = chi2_data.copy()
+    if prior_width_dy is not None:
+        chi2 += (shifts / prior_width_dy)**2
 
 
 
@@ -345,7 +352,63 @@ def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
         plt.show()
     '''
 
+    if return_chi2 :
+        return delta, sigma, shifts, chi2_data
     return delta,sigma
+
+
+def _fit_shift_polynomial(shifts, chi2_curves, bin_waves, degree, prior_width_dy, error_floor) :
+    """
+    Fit the wavelength shift as a polynomial of wavelength to the chi2(shift) curves of several
+    wavelength bins at once, by minimizing the sum of the curves evaluated at the polynomial.
+    Unlike a fit to the per-bin minima, this keeps the full curves, so a bin whose global
+    minimum is an alias of its true minimum does not pull the solution.
+
+    The model shift of bin b is pol(bin_waves[b] - wave0) + offset[b], where offset[b] is a
+    systematic offset of that bin with a Gaussian prior of width error_floor (the floor that
+    is also added to the uncertainty of the per-bin shifts). The Gaussian prior of width
+    prior_width_dy on the shift is applied at each bin, as in the per-bin fits.
+
+    Args:
+        shifts : 1D array of scanned shifts (in Angstrom), common to all bins
+        chi2_curves : list of 1D arrays, chi2 as a function of shift for each bin (data term only)
+        bin_waves : 1D array of central wavelengths of the bins
+        degree : degree of the polynomial of the shift as a function of wavelength
+        prior_width_dy : sigma of the Gaussian prior on the shift
+        error_floor : sigma of the Gaussian prior on the systematic offset of each bin
+
+    Returns:
+        pol : np.poly1d giving the shift (in Angstrom) as a function of (wavelength - wave0)
+        wave0 : float, reference wavelength of the polynomial
+    """
+    chi2_of_shift = [CubicSpline(shifts, chi2) for chi2 in chi2_curves]
+    nbins = len(chi2_curves)
+    ncoef = degree + 1
+    wave0 = np.mean(bin_waves)
+    max_shift = shifts[-1]
+
+    def total_chi2(params) :
+        coef = params[:ncoef]
+        offsets = params[ncoef:]
+        pol_shift = np.polyval(coef, bin_waves - wave0)
+        bin_shift = pol_shift + offsets
+        if np.any(np.abs(bin_shift) > max_shift) :
+            return np.inf # outside of the scanned range
+        chi2_data = sum(chi2_of_shift[b](bin_shift[b]) for b in range(nbins))
+        chi2_prior_shift = np.sum((pol_shift / prior_width_dy)**2)
+        chi2_prior_offsets = np.sum((offsets / error_floor)**2)
+        return chi2_data + chi2_prior_shift + chi2_prior_offsets
+
+    # start from the best constant shift on the scanned grid
+    params = np.zeros(ncoef + nbins)
+    constant_chi2 = []
+    for shift in shifts :
+        params[ncoef - 1] = shift
+        constant_chi2.append(total_chi2(params))
+    params[ncoef - 1] = shifts[np.argmin(constant_chi2)]
+
+    params = minimize(total_chi2, params, method='BFGS').x
+    return np.poly1d(params[:ncoef]), wave0
 
 
 def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoef, ycoef, wavemin, wavemax, reference_flux , n_wavelength_bins = 4) :
@@ -1076,6 +1139,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     wave_for_dy = np.array([])
     dwave_list = np.array([])
     dwave_err_list = np.array([])
+    chi2_curves = []
+    dydw_list = np.array([])
     n_fibers_for_psf = min(20, flux.shape[0])
     rows_for_psf_evaluation = np.unique(np.linspace(0, flux.shape[0] - 1, n_fibers_for_psf).astype(int))
     fibers_for_psf_evaluation = fibers[rows_for_psf_evaluation]
@@ -1087,9 +1152,9 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         flux_weights_sum = np.sum(flux_weights)
         if flux_weights_sum == 0 :
             continue
-        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],
+        dwave,err,shifts,chi2_data = compute_dy_from_spectral_cross_correlation(mflux[ok],
                 wave[ok], ref_spectrum[ok], ivar=mivar[ok], hw=10.,
-                prior_width_dy=prior_width_dy)
+                prior_width_dy=prior_width_dy, return_chi2=True)
         bin_wave  = np.sum(flux_weights * wave[ok]) / flux_weights_sum
         # flux weighted wavelength of the center
         dydws = []
@@ -1105,10 +1170,12 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         if err * dydw < 1 : # 1 pixel error limit
             dy = np.append(dy, -dwave * dydw)
             ey = np.append(ey, err*dydw)
+            dydw_list = np.append(dydw_list, dydw)
             wave_for_dy = np.append(wave_for_dy,bin_wave)
             dwave_list = np.append(dwave_list, dwave)
             dwave_err_list = np.append(dwave_err_list, err)
             y_for_dy=np.append(y_for_dy,y)  # this is only used for printing
+            chi2_curves.append(chi2_data) # data term only, the priors are applied in the joint fit
             log.info(f"wave = {bin_wave:.3f}A , y={y:.3f}, measured "
                      f"dwave = {dwave:.3f} +- {err:.3f} A")
 
@@ -1132,10 +1199,11 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         except :
             log.warning("couldn't correct for asymmetry of PSF: %s %s"%(sys.exc_info()[0],sys.exc_info()[1]))
 
-    log.info("polynomial fit of shifts and modification of PSF ycoef")
-    # pol fit
-    coef = np.polyfit(wave_for_dy, dy, degyy, w=1. / ey)
-    pol  = np.poly1d(coef)
+    log.info("joint fit of the chi2 curves of the bins and modification of PSF ycoef")
+    pol_dwave, wave0 = _fit_shift_polynomial(shifts, chi2_curves, wave_for_dy, degyy, prior_width_dy,
+                                             CROSS_CORRELATION_ERROR_FLOOR)
+    # dy = -dwave * dy/dwave, with dy/dwave interpolated between the bins
+    pol = lambda w : -pol_dwave(w - wave0) * np.interp(w, wave_for_dy, dydw_list)
 
     for i in range(dy.size) :
         log.info("wave=%fA y=%f, measured dy=%f+-%f , pol(wave) = %f"%(wave_for_dy[i],y_for_dy[i],dy[i],ey[i],pol(wave_for_dy[i])))
