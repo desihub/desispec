@@ -606,6 +606,15 @@ class TestInjectBadExposures(unittest.TestCase):
         self.mock_findfile = findfile_patcher.start()
         self.addCleanup(findfile_patcher.stop)
 
+        # bad-exposure sky magnitudes look for the exposure directory, which
+        # needs a production; use an empty one (NaN sky magnitudes) unless a
+        # test sets its own
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        prod_patcher = mock.patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value=tmpdir.name)
+        prod_patcher.start()
+        self.addCleanup(prod_patcher.stop)
+
     def _make_empty_tables(self):
         """Create minimal empty exposures and frames tables with required columns."""
         exp_row = _make_exposure_row(expid=100)

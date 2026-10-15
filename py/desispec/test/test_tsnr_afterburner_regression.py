@@ -10,7 +10,7 @@ To generate fixtures::
 
     # Run a separately saved original executable on a small test production
     /path/to/original/desi_tsnr_afterburner --prod <testprod> -o <fixture_dir>/v1_exposures.fits \\
-        --nights <night>
+        --nights <night> --add-badexp
 
     # Set environment variable pointing at fixture dir
     export TSNR_AFTERBURNER2_REGRESSION_DIR=<fixture_dir>
@@ -88,8 +88,9 @@ def _ensure_v2_output():
     if not specprod:
         specprod = os.environ.get('SPECPROD', None)
 
-    # build argv for v2
-    argv = ['-o', _V2_FITS, '--nights', nights_arg, '--overwrite',
+    # build argv for v2; reference files are made with --add-badexp (as in the
+    # daily cron), so include zero-filled rows for bad exposures too
+    argv = ['-o', _V2_FITS, '--nights', nights_arg, '--overwrite', '--add-badexp',
             '--expids', ','.join(str(e) for e in v1['EXPID'])]
     if specprod is not None:
         argv += ['--prod', specprod]

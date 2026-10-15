@@ -90,7 +90,12 @@ class TestAfterburnerIntegration(unittest.TestCase):
 
     def test_executable_help(self):
         script = Path(__file__).resolve().parents[3] / 'bin' / 'desi_tsnr_afterburner'
-        result = subprocess.run([sys.executable, str(script), '--help'], capture_output=True, text=True)
+        # the subprocess must import this checkout's desispec even when it is
+        # only on sys.path through pytest (as in CI), not installed
+        env = dict(os.environ)
+        pydir = str(Path(__file__).resolve().parents[2])
+        env['PYTHONPATH'] = pydir + os.pathsep + env['PYTHONPATH'] if env.get('PYTHONPATH') else pydir
+        result = subprocess.run([sys.executable, str(script), '--help'], capture_output=True, text=True, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('--recompute-skymags', result.stdout)
 

@@ -544,11 +544,11 @@ def collect_science_expids(nights=None, expids=None):
         expids: list of int, optional. Filter to these EXPIDs if given.
 
     Returns:
-        good_expids: list of dict, each with keys
-            NIGHT, EXPID, TILEID, CAMWORD, BADCAMWORD, EXPTIME, MJD-OBS,
-            EFFTIME_ETC, AIRMASS, SURVEY, FAPRGRM, GOALTYPE, GOALTIME, EBVFAC,
-            LASTSTEP.
-        bad_expids: list of dict, same keys, for exposures not fully processed.
+        tuple: (good_expids, bad_expids), two lists of dict with keys NIGHT,
+        EXPID, TILEID, CAMWORD, BADCAMWORD, EXPTIME, MJD-OBS, EFFTIME_ETC,
+        AIRMASS, SURVEY, FAPRGRM, GOALTYPE, GOALTIME, EBVFAC, LASTSTEP,
+        FAFLAVOR and MINTFRAC.  bad_expids holds the exposures that were not
+        fully processed or have every camera marked bad.
     """
     log = get_logger()
 
@@ -668,15 +668,14 @@ def _read_exposureqa(night, expid, recompute_skymags=False, exptab_entry=None, c
             keywords.
 
     Returns:
-        dict with keys:
-            NIGHT, EXPID, TILEID, TILERA, TILEDEC, MJD, EXPTIME, AIRMASS,
-            SEEING_ETC, EFFTIME_ETC, EBV,
-            SKY_MAG_G_SPEC, SKY_MAG_R_SPEC, SKY_MAG_Z_SPEC,
-            SURVEY, FAPRGRM, FAFLAVOR, GOALTYPE, GOALTIME, MINTFRAC,
-            PETALQA: numpy structured array (as returned by fitsio.read),
-                the raw PETALQA HDU data containing PETAL_LOC and
-                TSNR2_{tracer}_{band} columns for all tracers and bands.
-        Returns None if the exposureqa file does not exist.
+        dict: Exposure metadata with keys NIGHT, EXPID, TILEID, TILERA,
+        TILEDEC, MJD, EXPTIME, AIRMASS, SEEING_ETC, EFFTIME_ETC, EBV,
+        SKY_MAG_G_SPEC, SKY_MAG_R_SPEC, SKY_MAG_Z_SPEC, SURVEY, FAPRGRM,
+        FAFLAVOR, GOALTYPE, GOALTIME and MINTFRAC, plus PETAL_EBV (dict of
+        petal -> median EBV) and PETALQA (the PETALQA HDU data as read by
+        fitsio, with PETAL_LOC and TSNR2_{tracer}_{band} columns, or None).
+        None if the exposureqa file does not exist or its FIBERQA HDU can't
+        be read.
     """
     log = get_logger()
 
