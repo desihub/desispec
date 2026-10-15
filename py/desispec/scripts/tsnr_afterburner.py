@@ -837,6 +837,13 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
     """
     log = get_logger()
     entry = _read_exposureqa(night, expid, recompute_skymags, exptab_entry=exptab_entry, cameras=cameras)
+    # Without an exposure directory there are no cframes either; skip the
+    # per-camera checks (and their warnings) for this exposure.
+    if entry is None:
+        expdir = os.path.dirname(findfile('exposureqa', night=night, expid=expid, readonly=True))
+        if not os.path.isdir(expdir):
+            log.error('No exposure directory for night={} expid={}; writing a zeroed row'.format(night, expid))
+            return None
     petalqa = entry.get('PETALQA') if entry is not None else None
     if cameras is None:
         petals = petalqa['PETAL_LOC'] if petalqa is not None else _PETALS
@@ -1172,7 +1179,32 @@ def _bad_exposure_skymags(args_tuple):
             'SKY_MAG_Z_SPEC': np.float64(np.nan)}
 
 
-def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None, skymags=None):
+def _fiberassign_header(args_tuple):
+    """Return the fiberassign header values needed for a bad exposure.
+
+    Looks for the fiberassign file in the SVN tiles directory, then in the raw
+    data directory.  Takes (night, expid, tileid) as one tuple so that it can
+    be used with multiprocessing.Pool.map, and uses astropy, which reads a
+    gzipped header without decompressing the whole file.
+
+    Returns:
+        dict of TILERA, TILEDEC and the targeting keywords present in the
+        header, or None if no fiberassign file is found.
+    """
+    night, expid, tileid = args_tuple
+    filename, exists = findfile('fiberassignsvn', tile=int(tileid), return_exists=True, readonly=True)
+    if not exists:
+        filename, exists = findfile('fiberassign', night=int(night), expid=int(expid),
+                                    tile=int(tileid), return_exists=True, readonly=True)
+    if not exists:
+        return None
+    hdr = fits.getheader(filename, 0)
+    keys = ['TILERA', 'TILEDEC', 'FA_SURV'] + list(_TARG_DEFAULTS)
+    return {key: hdr[key] for key in keys if key in hdr}
+
+
+def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None, skymags=None,
+                         fa_headers=None):
     """Add zero-filled rows for EXPIDs that were not fully processed, or
     whose processed outputs could not be read.
 
@@ -1190,6 +1222,9 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
         skymags: Optional dict mapping EXPID -> sky magnitude dict, e.g.
             precomputed in parallel with _bad_exposure_skymags(); exposures
             not in it are computed here.
+        fa_headers: Optional dict mapping EXPID -> _fiberassign_header()
+            result, e.g. precomputed in parallel; exposures not in it are
+            read here.
 
     Returns:
         (exposures_table, frames_table): tuple of astropy.table.Table with
@@ -1199,6 +1234,10 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
 
     existing_expids = set(exposures_table['EXPID'].tolist()) if len(exposures_table) > 0 else set()
 
+    # Collect all new rows and append them with one vstack per table:
+    # Table.add_row copies every column, which is slow on large tables.
+    exp_rows = []
+    frame_rows = []
     for be in bad_expids:
         expid = int(be['EXPID'])
         if expid in existing_expids:
@@ -1228,12 +1267,11 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
             entry[key] = be.get(key, _TARG_DEFAULTS.get(key, 'unknown'))
 
         # TILERA/TILEDEC and targeting from fiberassignsvn, else raw data dir
-        fa_filename, exists = findfile('fiberassignsvn', tile=int(be['TILEID']), return_exists=True, readonly=True)
-        if not exists:
-            fa_filename, exists = findfile('fiberassign', night=int(be['NIGHT']), expid=expid,
-                                           tile=int(be['TILEID']), return_exists=True, readonly=True)
-        if exists:
-            fa_hdr = fitsio.read_header(fa_filename, 0)
+        if fa_headers is not None and expid in fa_headers:
+            fa_hdr = fa_headers[expid]
+        else:
+            fa_hdr = _fiberassign_header((be['NIGHT'], expid, be['TILEID']))
+        if fa_hdr is not None:
             entry = _fill_targ_from_header(entry, fa_hdr)
             entry['TILERA'] = np.float64(fa_hdr['TILERA'])
             entry['TILEDEC'] = np.float64(fa_hdr['TILEDEC'])
@@ -1255,11 +1293,13 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
         entry = _add_efftimes(entry)
         entry = _add_gfa_zero_cols(entry)
 
-        # -- add EXPOSURES row ----------------------------------------------
-        exp_vals = [entry.get(col, _get_default_for_col(exposures_table, col))
-                    for col in exposures_table.colnames]
-        log.warning('Adding bad exposure EXPID={}'.format(expid))
-        exposures_table.add_row(exp_vals)
+        # -- EXPOSURES row ----------------------------------------------------
+        exp_rows.append([entry.get(col, _get_default_for_col(exposures_table, col))
+                         for col in exposures_table.colnames])
+        if be.get('LASTSTEP', '') == 'all' and be.get('CAMWORD') != be.get('BADCAMWORD'):
+            log.warning('Adding zeroed row for an expected exposure with no outputs: EXPID={}'.format(expid))
+        else:
+            log.warning('Adding bad exposure EXPID={}'.format(expid))
         existing_expids.add(expid)
 
         # -- add FRAMES rows ------------------------------------------------
@@ -1271,12 +1311,39 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
 
         for cam in active_cameras:
             entry['CAMERA'] = cam
-            cam_vals = [entry.get(col, _get_default_for_col(frames_table, col))
-                        for col in frames_table.colnames]
-            log.debug('Adding bad exposure FRAMES row EXPID={} CAMERA={}'.format(expid, cam))
-            frames_table.add_row(cam_vals)
+            frame_rows.append([entry.get(col, _get_default_for_col(frames_table, col))
+                               for col in frames_table.colnames])
 
+    exposures_table = _append_rows(exposures_table, exp_rows)
+    frames_table = _append_rows(frames_table, frame_rows)
     return exposures_table, frames_table
+
+
+def _append_rows(table, rows):
+    """Return table with rows (lists of values in column order) appended.
+
+    Numeric columns keep the table's dtypes; string columns are widened only
+    if a new value is longer, so values are never truncated.
+
+    Args:
+        table: astropy.table.Table.
+        rows: list of lists, one value per column of table.
+
+    Returns:
+        astropy.table.Table
+    """
+    if not rows:
+        return table
+    columns = list(zip(*rows))
+    new = Table()
+    for col, values in zip(table.colnames, columns):
+        if table[col].dtype.kind in 'US':
+            new[col] = np.array([str(value) for value in values])
+        else:
+            new[col] = np.array(values, dtype=table[col].dtype)
+    merged = vstack([table, new], metadata_conflicts='silent')
+    merged.meta = table.meta
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -1855,10 +1922,13 @@ def main(options=None):
                             'zero-filled exposures {}'.format([int(be['EXPID']) for be in zero_fill]))
             if zero_fill:
                 sky_args = [(be['NIGHT'], int(be['EXPID'])) for be in zero_fill]
-                skymags = dict(zip([expid for night, expid in sky_args],
-                                   mapper(_bad_exposure_skymags, sky_args)))
+                fa_args = [(be['NIGHT'], int(be['EXPID']), int(be['TILEID'])) for be in zero_fill]
+                zero_expids = [expid for night, expid in sky_args]
+                skymags = dict(zip(zero_expids, mapper(_bad_exposure_skymags, sky_args)))
+                fa_headers = dict(zip(zero_expids, mapper(_fiberassign_header, fa_args)))
                 exposures_table, frames_table = inject_bad_exposures(
-                    exposures_table, frames_table, zero_fill, cameras=cameras_filter, skymags=skymags)
+                    exposures_table, frames_table, zero_fill, cameras=cameras_filter, skymags=skymags,
+                    fa_headers=fa_headers)
         finally:
             if pool is not None:
                 pool.close()

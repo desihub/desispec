@@ -30,6 +30,7 @@ from desispec.scripts.tsnr_afterburner import (
     _reorder_exposures,
     _read_etc_values,
     _petalqa_camera_values,
+    _append_rows,
     _empty_tables,
     _fill_targ_from_header,
     find_processed_nights,
@@ -633,7 +634,7 @@ class TestInjectBadExposures(unittest.TestCase):
             'GOALTYPE': 'dark', 'GOALTIME': 1000.0, 'MINTFRAC': 0.9,
             'FAFLAVOR': 'maindark', 'EBVFAC': 1.0,
         }]
-        inject_bad_exposures(exposures, frames, bad_expids)
+        exposures, frames = inject_bad_exposures(exposures, frames, bad_expids)
         self.assertIn(999, exposures['EXPID'].tolist())
 
     def test_targeting_filled_from_fiberassign_header(self):
@@ -649,7 +650,7 @@ class TestInjectBadExposures(unittest.TestCase):
         fa_hdr = {'TILERA': 37.362, 'TILEDEC': 1.5, 'FAFLAVOR': 'mainbright', 'FAPRGRM': 'bright',
                   'SURVEY': 'main', 'GOALTYPE': 'BRIGHT', 'MINTFRAC': 0.85, 'GOALTIME': 180.0}
         self.mock_findfile.return_value = ('/fake/fiberassign-020293.fits.gz', True)
-        with patch('desispec.scripts.tsnr_afterburner.fitsio.read_header', return_value=fa_hdr):
+        with patch('desispec.scripts.tsnr_afterburner.fits.getheader', return_value=fa_hdr):
             exposures, frames = inject_bad_exposures(exposures, frames, bad_expids)
         row = exposures[exposures['EXPID'] == 999][0]
         self.assertTrue(np.all(np.isnan(frames['TSNR2_ALPHA'][frames['EXPID'] == 999])))
@@ -700,7 +701,7 @@ class TestInjectBadExposures(unittest.TestCase):
             'GOALTYPE': 'dark', 'GOALTIME': 1000.0, 'MINTFRAC': 0.9,
             'FAFLAVOR': 'maindark', 'EBVFAC': 1.0,
         }]
-        inject_bad_exposures(exposures, frames, bad_expids)
+        exposures, frames = inject_bad_exposures(exposures, frames, bad_expids)
         self.assertEqual(len(exposures), initial_len)
 
     def test_tsnr2_zero_filled(self):
@@ -714,7 +715,7 @@ class TestInjectBadExposures(unittest.TestCase):
             'GOALTYPE': 'dark', 'GOALTIME': 1000.0, 'MINTFRAC': 0.9,
             'FAFLAVOR': 'maindark', 'EBVFAC': 1.0,
         }]
-        inject_bad_exposures(exposures, frames, bad_expids)
+        exposures, frames = inject_bad_exposures(exposures, frames, bad_expids)
         mask = exposures['EXPID'] == 888
         for tracer in _TSNR2_TRACERS:
             self.assertAlmostEqual(
@@ -731,7 +732,7 @@ class TestInjectBadExposures(unittest.TestCase):
             'GOALTYPE': 'dark', 'GOALTIME': 1000.0, 'MINTFRAC': 0.9,
             'FAFLAVOR': 'maindark', 'EBVFAC': 1.5,
         }]
-        inject_bad_exposures(exposures, frames, bad_expids)
+        exposures, frames = inject_bad_exposures(exposures, frames, bad_expids)
         mask = exposures['EXPID'] == 777
         ebv = float(exposures['EBV'][mask][0])
         self.assertGreater(ebv, 0.0)
@@ -1118,6 +1119,25 @@ class TestWriteOutput(unittest.TestCase):
                     val = float(csv[col][0])
                     self.assertAlmostEqual(val, round(val, 3), places=8,
                                            msg='Column {} not rounded to 3 dp'.format(col))
+
+
+class TestAppendRows(unittest.TestCase):
+    """Test _append_rows(), used to add zero-filled rows in one step."""
+
+    def test_keeps_numeric_dtypes_and_widens_strings(self):
+        table = Table({'EXPID': np.array([1], dtype=np.int32), 'EBV': np.array([.1], dtype=np.float32),
+                       'SURVEY': np.array(['sv1'], dtype='U3')})
+        table.meta['EXTNAME'] = 'EXPOSURES'
+        result = _append_rows(table, [[2, .2, 'main'], [3, .3, 'special']])
+        self.assertEqual(result['EXPID'].tolist(), [1, 2, 3])
+        self.assertEqual(result['EXPID'].dtype, np.int32)
+        self.assertEqual(result['EBV'].dtype, np.float32)
+        self.assertEqual(result['SURVEY'].tolist(), ['sv1', 'main', 'special'])
+        self.assertEqual(result.meta['EXTNAME'], 'EXPOSURES')
+
+    def test_no_rows_returns_table(self):
+        table = Table({'EXPID': np.array([1], dtype=np.int32)})
+        self.assertIs(_append_rows(table, []), table)
 
 
 class TestKeepStringWidths(unittest.TestCase):
@@ -1708,7 +1728,7 @@ class TestMain(unittest.TestCase):
 
         # The mock must return non-empty tables; returning empty tables would cause
         # main() to hit the "No valid exposures" guard and return 1 before write_output.
-        def _inject_passthrough(exp_tbl, frm_tbl, bad_list, cameras=None, skymags=None):
+        def _inject_passthrough(exp_tbl, frm_tbl, bad_list, cameras=None, skymags=None, fa_headers=None):
             return exp_tbl, frm_tbl
 
         with tempfile.TemporaryDirectory() as tmpdir:

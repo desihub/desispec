@@ -405,7 +405,7 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(float(self._tables()[0]['TSNR2_ELG'][0]), 30.)
 
     def test_bad_exposure_skymags_use_the_pool(self):
-        # one pool: exposure loading, then the bad-exposure sky magnitudes
+        # one pool: exposure loading, then the bad-exposure sky magnitudes and fiberassign headers
         self._add_exposure(expid=101, laststep='skysub')
         os.makedirs(mod.os.path.dirname(mod.findfile('cframe', night=20211001, expid=101, camera='b0')))
         with patch.object(mod.multiprocessing, 'Pool') as pool, self._no_fiberassign():
@@ -413,7 +413,8 @@ class TestAfterburnerIntegration(unittest.TestCase):
             self.assertEqual(self._run('--nproc', '2', '--add-badexp'), 0)
         pool.assert_called_once_with(2)
         functions = [call.args[0] for call in pool.return_value.map.call_args_list]
-        self.assertEqual(functions, [mod._read_one_exposure_wrapper, mod._bad_exposure_skymags])
+        self.assertEqual(functions, [mod._read_one_exposure_wrapper, mod._bad_exposure_skymags,
+                                     mod._fiberassign_header])
         exposures, _ = self._tables()
         self.assertEqual(float(exposures['SKY_MAG_R_SPEC'][exposures['EXPID'] == 101][0]), 21.)
 
@@ -441,6 +442,21 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(float(old['EFFTIME_SPEC'][0]), 0.)
         self.assertEqual(frames['CAMERA'][frames['EXPID'] == 100].tolist(), ['b0', 'r0', 'z0'])
         self.assertTrue(np.all(frames['TSNR2_ELG'][frames['EXPID'] == 100] == 0.))
+
+    def test_missing_exposure_dir_skips_camera_checks(self):
+        # no exposure directory: one check, no per-camera cframe lookups
+        self._add_exposure(expid=101)
+        expdir = os.path.dirname(mod.findfile('exposureqa', night=20211001, expid=101))
+        os.remove(os.path.join(expdir, os.path.basename(mod.findfile('exposureqa', night=20211001, expid=101))))
+        os.rmdir(expdir)
+        with patch.object(mod, 'read_one_camera') as camera:
+            self.assertIsNone(mod.read_one_exposure(20211001, 101))
+        camera.assert_not_called()
+        with self._no_fiberassign():
+            self.assertEqual(self._run(), 0)
+        exposures, frames = self._tables()
+        self.assertEqual(float(exposures['EFFTIME_SPEC'][exposures['EXPID'] == 101][0]), 0.)
+        self.assertEqual(int(np.sum(frames['EXPID'] == 101)), 3)
 
     def test_bad_only_fresh_output_and_update(self):
         write_exptable_fixture(self.prod, 20211001, 100, laststep='skysub')
