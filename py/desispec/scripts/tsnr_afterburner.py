@@ -143,9 +143,14 @@ def parse(options=None):
                                    'error if any requested exposures (or nights, if no --expids) are '
                                    'already present. --update is the default (replace or add rows) and '
                                    'is retained only for compatibility.')
-    parser.add_argument('--add-badexp', action='store_true',
-                        help='Add zero-filled rows for known bad/unprocessed exposures. Without it, '
-                             'rows for such exposures are removed from existing output.')
+    missing_group = parser.add_mutually_exclusive_group()
+    missing_group.add_argument('--add-badexp', action='store_true',
+                               help='Add zero-filled rows for known bad/unprocessed exposures. Without it, '
+                                    'rows for such exposures are removed from existing output.')
+    missing_group.add_argument('--ignore-missing', action='store_true',
+                               help='Only write rows for exposures with outputs: use only nights with an '
+                                    'exposures directory, and write no zeroed rows for expected exposures '
+                                    'whose outputs are missing (existing rows for them are kept).')
     parser.add_argument('--details-dir', type=str, default=None, required=False,
                         help='Directory for per-camera TSNR2 detail files (--recompute path only).')
     parser.add_argument('--recompute', action='store_true',
@@ -931,7 +936,7 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
         dict: Exposure metadata and CAMERA_ROWS, keyed by camera. Cameras with
         neither QA values nor a cframe are skipped with a warning, as in the
         original afterburner. None if no camera could be read; main() then
-        writes a zeroed row for the exposure. Calculation failures when the
+        writes a zeroed row for the exposure, unless --ignore-missing. Calculation failures when the
         inputs exist still propagate.
     """
     log = get_logger()
@@ -941,7 +946,7 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
     if entry is None:
         expdir = os.path.dirname(findfile('exposureqa', night=night, expid=expid, readonly=True))
         if not os.path.isdir(expdir):
-            log.error('No exposure directory for night={} expid={}; writing a zeroed row'.format(night, expid))
+            log.error('No exposure directory for night={} expid={}; no outputs found'.format(night, expid))
             return None
     petalqa = entry.get('PETALQA') if entry is not None else None
     if cameras is None:
@@ -966,7 +971,7 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
         else:
             camera_rows[camera] = values
     if not camera_rows:
-        log.error('No cameras could be read for night={} expid={}; writing a zeroed row'.format(
+        log.error('No cameras could be read for night={} expid={}; no outputs found'.format(
             night, expid))
         return None
     entry['CAMERA_ROWS'] = camera_rows
@@ -1911,13 +1916,17 @@ def main(options=None):
     night_dirs = set()
     if rank == 0:
         night_dirs = _nights_with_exposures_dir()
-        available = find_production_nights(night_dirs)
+        if args.ignore_missing:
+            available = sorted(night_dirs)
+        else:
+            available = find_production_nights(night_dirs)
         if args.nights is None:
             all_nights = available
         else:
             all_nights, missing = select_nights(args.nights, available)
             if missing:
-                log.warning('No processing table or exposures directory for requested nights {}'.format(missing))
+                needed = 'exposures directory' if args.ignore_missing else 'processing table or exposures directory'
+                log.warning('No {} for requested nights {}'.format(needed, missing))
         log.info('Processing {} nights'.format(len(all_nights)))
 
     if comm is not None:
@@ -2024,9 +2033,14 @@ def main(options=None):
             exposure_rows = [row for row in results if row is not None]
             frames_table, exposures_table = build_tables(exposure_rows, camword_map)
 
-            # Processed exposures with nothing readable on disk always get zeroed
-            # rows, replacing any earlier values; bad exposures only with --add-badexp.
+            # Processed exposures with nothing readable on disk get zeroed rows,
+            # replacing any earlier values, unless --ignore-missing; bad exposures
+            # only with --add-badexp.
             unreadable = [entry for entry, row in zip(good_expids, results) if row is None]
+            if args.ignore_missing and unreadable:
+                log.warning('--ignore-missing: no rows for {} expected exposures with no outputs: {}'.format(
+                    len(unreadable), [int(entry['EXPID']) for entry in unreadable]))
+                unreadable = []
             zero_fill = (bad_expids if args.add_badexp else []) + unreadable
             if cameras_filter is not None and zero_fill:
                 log.warning('With --cameras, existing rows for cameras outside the selection are kept for '

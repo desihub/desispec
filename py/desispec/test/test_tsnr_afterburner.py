@@ -229,6 +229,12 @@ class TestParse(unittest.TestCase):
         self.assertTrue(parse(['--update']).update)
         self.assertFalse(parse(['--no-update']).update)
 
+    def test_ignore_missing_flag(self):
+        self.assertFalse(parse([]).ignore_missing)
+        self.assertTrue(parse(['--ignore-missing']).ignore_missing)
+        with self.assertRaises(SystemExit):
+            parse(['--ignore-missing', '--add-badexp'])
+
     def test_output_modes_mutually_exclusive(self):
         for flags in (['--no-update', '--overwrite'], ['--update', '--overwrite']):
             with self.assertRaises(SystemExit):

@@ -458,6 +458,35 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(float(exposures['EFFTIME_SPEC'][exposures['EXPID'] == 101][0]), 0.)
         self.assertEqual(int(np.sum(frames['EXPID'] == 101)), 3)
 
+    def test_ignore_missing_writes_no_zeroed_rows(self):
+        # an expected exposure with no outputs: no row on a fresh run, and an
+        # existing row is kept unchanged on an update
+        self._add_exposure(expid=101)
+        os.remove(mod.findfile('exposureqa', night=20211001, expid=101))
+        self.assertEqual(self._run('--ignore-missing', '--overwrite'), 0)
+        self.assertEqual(self._tables()[0]['EXPID'].tolist(), [100])
+        with self._no_fiberassign():
+            self._run('--overwrite')
+        write_qa_fixture(self.prod, 20211001, 101)
+        self._run()
+        before = self._tables()[0]
+        os.remove(mod.findfile('exposureqa', night=20211001, expid=101))
+        self.assertEqual(self._run('--ignore-missing'), 0)
+        after = self._tables()[0]
+        self.assertEqual(after['EXPID'].tolist(), [100, 101])
+        self.assertEqual(float(after['TSNR2_ELG'][1]), float(before['TSNR2_ELG'][1]))
+        self.assertGreater(float(after['TSNR2_ELG'][1]), 0.)
+
+    def test_ignore_missing_uses_only_exposures_dir_nights(self):
+        # a bad-only night with a processing table but no exposures directory
+        write_exptable_fixture(self.prod, 20211002, 201, laststep='skysub')
+        ptab = Path(mod.findfile('processing_table', night=20211002))
+        ptab.parent.mkdir(parents=True, exist_ok=True)
+        ptab.touch()
+        with patch.object(mod, 'collect_science_expids', wraps=mod.collect_science_expids) as collect:
+            self.assertEqual(self._run('--ignore-missing'), 0)
+        self.assertEqual(list(collect.call_args.args[0]), [20211001])
+
     def test_not_yet_processed_night_is_skipped(self):
         # a night with a processing table and expected exposures but no
         # exposures directory: nothing is read or written, with or without
