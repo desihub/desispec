@@ -679,7 +679,7 @@ def fit_trace_shifts(image, args):
         # the traceset of the psf is not used here
         psf = read_specter_psf(args.psf)
         # sky fibers (if a fibermap is available) are used to estimate the
-        # continuum common to all fibers when building the median spectrum
+        # sky continuum when building the median spectrum
         sky_fibers = None
         fibermap = getattr(image, 'fibermap', None)
         if fibermap is not None and len(fibermap) != tset.nspec:

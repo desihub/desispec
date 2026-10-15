@@ -844,7 +844,8 @@ def _weighted_median(flux, weights):
     return np.where(total > 0, res, 0.)
 
 def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20,
-                               continuum_error_frac = None, is_sky_fiber = None):
+                               continuum_error_frac = None, is_sky_fiber = None,
+                               return_sky_continuum = False):
     """
     Compute the median spectrum after continuum subtraction
 
@@ -861,22 +862,24 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20,
             bright objects whose continuum-subtracted absorption features
             can otherwise dominate the median (e.g. stars on backup tiles)
         is_sky_fiber: (nfibers,) boolean np.array or None. Sky fibers, used to
-            estimate the continuum common to all fibers when
-            continuum_error_frac is set
+            estimate the sky continuum when continuum_error_frac is set
+        return_sky_continuum: bool, also return the sky continuum (including
+            moonlight and twilight), common to all fibers
 
     Returns:
         mfux: npix np.array of median spectrum
         mivar: npix np.array with ivar of the median spectrum
         flux: (nfibers, npix) continuum subtracted original flux array
+        sky_continuum: npix np.array, only if return_sky_continuum
 
     Notes:
         The median at each pixel only uses fibers with ivar>0 at that pixel,
         so that masked pixels (e.g. from a masked amplifier) do not enter
         the median as zeros.
-        The object continuum is the fiber continuum minus the continuum
-        common to all fibers (the median of sky fibers, or a low percentile
-        across fibers where no sky fiber is available), so that a bright
-        sky continuum (e.g. moonlight) does not change the weights.
+        The object continuum is the fiber continuum minus the sky continuum
+        (the median of sky fibers, or a low percentile across fibers where no
+        sky fiber is available), so that a bright sky continuum (e.g.
+        moonlight) does not change the weights.
     """
     # here we get rid of continuum by applying a median filter
     continuum_foot = np.abs(np.arange(-continuum_win,continuum_win+1))>continuum_win /2.
@@ -898,22 +901,23 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20,
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', message='All-NaN slice encountered', category=RuntimeWarning)
 
+        continuum = np.where(good, flux0 - flux, np.nan)
+        # sky continuum (including moonlight), the same in all fibers,
+        # which should not affect the weights
+        if is_sky_fiber is not None and np.any(is_sky_fiber):
+            sky_continuum = np.nanmedian(continuum[is_sky_fiber], axis=0)
+        else:
+            # without sky fibers, use a low percentile across fibers:
+            # sky fibers are ~10% of fibers and usually the faintest.
+            # An underestimate only adds a similar term to all variances
+            sky_continuum = np.nanpercentile(continuum, 5, axis=0)
+        sky_continuum = np.nan_to_num(sky_continuum)
+
         # median flux used as internal spectral reference
         if continuum_error_frac is None:
             mflux = np.nan_to_num(np.nanmedian(masked_flux, axis=0))
         else:
-            continuum = np.where(good, flux0 - flux, np.nan)
-            # continuum common to all fibers (sky, including moonlight),
-            # which should not affect the weights
-            if is_sky_fiber is not None and np.any(is_sky_fiber):
-                common_continuum = np.nanmedian(continuum[is_sky_fiber], axis=0)
-            else:
-                # without sky fibers, use a low percentile across fibers:
-                # sky fibers are ~10% of fibers and usually the faintest.
-                # An underestimate only adds a similar term to all variances
-                common_continuum = np.nanpercentile(continuum, 5, axis=0)
-            common_continuum = np.nan_to_num(common_continuum)
-            object_continuum = np.nan_to_num(np.maximum(continuum - common_continuum[None, :], 0))
+            object_continuum = np.nan_to_num(np.maximum(continuum - sky_continuum[None, :], 0))
             var = 1. / (ivar + (~good)) + (continuum_error_frac * object_continuum)**2
             mflux = _weighted_median(np.where(good, flux, 0.), good / var)
 
@@ -941,17 +945,24 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20,
     mivar[~enough_fibers] = 0.
     # do not allow negatives
     mflux[mflux <  0] = 0
+    if return_sky_continuum:
+        return mflux, mivar, flux, sky_continuum
     return mflux, mivar, flux
 
 # Wavelength ranges (vacuum, Angstrom) of absorption features in the sky
-# continuum, ignored in the external calibration against the sky
-# spectrum. In bright moonlight or twilight the sky continuum is scattered
-# sunlight with solar (Na D) and telluric (O2 B band, H2O) absorption
-# lines. The continuum subtraction turns them into spurious features that
-# the cross-correlation can lock onto, several Angstroms away from the
-# true sky lines.
-SKY_ABSORPTION_WAVELENGTH_MASKS = [(5886., 5900., 'Na D'),
-                                   (6862., 6960., 'O2 B band'),
+# continuum, used in the external calibration against the sky spectrum.
+# In bright moonlight or twilight the sky continuum is scattered sunlight
+# with solar (Na D) and telluric (O2 B band, H2O) absorption lines. The
+# continuum subtraction turns them into spurious features that the
+# cross-correlation can lock onto, several Angstroms away from the true
+# sky lines.
+# The Na D range is ignored: the absorption sits on the sky Na D emission
+# itself. In the telluric bands, which contain OH sky lines, the variance
+# of the stacked spectrum is increased by (continuum_error_frac x sky
+# continuum)^2, the expected size of the absorption residual, so that they
+# lose weight in proportion to the sky continuum.
+SKY_ABSORPTION_WAVELENGTH_MASKS = [(5886., 5900., 'Na D')]
+SKY_ABSORPTION_WAVELENGTH_BANDS = [(6862., 6960., 'O2 B band'),
                                    (7150., 7400., 'H2O')]
 
 def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
@@ -977,8 +988,8 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
         prior_width_dy: float with of the Gaussian prior on dy
         continuum_error_frac: float or None, fraction of the object continuum added in quadrature to the pixel uncertainties when computing the median spectrum (see _continuum_subtract_median)
-        sky_fibers: 1D np.array of sky fiber indices or None, used to estimate the continuum common to all fibers
-        mask_sky_absorption: bool, if True ignore the wavelength ranges of absorption features of a bright sky continuum (SKY_ABSORPTION_WAVELENGTH_MASKS) in the cross-correlation. Only for a sky spectrum reference (not arc lamps).
+        sky_fibers: 1D np.array of sky fiber indices or None, used to estimate the sky continuum
+        mask_sky_absorption: bool, if True account for absorption features of a bright sky continuum in the cross-correlation: ignore SKY_ABSORPTION_WAVELENGTH_MASKS, and add (continuum_error_frac x sky continuum)^2 to the variance of the stacked spectrum in SKY_ABSORPTION_WAVELENGTH_BANDS. Only for a sky spectrum reference (not arc lamps).
         apply_throughput: bool, if True multiply the reference spectrum by the hardware throughput of the camera arm (from desimodel, arm from image.meta["CAMERA"]), so that its lines have the same relative strengths as in the extracted (uncalibrated) spectra. Matters at the arm edges where the throughput drops by more than an order of magnitude. For a reference spectrum given in physical flux units (sky spectrum).
 
     Returns:
@@ -1027,21 +1038,34 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     is_sky_fiber = None
     if sky_fibers is not None:
         is_sky_fiber = np.isin(fibers, sky_fibers)
-        log.info(f"use {np.sum(is_sky_fiber)} sky fibers for the common continuum")
-    mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9,
-                                                    continuum_error_frac=continuum_error_frac,
-                                                    is_sky_fiber=is_sky_fiber)
+        log.info(f"use {np.sum(is_sky_fiber)} sky fibers for the sky continuum")
+    mflux, mivar, flux, sky_continuum = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9,
+                                                                   continuum_error_frac=continuum_error_frac,
+                                                                   is_sky_fiber=is_sky_fiber,
+                                                                   return_sky_continuum=True)
 
     ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar), width=width)
 
-    # ignore wavelength ranges where a bright sky continuum (moon, twilight)
-    # produces spurious features (see SKY_ABSORPTION_WAVELENGTH_MASKS)
+    # absorption features of a bright sky continuum (moon, twilight) become
+    # spurious features after the continuum subtraction (see
+    # SKY_ABSORPTION_WAVELENGTH_MASKS and SKY_ABSORPTION_WAVELENGTH_BANDS)
     if mask_sky_absorption:
         for wmin, wmax, label in SKY_ABSORPTION_WAVELENGTH_MASKS:
             masked = (wave >= wmin) & (wave <= wmax)
             if np.any(masked & (mivar > 0)):
                 log.info(f"ignore {wmin:.0f}-{wmax:.0f}A ({label}) in the external wavelength calibration")
             mivar[masked] = 0.
+        for wmin, wmax, label in SKY_ABSORPTION_WAVELENGTH_BANDS:
+            selection = (wave >= wmin) & (wave <= wmax) & (mivar > 0)
+            if not np.any(selection):
+                continue
+            if continuum_error_frac is None:
+                log.info(f"ignore {wmin:.0f}-{wmax:.0f}A ({label}) in the external wavelength calibration")
+                mivar[selection] = 0.
+            else:
+                log.info(f"add ({continuum_error_frac} x sky continuum)^2 to the variance in {wmin:.0f}-{wmax:.0f}A ({label}), "
+                         f"median sky continuum there {np.median(sky_continuum[selection]):.0f}")
+                mivar[selection] = 1. / (1. / mivar[selection] + (continuum_error_frac * sky_continuum[selection])**2)
 
     log.info("fit shifts on wavelength bins")
     # define bins
