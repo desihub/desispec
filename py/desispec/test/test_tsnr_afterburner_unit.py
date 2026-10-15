@@ -458,6 +458,45 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(float(exposures['EFFTIME_SPEC'][exposures['EXPID'] == 101][0]), 0.)
         self.assertEqual(int(np.sum(frames['EXPID'] == 101)), 3)
 
+    def test_not_yet_processed_night_is_skipped(self):
+        # a night with a processing table and expected exposures but no
+        # exposures directory: nothing is read or written, with or without
+        # --add-badexp, and existing rows are kept
+        self._run()
+        before = self._tables()[0]
+        write_exptable_fixture(self.prod, 20211002, 200)
+        write_exptable_fixture(self.prod, 20211002, 201, laststep='skysub')
+        ptab = Path(mod.findfile('processing_table', night=20211002))
+        ptab.parent.mkdir(parents=True, exist_ok=True)
+        ptab.touch()
+        with patch.object(mod, 'read_one_exposure', wraps=mod.read_one_exposure) as reader, self._no_fiberassign():
+            self.assertEqual(self._run('--add-badexp'), 0)
+        self.assertNotIn(20211002, [call.args[0] for call in reader.call_args_list])
+        exposures, frames = self._tables()
+        self.assertEqual(exposures['EXPID'].tolist(), before['EXPID'].tolist())
+        self.assertNotIn(200, frames['EXPID'])
+
+    def test_bad_only_night_without_exposures_dir(self):
+        # only bad exposures and no exposures directory: added with --add-badexp
+        write_exptable_fixture(self.prod, 20211002, 201, laststep='skysub')
+        ptab = Path(mod.findfile('processing_table', night=20211002))
+        ptab.parent.mkdir(parents=True, exist_ok=True)
+        ptab.touch()
+        with self._no_fiberassign():
+            self.assertEqual(self._run('--add-badexp'), 0)
+        exposures, _ = self._tables()
+        self.assertIn(201, exposures['EXPID'])
+
+    def test_night_without_science_contributes_nothing(self):
+        # e.g. a darknight-only processing table: no science exposures
+        write_exptable_fixture(self.prod, 20211002, 202, tileid=0)
+        ptab = Path(mod.findfile('processing_table', night=20211002))
+        ptab.parent.mkdir(parents=True, exist_ok=True)
+        ptab.touch()
+        self.assertEqual(self._run('--add-badexp'), 0)
+        exposures, _ = self._tables()
+        self.assertEqual(exposures['EXPID'].tolist(), [100])
+
     def test_bad_only_fresh_output_and_update(self):
         write_exptable_fixture(self.prod, 20211001, 100, laststep='skysub')
         real_findfile = mod.findfile

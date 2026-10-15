@@ -33,7 +33,9 @@ from desispec.scripts.tsnr_afterburner import (
     _append_rows,
     _empty_tables,
     _fill_targ_from_header,
-    find_processed_nights,
+    find_production_nights,
+    select_nights,
+    _skip_unprocessed_nights,
     _EXP_SUMMARY_COLUMN_ORDER,
     _TARG_DEFAULTS,
     _TSNR2_TRACERS,
@@ -1236,15 +1238,63 @@ class TestFillTargFromHeader(unittest.TestCase):
         self.assertEqual(entry['SURVEY'], 'main')
 
 
-class TestFindProcessedNights(unittest.TestCase):
-    """Test find_processed_nights() uses the exposures directory."""
+class TestFindProductionNights(unittest.TestCase):
+    """Test find_production_nights() uses processing tables and exposures directories."""
 
-    def test_nights_from_exposures_dir(self):
+    def test_processing_tables_and_exposures_dirs(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            for name in ('20210628', '20220211', 'attic', '2021'):
-                os.makedirs(os.path.join(tmpdir, 'exposures', name))
-            with patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value=tmpdir):
-                self.assertEqual(find_processed_nights(), [20210628, 20220211])
+            prod = os.path.join(tmpdir, 'prod')
+            ptab = os.path.join(prod, 'processing_tables')
+            os.makedirs(ptab)
+            for name in ('processing_table_prod-20210628.csv',
+                         'processing_table_prod-20210110.csv.20260827_16h24m39s',  # backup copy
+                         'notes.txt'):
+                open(os.path.join(ptab, name), 'w').close()
+            # an exposures directory without a processing table (e.g. loa)
+            os.makedirs(os.path.join(prod, 'exposures', '20201215'))
+            os.makedirs(os.path.join(prod, 'exposures', 'attic'))
+            # an exposure table alone (not yet processed) does not count
+            os.makedirs(os.path.join(prod, 'exposure_tables', '202202'))
+            open(os.path.join(prod, 'exposure_tables', '202202', 'exposure_table_20220211.csv'), 'w').close()
+            with patch.dict(os.environ, {'DESI_SPECTRO_REDUX': tmpdir, 'SPECPROD': 'prod'}):
+                self.assertEqual(find_production_nights(), [20201215, 20210628])
+
+
+class TestSkipUnprocessedNights(unittest.TestCase):
+    """Test _skip_unprocessed_nights() night groups."""
+
+    def test_groups(self):
+        good = [{'NIGHT': 20250101, 'EXPID': 1}, {'NIGHT': 20250102, 'EXPID': 2}]
+        bad = [{'NIGHT': 20250101, 'EXPID': 3}, {'NIGHT': 20250102, 'EXPID': 4},
+               {'NIGHT': 20250103, 'EXPID': 5}]
+        # 20250101 processed; 20250102 not yet processed; 20250103 bad only
+        good, bad = _skip_unprocessed_nights(good, bad, {20250101})
+        self.assertEqual([e['EXPID'] for e in good], [1])
+        self.assertEqual([e['EXPID'] for e in bad], [3, 5])
+
+
+class TestSelectNights(unittest.TestCase):
+    """Test select_nights() keeps only nights with exposure tables."""
+
+    available = [20210630, 20210701, 20210705, 20220101]
+
+    def test_range_keeps_only_available(self):
+        nights, missing = select_nights('20210601:20210731', self.available)
+        self.assertEqual(nights, [20210630, 20210701, 20210705])
+        self.assertEqual(missing, [])
+
+    def test_range_end_included(self):
+        nights, _ = select_nights('20210701:20210705', self.available)
+        self.assertEqual(nights, [20210701, 20210705])
+
+    def test_explicit_missing_reported(self):
+        nights, missing = select_nights('20210630,20210631,20220101', self.available)
+        self.assertEqual(nights, [20210630, 20220101])
+        self.assertEqual(missing, [20210631])
+
+    def test_range_does_not_report_missing(self):
+        _, missing = select_nights('20210702:20210704', self.available)
+        self.assertEqual(missing, [])
 
 
 class TestAddEfftimes(unittest.TestCase):
@@ -1594,6 +1644,12 @@ class TestMain(unittest.TestCase):
             side_effect=_mock_tsnr2_to_efftime)
         self._efftime_patcher.start()
         self.addCleanup(self._efftime_patcher.stop)
+        # the fake production has no processing tables or exposures
+        # directories; 20211001 is the (processed) night the tests request
+        for name, value in (('find_production_nights', [20211001]), ('_nights_with_exposures_dir', {20211001})):
+            nights_patcher = patch('desispec.scripts.tsnr_afterburner.' + name, return_value=value)
+            nights_patcher.start()
+            self.addCleanup(nights_patcher.stop)
 
     def _good_entry(self, night=20211001, expid=100):
         return {
@@ -1740,8 +1796,13 @@ class TestMain(unittest.TestCase):
                        return_value=exposure_row), \
                  patch('desispec.scripts.tsnr_afterburner.write_output'), \
                  patch('os.path.isfile', return_value=False), \
+                 patch('desispec.scripts.tsnr_afterburner._bad_exposure_skymags', return_value={}), \
+                 patch('desispec.scripts.tsnr_afterburner._fiberassign_header', return_value=None), \
                  patch('desispec.scripts.tsnr_afterburner.inject_bad_exposures',
                        side_effect=_inject_passthrough) as mock_inject:
+                # the sky magnitude and fiberassign helpers prepare inputs for
+                # inject_bad_exposures in the pool; mock them too, since they
+                # need DESI data paths that CI doesn't have
                 rc = main(['--prod', '/fake/prod', '-o', outfile,
                            '--nights', '20211001', '--add-badexp'])
             mock_inject.assert_called_once()

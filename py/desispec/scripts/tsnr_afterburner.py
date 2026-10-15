@@ -117,7 +117,9 @@ def parse(options=None):
     parser.add_argument('--prod', type=str, default=None, required=False,
                         help='Production name or full path. Defaults to $DESI_SPECTRO_REDUX/$SPECPROD.')
     parser.add_argument('-n', '--nights', type=str, default=None, required=False,
-                        help='Comma- or colon-separated list of nights to process, e.g. 20210501 or 20210501:20210531.')
+                        help='Comma- or colon-separated list of nights to process, e.g. 20210501 or '
+                             '20210501:20210531. Only nights with a processing table or exposures '
+                             'directory are used; nights not yet processed are skipped.')
     parser.add_argument('-e', '--expids', type=str, default=None, required=False,
                         help='Comma-separated list of EXPIDs to process.')
     parser.add_argument('-c', '--cameras', type=str, default=None, required=False,
@@ -510,26 +512,123 @@ def read_one_camera(night, expid, camera, alpha_only=False, details_dir=None,
 # Exposure collection
 # ---------------------------------------------------------------------------
 
-def find_processed_nights():
-    """Return the nights that have an exposures directory in the production.
+def _nights_from_files(template):
+    """Return the nights of the files matching a findfile() template.
 
-    Exposure tables can list nights that were never processed (e.g. partial
-    productions), so the processed nights are taken from
-    $DESI_SPECTRO_REDUX/$SPECPROD/exposures/{NIGHT} instead.
+    Args:
+        template: findfile() path for night 99999999; a month directory
+            999999, if present, is matched too.
+
+    Returns:
+        set of int: YYYYMMDD nights with an exactly matching filename.
+    """
+    prefix, suffix = os.path.basename(template).split('99999999')
+    dirname = os.path.dirname(template)
+    if os.path.basename(dirname) == '999999':
+        dirname = os.path.join(os.path.dirname(dirname), '*')
+    nights = set()
+    for filename in glob.glob(os.path.join(dirname, prefix + '*' + suffix)):
+        night = os.path.basename(filename)[len(prefix):len(os.path.basename(filename)) - len(suffix)]
+        if night.isdigit() and len(night) == 8:
+            nights.add(int(night))
+    return nights
+
+
+def _nights_with_exposures_dir():
+    """Return the nights with an exposures/{NIGHT} directory.
+
+    A night's exposures directory is created when its science processing
+    runs (darknight preprocessing of dark calibrations does not create one).
+
+    Returns:
+        set of int: YYYYMMDD nights.
+    """
+    nights = set()
+    for dirname in glob.glob(os.path.join(specprod_root(), 'exposures', '*')):
+        basename = os.path.basename(dirname)
+        if basename.isdigit() and len(basename) == 8:
+            nights.add(int(basename))
+    return nights
+
+
+def find_production_nights(night_dirs=None):
+    """Return the nights the production has started processing.
+
+    These are the nights with a processing table, plus nights with an
+    exposures directory for productions or nights without processing tables
+    (e.g. loa, or daily before 2021).  Nights that only have an exposure
+    table are excluded.  Processing tables can exist for nights that haven't
+    been processed yet (e.g. darknight calibrations for surrounding nights);
+    _skip_unprocessed_nights() handles those.
+
+    Args:
+        night_dirs: Optional set of nights with an exposures directory, from
+            _nights_with_exposures_dir(), to avoid listing it twice.
 
     Returns:
         list of int: sorted YYYYMMDD nights.
     """
     log = get_logger()
-    exposures_dir = os.path.join(specprod_root(), 'exposures')
-    nights = []
-    for dirname in sorted(glob.glob(os.path.join(exposures_dir, '*'))):
-        basename = os.path.basename(dirname)
-        if basename.isdigit() and len(basename) == 8:
-            nights.append(int(basename))
+    if night_dirs is None:
+        night_dirs = _nights_with_exposures_dir()
+    nights = _nights_from_files(findfile('processing_table', night=99999999, readonly=True)) | set(night_dirs)
     if not nights:
-        log.warning('No night directories found in {}'.format(exposures_dir))
-    return nights
+        log.warning('No processing tables or night directories found in {}'.format(specprod_root()))
+    return sorted(nights)
+
+
+def _skip_unprocessed_nights(good_expids, bad_expids, night_dirs):
+    """Drop the exposures of nights that have not been processed yet.
+
+    A night without an exposures directory but with expected (good)
+    exposures has not been processed yet: all of its exposures, expected and
+    bad, are skipped, so no rows are written or removed for them.  Nights with
+    an exposures directory are processed normally, and nights with only bad
+    exposures (which never get an exposures directory) keep their bad
+    exposures.
+
+    Args:
+        good_expids: list of dict from collect_science_expids().
+        bad_expids: list of dict from collect_science_expids().
+        night_dirs: set of int, nights with an exposures directory.
+
+    Returns:
+        tuple: (good_expids, bad_expids) without the skipped exposures.
+    """
+    log = get_logger()
+    unprocessed = set(int(e['NIGHT']) for e in good_expids) - set(night_dirs)
+    for night in sorted(unprocessed):
+        ngood = sum(int(e['NIGHT']) == night for e in good_expids)
+        nbad = sum(int(e['NIGHT']) == night for e in bad_expids)
+        log.info('Night {} has no exposures directory; skipping its {} expected and {} bad exposures '
+                 '(not yet processed)'.format(night, ngood, nbad))
+    good_expids = [e for e in good_expids if int(e['NIGHT']) not in unprocessed]
+    bad_expids = [e for e in bad_expids if int(e['NIGHT']) not in unprocessed]
+    return good_expids, bad_expids
+
+
+def select_nights(nights_arg, available):
+    """Return the requested nights that the production has started processing.
+
+    Ranges such as 20201214:20260416 are expanded as integers, which includes
+    many values that are not dates; only nights in available are kept.
+
+    Args:
+        nights_arg: str, the --nights value: comma-separated nights and
+            ranges (":", ".." or "-"), with the range end included.
+        available: list of int, nights from find_production_nights().
+
+    Returns:
+        tuple: (nights, missing), sorted lists of int.  missing holds the
+        nights listed individually (not as part of a range) that are not
+        available, so that typos can be reported.
+    """
+    available = set(available)
+    requested = set(int(night) for night in parse_int_args(nights_arg, include_end=True))
+    explicit = set(int(token) for token in str(nights_arg).split(',') if token.strip().isdigit())
+    nights = sorted(requested & available)
+    missing = sorted(explicit - available)
+    return nights, missing
 
 
 def collect_science_expids(nights=None, expids=None):
@@ -540,7 +639,7 @@ def collect_science_expids(nights=None, expids=None):
     bad-exposure entries (LASTSTEP != 'all', TILEID > 0) for zero-filling.
 
     Args:
-        nights: list of int, optional. If None, use find_processed_nights().
+        nights: list of int, optional. If None, use find_production_nights().
         expids: list of int, optional. Filter to these EXPIDs if given.
 
     Returns:
@@ -553,7 +652,7 @@ def collect_science_expids(nights=None, expids=None):
     log = get_logger()
 
     if nights is None:
-        nights = find_processed_nights()
+        nights = find_production_nights()
 
     good_expids = []
     bad_expids = []
@@ -1805,13 +1904,24 @@ def main(options=None):
             log.warning('mpi4py not available; running without MPI')
 
     # -- determine nights ---------------------------------------------------
-    if args.nights is None:
-        all_nights = find_processed_nights() if rank == 0 else []
-    else:
-        all_nights = parse_int_args(args.nights, include_end=True) if rank == 0 else []
+    # Only nights the production has started processing are considered, so a
+    # range such as 20201214:20260416 doesn't look up tens of thousands of
+    # non-dates, and unprocessed nights of a partial production are skipped.
+    all_nights = []
+    night_dirs = set()
+    if rank == 0:
+        night_dirs = _nights_with_exposures_dir()
+        available = find_production_nights(night_dirs)
+        if args.nights is None:
+            all_nights = available
+        else:
+            all_nights, missing = select_nights(args.nights, available)
+            if missing:
+                log.warning('No processing table or exposures directory for requested nights {}'.format(missing))
+        log.info('Processing {} nights'.format(len(all_nights)))
 
     if comm is not None:
-        all_nights = comm.bcast(all_nights, root=0)
+        all_nights, night_dirs = comm.bcast((all_nights, night_dirs), root=0)
 
     # each rank processes a slice of nights
     ranknights = all_nights[rank::size]
@@ -1880,6 +1990,7 @@ def main(options=None):
 
     # -- collect exposures --------------------------------------------------
     good_expids, bad_expids = collect_science_expids(ranknights, expids_filter)
+    good_expids, bad_expids = _skip_unprocessed_nights(good_expids, bad_expids, night_dirs)
 
     if not good_expids:
         log.warning('No good science exposures found for rank {}'.format(rank))
