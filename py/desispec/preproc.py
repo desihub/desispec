@@ -1089,11 +1089,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
     for amp in amp_ids:
 
-        # Aren't they the same thing???
+        # use_overscan_row controls the ORSEC overscan row subtraction, while
+        # no_overscan_per_row disables the per-row overscan column subtraction
         use_overscan_row = use_overscan_row_orig
         no_overscan_per_row = no_overscan_per_row_orig
 
-        if cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}'):
+        # GOODBIASSEC covers fewer rows than the active area, so only use an average overscan
+        use_goodbiassec = cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}')
+        if use_goodbiassec:
             use_overscan_row = False
             no_overscan_per_row = True
 
@@ -1202,7 +1205,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         # find rows impacted by a large cosmic charge deposit
         badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col, reading_to_the_left = reading_to_the_left)
 
-        if use_overscan_row:
+        if not use_goodbiassec:
             # also mask overscan rows that are entirely masked in the active region
             masked_rows = find_masked_rows(mask, header, amp)
             num_masked_rows = np.sum(masked_rows)
@@ -1229,7 +1232,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         average_read_noise = 0.
 
-        if overscan_step < 2 or no_overscan_per_row or (not use_overscan_row):  # tuned to trig on the worst few
+        per_row_overscan = (overscan_step >= 2) and (not no_overscan_per_row)  # tuned to trig on the worst few
+        if not per_row_overscan:
             log.info(f"Camera {camera} amp {amp} subtracting average overscan")
             average_overscan, average_read_noise = calc_overscan(raw_overscan_col)
             # replace by single value
@@ -1341,7 +1345,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         data = rawimage[jj].copy()
         # Subtract columns
-        if use_overscan_row:
+        if per_row_overscan:
             for k in range(nrows):
                 data[k] -= overscan_col[k]
         else:
