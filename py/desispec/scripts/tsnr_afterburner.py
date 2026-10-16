@@ -27,7 +27,7 @@ from pathlib import Path
 import fitsio
 import numpy as np
 import astropy.io.fits as fits
-from astropy.table import Table, vstack
+from astropy.table import MaskedColumn, Table, vstack
 
 from desiutil.log import get_logger
 
@@ -1101,9 +1101,7 @@ def build_tables(exposure_rows, camword_map):
         ii = np.argsort(exposures_table['EXPID'])
         exposures_table = exposures_table[ii]
     if len(frames_table) > 0:
-        sort_keys = ['{:08d}-{}'.format(int(e), c) for e, c in
-                     zip(frames_table['EXPID'], frames_table['CAMERA'])]
-        ii = np.argsort(sort_keys)
+        ii = np.argsort(_frame_codes(frames_table)[0], kind='stable')
         frames_table = frames_table[ii]
 
     return frames_table, exposures_table
@@ -1342,6 +1340,8 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
     # Table.add_row copies every column, which is slow on large tables.
     exp_rows = []
     frame_rows = []
+    exp_defaults = {col: _get_default_for_col(exposures_table, col) for col in exposures_table.colnames}
+    frame_defaults = {col: _get_default_for_col(frames_table, col) for col in frames_table.colnames}
     for be in bad_expids:
         expid = int(be['EXPID'])
         if expid in existing_expids:
@@ -1398,8 +1398,7 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
         entry = _add_gfa_zero_cols(entry)
 
         # -- EXPOSURES row ----------------------------------------------------
-        exp_rows.append([entry.get(col, _get_default_for_col(exposures_table, col))
-                         for col in exposures_table.colnames])
+        exp_rows.append([entry.get(col, exp_defaults[col]) for col in exposures_table.colnames])
         if be.get('LASTSTEP', '') == 'all' and be.get('CAMWORD') != be.get('BADCAMWORD'):
             log.warning('Adding zeroed row for an expected exposure with no outputs: EXPID={}'.format(expid))
         else:
@@ -1415,8 +1414,7 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
 
         for cam in active_cameras:
             entry['CAMERA'] = cam
-            frame_rows.append([entry.get(col, _get_default_for_col(frames_table, col))
-                               for col in frames_table.colnames])
+            frame_rows.append([entry.get(col, frame_defaults[col]) for col in frames_table.colnames])
 
     exposures_table = _append_rows(exposures_table, exp_rows)
     frames_table = _append_rows(frames_table, frame_rows)
@@ -1593,6 +1591,54 @@ def add_gfa_efftimes(exposures_table):
 # Merge with pre-existing output
 # ---------------------------------------------------------------------------
 
+def _frame_codes(*tables):
+    """Return integer (EXPID, CAMERA) codes for FRAMES tables.
+
+    The codes identify the same (EXPID, CAMERA) pair across all the given
+    tables, and sort in the same order as (EXPID, CAMERA) themselves, since
+    camera names are numbered in sorted order.  They replace per-row
+    '{expid:08d}-{camera}' strings, which are slow to build for large tables.
+
+    Args:
+        *tables: astropy.table.Table objects with EXPID and CAMERA columns.
+
+    Returns:
+        list of np.ndarray of int64, one per table.
+    """
+    cameras = [np.asarray(table['CAMERA']).astype(str) for table in tables]
+    _, inverse = np.unique(np.concatenate(cameras), return_inverse=True)
+    ncameras = max(int(inverse.max()) + 1, 1) if len(inverse) else 1
+    codes = []
+    start = 0
+    for table, camera in zip(tables, cameras):
+        code = inverse[start:start + len(camera)].astype(np.int64)
+        codes.append(np.asarray(table['EXPID'], dtype=np.int64) * ncameras + code)
+        start += len(camera)
+    return codes
+
+
+def _last_match(keys, lookup):
+    """Return indices into keys of the last occurrence of each lookup value.
+
+    Args:
+        keys: np.ndarray of values to search.
+        lookup: np.ndarray of values to find.
+
+    Returns:
+        tuple: (found, index), a boolean array over lookup and, where found,
+        the index in keys of the last matching element (as a dict built by
+        enumerating keys would give).
+    """
+    order = np.argsort(keys, kind='stable')
+    sorted_keys = keys[order]
+    pos = np.searchsorted(sorted_keys, lookup, side='right') - 1
+    found = pos >= 0
+    found[found] = sorted_keys[pos[found]] == lookup[found]
+    index = np.zeros(len(lookup), dtype=np.int64)
+    index[found] = order[pos[found]]
+    return found, index
+
+
 def _keep_string_widths(merged, existing_table):
     """Return merged with the string column widths of existing_table.
 
@@ -1617,8 +1663,10 @@ def _keep_string_widths(merged, existing_table):
         if existing_table[col].dtype.kind == 'U':
             width //= 4
         values = np.asarray(merged[col]).astype(str)
-        longest = max((len(value) for value in values), default=0)
-        merged[col] = values.astype('U{}'.format(max(width, longest)))
+        longest = int(np.char.str_len(values).max()) if len(values) else 0
+        target = 'U{}'.format(max(width, longest))
+        if values.dtype != np.dtype(target) or merged[col].dtype.kind != 'U':
+            merged[col] = values.astype(target)
     return merged
 
 
@@ -1640,14 +1688,15 @@ def merge_exposures(existing_table, new_table):
 
     existing_table = existing_table.copy()
     new_table = new_table.copy()
-    existing_indices = {int(expid): i for i, expid in enumerate(existing_table['EXPID'])}
+    found, source = _last_match(np.asarray(existing_table['EXPID'], dtype=np.int64),
+                                np.asarray(new_table['EXPID'], dtype=np.int64))
+    target = np.where(found)[0]
     for col in existing_table.colnames:
         if col.endswith('_GFA'):
             if col not in new_table.colnames:
                 new_table[col] = np.zeros(len(new_table), dtype=existing_table[col].dtype)
-            for j, expid in enumerate(new_table['EXPID']):
-                if int(expid) in existing_indices:
-                    new_table[col][j] = existing_table[col][existing_indices[int(expid)]]
+            if len(target):
+                new_table[col][target] = existing_table[col][source[found]]
 
     existing_expids = set(existing_table['EXPID'].tolist())
     new_expids = set(new_table['EXPID'].tolist())
@@ -1694,20 +1743,16 @@ def merge_frames(existing_table, new_table, replace_expids=None, cameras=None):
     existing_table = existing_table.copy()
     new_table = new_table.copy()
 
-    def _joint_key(table):
-        return ['{:08d}-{}'.format(int(e), c) for e, c in zip(table['EXPID'], table['CAMERA'])]
-
-    existing_keys = set(_joint_key(existing_table))
-    new_keys = set(_joint_key(new_table))
-    replace_count = len(existing_keys & new_keys)
-    keep_count = len(existing_keys - new_keys)
-    add_count = len(new_keys - existing_keys)
+    existing_codes, new_codes = _frame_codes(existing_table, new_table)
+    existing_keys = np.unique(existing_codes)
+    new_keys = np.unique(new_codes)
+    replace_count = len(np.intersect1d(existing_keys, new_keys, assume_unique=True))
+    keep_count = len(existing_keys) - replace_count
+    add_count = len(new_keys) - replace_count
 
     log.info('FRAMES merge: keep={}, replace={}, add={}'.format(keep_count, replace_count, add_count))
 
-    new_key_arr = np.array(list(new_keys))
-    existing_key_arr = np.array(_joint_key(existing_table))
-    keep_mask = ~np.isin(existing_key_arr, new_key_arr)
+    keep_mask = ~np.isin(existing_codes, new_keys)
     if replace_expids is not None:
         replace = np.isin(existing_table['EXPID'], list(replace_expids))
         if cameras is not None:
@@ -1719,11 +1764,16 @@ def merge_frames(existing_table, new_table, replace_expids=None, cameras=None):
     if 'TSNR2_ALPHA' in existing_table.colnames:
         if 'TSNR2_ALPHA' not in new_table.colnames:
             new_table['TSNR2_ALPHA'] = np.full(len(new_table), np.nan, dtype=np.float32)
-        indices = {key: i for i, key in enumerate(_joint_key(existing_table))}
-        for j, key in enumerate(_joint_key(new_table)):
-            value = new_table['TSNR2_ALPHA'][j]
-            if key in indices and (np.ma.is_masked(value) or not np.isfinite(value)):
-                new_table['TSNR2_ALPHA'][j] = existing_table['TSNR2_ALPHA'][indices[key]]
+        found, source = _last_match(existing_codes, new_codes)
+        alpha = new_table['TSNR2_ALPHA']
+        missing = np.ma.getmaskarray(alpha) | ~np.isfinite(np.ma.getdata(alpha))
+        target = np.where(found & missing)[0]
+        if len(target):
+            values = existing_table['TSNR2_ALPHA'][source[target]]
+            if not isinstance(alpha, MaskedColumn):
+                # as with element-wise assignment, masked values become NaN
+                values = np.ma.filled(np.ma.asarray(values), np.nan)
+            new_table['TSNR2_ALPHA'][target] = values
 
     for col in new_table.colnames:
         if col not in existing_table.colnames:
@@ -1737,8 +1787,8 @@ def merge_frames(existing_table, new_table, replace_expids=None, cameras=None):
 
     merged = _keep_string_widths(merged, existing_table)
     merged.meta['EXTNAME'] = 'FRAMES'
-    sort_keys = np.array(_joint_key(merged))
-    ii = np.argsort(sort_keys)
+    # same order as sorting by '{expid:08d}-{camera}'
+    ii = np.argsort(_frame_codes(merged)[0], kind='stable')
     return merged[ii]
 
 
@@ -1754,24 +1804,47 @@ def update_exposure_tsnr(exposures_table, frames_table, expids):
         Table: Copy of exposures_table with consistent TSNR2 and effective times.
     """
     result = exposures_table.copy()
+    selected = sorted(set(int(expid) for expid in expids))
+    if not selected:
+        return result
     indices = {int(expid): i for i, expid in enumerate(result['EXPID'])}
-    groups = {}
-    selected = set(expids)
-    for frame in frames_table[np.isin(frames_table['EXPID'], list(selected))]:
-        expid = int(frame['EXPID'])
-        groups.setdefault(expid, {}).setdefault(int(frame['CAMERA'][1]), []).append(frame)
-    for expid in selected:
+
+    # Group the selected exposures' frames by (EXPID, petal).  Each petal sum
+    # is accumulated frame by frame in table order from 0 (np.add.at applies
+    # values in order, like Python's sum), and petals are averaged in the
+    # order they first appear, so the results match a row-by-row loop exactly.
+    in_selected = np.isin(np.asarray(frames_table['EXPID'], dtype=np.int64), selected)
+    frame_expids = np.asarray(frames_table['EXPID'], dtype=np.int64)[in_selected]
+    cameras = np.asarray(frames_table['CAMERA']).astype(str)[in_selected]
+    frame_petals = np.array([int(camera[1]) for camera in cameras], dtype=np.int64)
+    group_keys, first_index, inverse = np.unique(frame_expids * 10 + frame_petals,
+                                                 return_index=True, return_inverse=True)
+    group_expids = group_keys // 10
+    order = np.lexsort((first_index, group_expids))
+    starts = np.searchsorted(group_expids[order], selected, side='left')
+    ends = np.searchsorted(group_expids[order], selected, side='right')
+
+    sums = {}
+    for tracer in _TSNR2_TRACERS:
+        values = np.ma.filled(np.ma.asarray(frames_table['TSNR2_' + tracer])[in_selected], 0.0)
+        petal_sums = np.zeros(len(group_keys), dtype=np.float64)
+        np.add.at(petal_sums, inverse, np.asarray(values, dtype=np.float64))
+        sums[tracer] = petal_sums[order]
+
+    rows = []
+    for expid, start, end in zip(selected, starts, ends):
         i = indices[expid]
-        row = dict(result[i])
-        petals = groups.get(expid, {})
+        row = {'NIGHT': result['NIGHT'][i], 'GOALTYPE': result['GOALTYPE'][i]}
         for tracer in _TSNR2_TRACERS:
-            col = 'TSNR2_' + tracer
-            sums = [sum(float(frame[col]) for frame in frames) for frames in petals.values()]
-            row[col] = _tsnr2_value(tracer, np.mean(sums) if sums else 0.0)
-        row = _add_efftimes(row)
-        for col in result.colnames:
-            if col.startswith('TSNR2_') or ('EFFTIME' in col and not col.endswith(('_GFA', '_ETC'))):
-                result[col][i] = row[col]
+            petal_sums = sums[tracer][start:end]
+            row['TSNR2_' + tracer] = _tsnr2_value(tracer, np.mean(petal_sums) if end > start else 0.0)
+        rows.append((i, _add_efftimes(row)))
+
+    for col in result.colnames:
+        if col.startswith('TSNR2_') or ('EFFTIME' in col and not col.endswith(('_GFA', '_ETC'))):
+            updated = [(i, row[col]) for i, row in rows if col in row]
+            if updated:
+                result[col][[i for i, _ in updated]] = [value for _, value in updated]
     return result
 
 
@@ -2185,15 +2258,24 @@ def main(options=None):
         new_tile_table.write(head + '.csv', format='ascii.csv', overwrite=True)
         log.info('Wrote tile completeness to {}'.format(head + '.fits'))
 
-        # propagate any GOALTIME updates from tile table back to exposure tables
-        for tileid, goaltime in zip(new_tile_table['TILEID'], new_tile_table['GOALTIME']):
-            if goaltime > 0.0:
-                ii = exposures_table['TILEID'] == tileid
-                if np.any(exposures_table['GOALTIME'][ii] == 0.0):
-                    exposures_table['GOALTIME'][ii] = goaltime
-                jj = frames_table['TILEID'] == tileid
-                if np.any(frames_table['GOALTIME'][jj] == 0.0):
-                    frames_table['GOALTIME'][jj] = goaltime
+        # propagate any GOALTIME updates from tile table back to exposure
+        # tables: for each tile with GOALTIME > 0 (the first such entry if a
+        # tile were listed twice), set every row of the tile if any row has
+        # GOALTIME == 0
+        goaltimes = np.asarray(new_tile_table['GOALTIME'], dtype=float)
+        positive = goaltimes > 0.0
+        tile_ids, first = np.unique(np.asarray(new_tile_table['TILEID'])[positive], return_index=True)
+        tile_goaltimes = goaltimes[positive][first]
+        for table in (exposures_table, frames_table):
+            if len(table) == 0 or len(tile_ids) == 0:
+                continue
+            table_tiles = np.asarray(table['TILEID'])
+            zero_tiles = np.unique(table_tiles[np.asarray(table['GOALTIME']) == 0.0])
+            update = np.isin(tile_ids, zero_tiles)
+            rows = np.where(np.isin(table_tiles, tile_ids[update]))[0]
+            if len(rows):
+                position = np.searchsorted(tile_ids[update], table_tiles[rows])
+                table['GOALTIME'][rows] = tile_goaltimes[update][position]
 
     # -- write final output -------------------------------------------------
     write_output(exposures_table, frames_table, args.outfile)

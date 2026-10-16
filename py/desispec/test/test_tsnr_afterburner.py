@@ -1148,6 +1148,67 @@ class TestAppendRows(unittest.TestCase):
         self.assertIs(_append_rows(table, []), table)
 
 
+class TestFrameKeys(unittest.TestCase):
+    """Test the integer (EXPID, CAMERA) keys and lookups used in merging."""
+
+    def test_codes_match_string_key_order(self):
+        from desispec.scripts.tsnr_afterburner import _frame_codes
+        a = Table({'EXPID': np.array([200, 100, 100, 99], dtype=np.int32),
+                   'CAMERA': np.array(['b0', 'z9', 'b1', 'r3'])})
+        b = Table({'EXPID': np.array([100], dtype=np.int32), 'CAMERA': np.array(['z9'])})
+        codes_a, codes_b = _frame_codes(a, b)
+        strings = ['{:08d}-{}'.format(e, c) for e, c in zip(a['EXPID'], a['CAMERA'])]
+        self.assertEqual(list(np.argsort(codes_a, kind='stable')), list(np.argsort(strings)))
+        self.assertEqual(codes_b[0], codes_a[1])
+
+    def test_last_match_takes_last_occurrence(self):
+        from desispec.scripts.tsnr_afterburner import _last_match
+        found, index = _last_match(np.array([5, 3, 5, 9]), np.array([5, 4, 9]))
+        self.assertEqual(found.tolist(), [True, False, True])
+        self.assertEqual(index[found].tolist(), [2, 3])
+
+    def test_alpha_from_masked_existing_becomes_nan(self):
+        """A masked existing alpha copied into a plain column becomes NaN, as element assignment did."""
+        from astropy.table import MaskedColumn
+        existing = Table({'EXPID': np.array([1, 1], dtype=np.int32), 'CAMERA': np.array(['b0', 'r0']),
+                          'TSNR2_ALPHA': MaskedColumn(np.array([1.5, 2.5], dtype=np.float32),
+                                                      mask=[False, True])})
+        new = Table({'EXPID': np.array([1, 1], dtype=np.int32), 'CAMERA': np.array(['b0', 'r0']),
+                     'TSNR2_ALPHA': np.array([np.nan, np.nan], dtype=np.float32)})
+        merged = merge_frames(existing, new)
+        alpha = np.ma.filled(np.ma.asarray(merged['TSNR2_ALPHA']), -1.0)
+        self.assertEqual(alpha[0], np.float32(1.5))
+        self.assertTrue(np.isnan(alpha[1]))
+
+
+class TestUpdateExposureTsnr(unittest.TestCase):
+    """update_exposure_tsnr() sums bands per petal and averages over petals."""
+
+    def test_sum_over_bands_mean_over_petals(self):
+        from desispec.scripts.tsnr_afterburner import update_exposure_tsnr
+        exposures = _make_exposure_row(expid=10)
+        rows = build_tables([exposures], camword_map={10: ['b0', 'r0', 'z0', 'b1']})[1]
+        frames = Table({'EXPID': np.array([10, 10, 10, 10], dtype=np.int32),
+                        'CAMERA': np.array(['b0', 'r0', 'z0', 'b1'])})
+        for tracer in _TSNR2_TRACERS:
+            frames['TSNR2_' + tracer] = np.array([1., 2., 3., 10.], dtype=np.float32)
+        with patch('desispec.scripts.tsnr_afterburner.tsnr2_to_efftime', side_effect=_mock_tsnr2_to_efftime):
+            result = update_exposure_tsnr(rows, frames, [10])
+        # petal 0: 1 + 2 + 3 = 6; petal 1: 10; mean 8
+        self.assertEqual(float(result['TSNR2_ELG'][0]), 8.0)
+        self.assertEqual(float(result['TSNR2_LYA'][0]), 8.0)
+
+    def test_expid_without_frames_gets_zero(self):
+        from desispec.scripts.tsnr_afterburner import update_exposure_tsnr
+        rows = build_tables([_make_exposure_row(expid=10)], camword_map={10: ['b0']})[1]
+        frames = Table({'EXPID': np.array([], dtype=np.int32), 'CAMERA': np.array([], dtype='U2')})
+        for tracer in _TSNR2_TRACERS:
+            frames['TSNR2_' + tracer] = np.array([], dtype=np.float32)
+        with patch('desispec.scripts.tsnr_afterburner.tsnr2_to_efftime', side_effect=_mock_tsnr2_to_efftime):
+            result = update_exposure_tsnr(rows, frames, [10])
+        self.assertEqual(float(result['TSNR2_ELG'][0]), 0.0)
+
+
 class TestKeepStringWidths(unittest.TestCase):
     """Merging must not widen stored string columns unnecessarily."""
 
