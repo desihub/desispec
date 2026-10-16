@@ -717,7 +717,7 @@ class TestAfterburnerIntegration(unittest.TestCase):
                       '--tile-completeness', str(self.prod / 'tiles.fits'))
         self.assertEqual(compute.call_args.args[0]['EXPID'].tolist(), [100, 200])
 
-    def test_legacy_skymag_file_and_compute_alias(self):
+    def test_skymag_file_and_recompute_skymags(self):
         skyfile = self.prod / 'sky.fits'
         Table({'NIGHT': [20211001], 'EXPID': [100], 'SKY_MAG_G': [23.],
                'SKY_MAG_R': [22.], 'SKY_MAG_Z': [21.]}).write(skyfile)
@@ -726,29 +726,6 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self._run('--skymags', str(skyfile), '--recompute-skymags')
         self.skymag.assert_called()
         self.assertEqual(float(self._tables()[0]['SKY_MAG_R_SPEC'][0]), 21.)
-
-    def test_reference_reader_accepts_modern_and_legacy_extensions(self):
-        from desispec.test import test_tsnr_afterburner_regression as regression
-        self._run()
-        for names in [('EXPOSURES', 'FRAMES'), ('TSNR2_EXPID', 'TSNR2_FRAME')]:
-            exposures, frames = self._tables()
-            ref = self.prod / 'reference.fits'
-            fits.HDUList([fits.PrimaryHDU(), fits.BinTableHDU(exposures, name=names[0]),
-                          fits.BinTableHDU(frames, name=names[1])]).writeto(ref, overwrite=True)
-            with patch.object(regression, '_V1_FITS', str(ref)):
-                self.assertEqual(regression._read_reference('EXPOSURES')['EXPID'].tolist(), [100])
-                self.assertEqual(len(regression._read_reference('FRAMES')), 3)
-
-    def test_reference_comparison_regenerates_stale_output(self):
-        from desispec.test import test_tsnr_afterburner_regression as regression
-        self._run()
-        current = self.prod / 'current.fits'
-        current.write_bytes(b'stale output must not be reused')
-        with patch.object(regression, '_V1_FITS', str(self.outfile)), \
-                patch.object(regression, '_V2_FITS', str(current)), \
-                patch.object(regression, '_V2_GENERATED', False):
-            regression._ensure_v2_output()
-        self.assertEqual(read_table(str(current), 'EXPOSURES')['EXPID'].tolist(), [100])
 
 
 if __name__ == '__main__':

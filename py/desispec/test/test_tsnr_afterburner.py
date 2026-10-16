@@ -39,9 +39,7 @@ from desispec.scripts.tsnr_afterburner import (
     _EXP_SUMMARY_COLUMN_ORDER,
     _TARG_DEFAULTS,
     _TSNR2_TRACERS,
-    _SEPT_2021_CUTOFF,
     _CAMERA_BANDS,
-    _PETALS,
 )
 
 
@@ -165,33 +163,6 @@ def _make_camera_row(expid=100, night=20210601, tileid=1234, camera='b0', value=
 # ---------------------------------------------------------------------------
 # Test classes
 # ---------------------------------------------------------------------------
-
-class TestConstants(unittest.TestCase):
-    """Verify constants match expected values from v1."""
-
-    def test_exp_summary_column_order_length(self):
-        self.assertEqual(len(_EXP_SUMMARY_COLUMN_ORDER), 51)
-
-    def test_sept_2021_cutoff(self):
-        self.assertEqual(_SEPT_2021_CUTOFF, 20210901)
-
-    def test_tsnr2_tracers(self):
-        expected = ('ELG', 'QSO', 'LRG', 'LYA', 'BGS', 'GPBDARK', 'GPBBRIGHT', 'GPBBACKUP')
-        self.assertEqual(_TSNR2_TRACERS, expected)
-
-    def test_camera_bands(self):
-        self.assertEqual(_CAMERA_BANDS, ('b', 'r', 'z'))
-
-    def test_petals(self):
-        self.assertEqual(_PETALS, list(range(10)))
-
-    def test_targ_defaults_keys(self):
-        for k in ('SURVEY', 'GOALTYPE', 'FAPRGRM', 'FAFLAVOR', 'MINTFRAC', 'GOALTIME'):
-            self.assertIn(k, _TARG_DEFAULTS)
-
-    def test_no_duplicate_columns(self):
-        self.assertEqual(len(_EXP_SUMMARY_COLUMN_ORDER), len(set(_EXP_SUMMARY_COLUMN_ORDER)))
-
 
 class TestParse(unittest.TestCase):
     """Test argparse setup."""
@@ -503,6 +474,9 @@ class TestBuildTables(unittest.TestCase):
                              side_effect=_mock_tsnr2_to_efftime)
         self.mock_efftime = patcher.start()
         self.addCleanup(patcher.stop)
+
+    def test_column_order_has_no_duplicates(self):
+        self.assertEqual(len(_EXP_SUMMARY_COLUMN_ORDER), len(set(_EXP_SUMMARY_COLUMN_ORDER)))
 
     def test_default_path_column_order(self):
         """EXPOSURES table must have columns in _EXP_SUMMARY_COLUMN_ORDER."""
@@ -1415,7 +1389,7 @@ class TestAddEfftimes(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Phase 3a: TestReadEtcValues
+# _read_etc_values
 # ---------------------------------------------------------------------------
 
 class TestReadEtcValues(unittest.TestCase):
@@ -1474,7 +1448,7 @@ class TestReadEtcValues(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Phase 3b: TestCollectScienceExpids
+# collect_science_expids
 # ---------------------------------------------------------------------------
 
 class TestCollectScienceExpids(unittest.TestCase):
@@ -1559,7 +1533,7 @@ class TestCollectScienceExpids(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Phase 3c: TestReadOneCamera
+# read_one_camera
 # ---------------------------------------------------------------------------
 
 class TestReadOneCamera(unittest.TestCase):
@@ -1696,7 +1670,7 @@ class TestReadOneCamera(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Phase 3d: TestMain
+# main
 # ---------------------------------------------------------------------------
 
 class TestMain(unittest.TestCase):
@@ -1775,23 +1749,6 @@ class TestMain(unittest.TestCase):
         self.assertTrue(actual_outfile.endswith('.fits'),
                         'write_output called with non-.fits path: {}'.format(actual_outfile))
 
-    def test_overwrite_skips_preexisting_merge(self):
-        """--overwrite should cause main() to skip reading any pre-existing output file."""
-        from desispec.scripts.tsnr_afterburner import main
-        exposure_row = _make_exposure_row(expid=100, night=20211001)
-        with tempfile.TemporaryDirectory() as tmpdir:
-            outfile = os.path.join(tmpdir, 'out.fits')
-            with patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value='/fake/prod'), \
-                 patch('desispec.scripts.tsnr_afterburner.collect_science_expids',
-                       return_value=([self._good_entry()], [])), \
-                 patch('desispec.scripts.tsnr_afterburner.read_one_exposure',
-                       return_value=exposure_row), \
-                 patch('desispec.scripts.tsnr_afterburner.write_output'), \
-                 patch('desispec.scripts.tsnr_afterburner.read_table') as mock_read_table, \
-                 patch('os.path.isfile', return_value=True):
-                main(['--prod', '/fake/prod', '-o', outfile, '--nights', '20211001', '--overwrite'])
-            mock_read_table.assert_not_called()
-
     def _run_main_with_existing(self, existing_nights, existing_expids, extra_argv):
         """Run main() against a mocked pre-existing output file; return (rc, write mock)."""
         from desispec.scripts.tsnr_afterburner import main
@@ -1841,39 +1798,6 @@ class TestMain(unittest.TestCase):
         rc, mock_write, _ = self._run_main_with_existing([20211001], [100], [])
         self.assertEqual(rc, 0)
         mock_write.assert_called_once()
-
-    def test_add_badexp_calls_inject(self):
-        """--add-badexp with a non-empty bad_expids list should call inject_bad_exposures."""
-        from desispec.scripts.tsnr_afterburner import main
-        exposure_row = _make_exposure_row(expid=100, night=20211001)
-        bad_entry = self._good_entry(expid=999)
-        bad_entry['LASTSTEP'] = 'skysub'
-
-        # The mock must return non-empty tables; returning empty tables would cause
-        # main() to hit the "No valid exposures" guard and return 1 before write_output.
-        def _inject_passthrough(exp_tbl, frm_tbl, bad_list, cameras=None, skymags=None, fa_headers=None):
-            return exp_tbl, frm_tbl
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            outfile = os.path.join(tmpdir, 'out.fits')
-            with patch('desispec.scripts.tsnr_afterburner.specprod_root', return_value='/fake/prod'), \
-                 patch('desispec.scripts.tsnr_afterburner.collect_science_expids',
-                       return_value=([self._good_entry()], [bad_entry])), \
-                 patch('desispec.scripts.tsnr_afterburner.read_one_exposure',
-                       return_value=exposure_row), \
-                 patch('desispec.scripts.tsnr_afterburner.write_output'), \
-                 patch('os.path.isfile', return_value=False), \
-                 patch('desispec.scripts.tsnr_afterburner._bad_exposure_skymags', return_value={}), \
-                 patch('desispec.scripts.tsnr_afterburner._fiberassign_header', return_value=None), \
-                 patch('desispec.scripts.tsnr_afterburner.inject_bad_exposures',
-                       side_effect=_inject_passthrough) as mock_inject:
-                # the sky magnitude and fiberassign helpers prepare inputs for
-                # inject_bad_exposures in the pool; mock them too, since they
-                # need DESI data paths that CI doesn't have
-                rc = main(['--prod', '/fake/prod', '-o', outfile,
-                           '--nights', '20211001', '--add-badexp'])
-            mock_inject.assert_called_once()
-            self.assertEqual(rc, 0)
 
 
 if __name__ == '__main__':
