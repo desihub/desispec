@@ -19,7 +19,7 @@ import specter.psf
 from desispec.calibfinder import findcalibfile,CalibFinder
 from desispec.xytraceset import XYTraceSet
 from desispec.io.xytraceset import read_xytraceset
-from desispec.io import read_image
+from desispec.io import read_image, read_fibermap
 from desispec.io import shorten_filename
 from desiutil.log import get_logger
 from desispec.util import parse_int_args
@@ -549,8 +549,8 @@ def fit_trace_shifts(image, args):
 
     if args.nfibers is not None :
         nfibers = args.nfibers # FOR DEBUGGING
+        fibers = fibers[fibers < nfibers]
 
-    fibers=np.arange(nfibers)
     internal_offset_info = None
     specter_psf = None
 
@@ -564,7 +564,8 @@ def fit_trace_shifts(image, args):
         if specter_psf is None :
             specter_psf = read_specter_psf(args.psf)
 
-        x,y,dx,ex,dy,ey,fiber_xy,wave_xy=compute_dx_dy_using_psf(specter_psf,image,fibers,lines)
+        # compute_dx_dy_using_psf assumes contiguous fibers starting at 0
+        x,y,dx,ex,dy,ey,fiber_xy,wave_xy=compute_dx_dy_using_psf(specter_psf,image,np.arange(nfibers),lines)
         x_for_dx=x
         y_for_dx=y
         fiber_for_dx=fiber_xy
@@ -677,11 +678,23 @@ def fit_trace_shifts(image, args):
         # the psf is used only to convolve the input spectrum
         # the traceset of the psf is not used here
         psf = read_specter_psf(args.psf)
+        # sky fibers (if a fibermap is available) are used to estimate the
+        # sky continuum when building the median spectrum
+        sky_fibers = None
+        fibermap = getattr(image, 'fibermap', None)
+        if fibermap is not None and len(fibermap) != tset.nspec:
+            log.warning(f"fibermap has {len(fibermap)} rows for {tset.nspec} fibers, cannot identify sky fibers")
+            fibermap = None
+        if fibermap is not None and 'OBJTYPE' in fibermap.dtype.names:
+            sky_fibers = np.asarray(fibermap['FIBER'][fibermap['OBJTYPE'] == 'SKY']) % 500
         (tset.y_vs_wave_traceset._coeff,
          wave_external, dwave_external, dwave_err_external) = shift_ycoef_using_external_spectrum(psf=psf, xytraceset=tset,
                                                                              image=image, fibers=fibers,
                                                                              spectrum_filename=spectrum_filename,
-                                                                             degyy=args.degyy, width=7)
+                                                                             degyy=args.degyy, width=7,
+                                                                             sky_fibers=sky_fibers,
+                                                                             mask_sky_absorption=args.sky,
+                                                                             apply_throughput=args.sky)
         external_offset_info = dict(wave=wave_external,
                                     dwave=dwave_external,
                                     dwave_err=dwave_err_external)
@@ -725,6 +738,10 @@ def main(args=None) :
     # read preprocessed image
     image=read_image(args.image)
     log.info("read image {}".format(args.image))
+    try:
+        image.fibermap = read_fibermap(args.image)
+    except OSError:
+        log.warning("no FIBERMAP in {}, cannot identify sky fibers".format(args.image))
     if image.mask is not None :
         image.ivar *= (image.mask==0)
 
