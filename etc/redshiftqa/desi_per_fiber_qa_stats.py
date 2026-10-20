@@ -97,14 +97,14 @@ def main():
             lrgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/LRGtargetsDR9v1.1.1_lrgimask.fits')
             lrgmask = Table(fitsio.read(lrgmask_fn))
             lrgmask = lrgmask[lrgmask['lrg_mask']==0]
-            mask = np.in1d(cat['TARGETID'], lrgmask['TARGETID'])
+            mask = np.isin(cat['TARGETID'], lrgmask['TARGETID'])
             print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
             cat = cat[mask]
         elif tracer in ['ELG', 'ELG_LOP', 'ELG_VLO']:
             elgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/ELGtargetsDR9v1.1.1_elgimask.fits')
             elgmask = Table(fitsio.read(elgmask_fn))
             elgmask = elgmask[elgmask['elg_mask']==0]
-            mask = np.in1d(cat['TARGETID'], elgmask['TARGETID'])
+            mask = np.isin(cat['TARGETID'], elgmask['TARGETID'])
             print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
             cat = cat[mask]
 
@@ -144,7 +144,7 @@ def main():
 
                 for ii in range(3):  # 3 iterations
                     print('iteration', ii+1)
-                    mask = ~np.in1d(cat['FIBER'], outliers)
+                    mask = ~np.isin(cat['FIBER'], outliers)
                     if apply_good_z_cut:
                         mask &= cat[good_z_col]
                     allz = np.sort(np.array(cat[z_col][mask]))

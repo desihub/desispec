@@ -97,14 +97,14 @@ if tracer=='LRG':
     lrgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/LRGtargetsDR9v1.1.1_lrgimask.fits')
     lrgmask = Table(fitsio.read(lrgmask_fn))
     lrgmask = lrgmask[lrgmask['lrg_mask']==0]
-    mask = np.in1d(cat['TARGETID'], lrgmask['TARGETID'])
+    mask = np.isin(cat['TARGETID'], lrgmask['TARGETID'])
     print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
     cat = cat[mask]
 elif tracer in ['ELG', 'ELG_LOP', 'ELG_VLO']:
     elgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/ELGtargetsDR9v1.1.1_elgimask.fits')
     elgmask = Table(fitsio.read(elgmask_fn))
     elgmask = elgmask[elgmask['elg_mask']==0]
-    mask = np.in1d(cat['TARGETID'], elgmask['TARGETID'])
+    mask = np.isin(cat['TARGETID'], elgmask['TARGETID'])
     print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
     cat = cat[mask]
 
@@ -172,7 +172,7 @@ for apply_good_z_cut in [True, False]:
                     vmin = vmin - (vmax-vmin)*0.05
                     vmax = vmax + (vmax-vmin)*0.05
                     ax.hist(bin_size*np.digitize(cat[z_col][mask], bins=bins), bins=bins, label='single fiber', rasterized=True)
-                    mask1 = ~np.in1d(cat['FIBER'], outliers)
+                    mask1 = ~np.isin(cat['FIBER'], outliers)
                     if apply_good_z_cut:
                         mask1 &= cat[good_z_col]
                     ax.hist(bin_size*np.digitize(cat[z_col][mask1], bins=bins), bins=bins, histtype='step', weights=np.full(np.sum(mask1), np.sum(mask)/np.sum(mask1)), color='red', alpha=1., label='all good fibers', rasterized=True)
@@ -226,7 +226,7 @@ for apply_good_z_cut in [True, False]:
                 vmin = vmin - (vmax-vmin)*0.05
                 vmax = vmax + (vmax-vmin)*0.05
                 ax.hist(bin_size*np.digitize(cat[z_col][mask], bins=bins), bins=bins, label='single fiber')
-                mask1 = ~np.in1d(cat['FIBER'], outliers)
+                mask1 = ~np.isin(cat['FIBER'], outliers)
                 if apply_good_z_cut:
                     mask1 &= cat[good_z_col]
                 ax.hist(bin_size*np.digitize(cat[z_col][mask1], bins=bins), bins=bins, histtype='step', weights=np.full(np.sum(mask1), np.sum(mask)/np.sum(mask1)), color='red', alpha=1., label='all good fibers')
