@@ -132,12 +132,6 @@ bin_centers = (bins[1:]+bins[:-1])/2
 
 for apply_good_z_cut in [True, False]:
 
-    if apply_good_z_cut:
-        output_fn = os.path.join(output_dir, 'per_fiber_redshifts_{}_goodz.pdf'.format(tracer.lower()))
-    else:
-        output_fn = os.path.join(output_dir, 'per_fiber_redshifts_{}_allz.pdf'.format(tracer.lower()))
-    print(output_fn)
-
     if stats_fn is not None:
         if apply_good_z_cut:
             pvalue_col = tracer.lower()+'_ks_pvalue_goodz'
@@ -149,6 +143,13 @@ for apply_good_z_cut in [True, False]:
         outliers = []
 
     if save_pdf:
+
+        if apply_good_z_cut:
+            output_fn = os.path.join(output_dir, 'per_fiber_redshifts_{}_goodz.pdf'.format(tracer.lower()))
+        else:
+            output_fn = os.path.join(output_dir, 'per_fiber_redshifts_{}_allz.pdf'.format(tracer.lower()))
+        print(output_fn)
+
         from matplotlib.backends.backend_pdf import PdfPages
         with PdfPages(output_fn) as pdf:
             # for ii in range(1):
@@ -254,9 +255,9 @@ for apply_good_z_cut in [True, False]:
 
             return None
 
-        from multiprocessing import Pool
+        import multiprocessing
         n_process = 128
-        with Pool(processes=n_process) as pool:
+        with multiprocessing.get_context('fork').Pool(processes=n_process) as pool:
             res = pool.map(write_png, np.arange(5000), chunksize=1)
 
         print('PNGs done!', time.strftime('%H:%M:%S', time.gmtime(time.time() - time_start)))
