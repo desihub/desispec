@@ -3,9 +3,10 @@
 # This is step 1 of the redshift QA generation procedure
 # Compute the per-fiber redshift success rates and save them to disk
 
-# Usage:
-# export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desicollab/users/rongpu/tmp/zcatalog/v0.4/main
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_stats.py -i $ZCAT_MAIN_DIR -o per_fiber_qa_stats.fits
+# Example usage:
+# export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desi/spectro/redux/nevis/zcatalog/v2/main
+# export QA_DIR=/global/cfs/cdirs/desicollab/users/rongpu/redshift_qa/nevis
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_stats.py -i $ZCAT_MAIN_DIR -o $QA_DIR/per_fiber_qa_stats.fits
 
 from __future__ import division, print_function
 import sys, os, glob, time, warnings, gc
@@ -43,11 +44,11 @@ def main():
     all_stats = Table()
     all_stats['FIBER'] = np.arange(5000)
 
-    for tracer in ['LRG', 'ELG_LOP', 'ELG_VLO', 'QSO', 'BGS_BRIGHT', 'BGS_FAINT']:
+    for tracer in ['LRG', 'LGE', 'ELG_LOP', 'ELG_VLO', 'QSO', 'BGS_BRIGHT', 'BGS_FAINT']:
 
         print(tracer)
 
-        if tracer in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
+        if tracer in ['LRG', 'LGE', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
             fn = os.path.join(indir, 'ztile-main-dark-cumulative.fits')
             fn1 = os.path.join(indir, 'ztile-main-dark-cumulative-extra.fits')
             cat = Table(fitsio.read(fn, columns=['DESI_TARGET', 'FIBER', 'COADD_FIBERSTATUS', 'EFFTIME_SPEC', 'TARGETID', 'PRIORITY']))
@@ -118,7 +119,10 @@ def main():
 
         print(tracer, len(cat))
 
-        good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
+        if tracer=='LGE':
+            good_z_col = 'GOOD_Z_LRG'  # LGE and LRG share the same redshift quality cuts
+        else:
+            good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
         print(tracer, 'average failure rate', np.sum(~cat[good_z_col])/len(cat))
 
         stats = Table()

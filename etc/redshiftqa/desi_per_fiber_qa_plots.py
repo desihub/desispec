@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 
-# This is step 2 of the redshift QA generation procedure
+# This is step 3 of the redshift QA generation procedure
 # Make per-fiber per-tracer redshift QA plots
 
-# Usage:
-# export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desicollab/users/rongpu/tmp/zcatalog/v0.4/main
-# export QA_DIR=/global/cfs/cdirs/desicollab/users/rongpu/redshift_qa/new/loa
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer LRG --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_LOP --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_VLO --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer QSO --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_BRIGHT --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_FAINT --stats per_fiber_qa_stats.fits -o $QA_DIR
+# Example usage:
+# export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desi/spectro/redux/nevis/zcatalog/v2/main
+# export QA_DIR=/global/cfs/cdirs/desicollab/users/rongpu/redshift_qa/nevis
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer LRG --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer LGE --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_LOP --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_VLO --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer QSO --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_BRIGHT --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_FAINT --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
 
 from __future__ import division, print_function
 import sys, os, glob, time, warnings, gc
@@ -51,7 +52,7 @@ stats = Table(fitsio.read(stats_fn))
 
 print(tracer)
 
-if tracer in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
+if tracer in ['LRG', 'LGE', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
     fn = os.path.join(indir, 'ztile-main-dark-cumulative.fits')
     fn1 = os.path.join(indir, 'ztile-main-dark-cumulative-extra.fits')
     cat = Table(fitsio.read(fn, columns=['DESI_TARGET', 'FIBER', 'COADD_FIBERSTATUS', 'EFFTIME_SPEC', 'TARGETID', 'PRIORITY', 'LASTNIGHT']))
@@ -117,7 +118,10 @@ if tracer=='QSO':
 else:
     z_col = 'Z'
 
-good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
+if tracer=='LGE':
+    good_z_col = 'GOOD_Z_LRG'  # LGE and LRG share the same redshift quality cuts
+else:
+    good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
 print(tracer, 'average failure rate', np.sum(~cat[good_z_col])/len(cat))
 
 datemin = datetime.strptime(str(cat['LASTNIGHT'].min()), '%Y%m%d') - timedelta(days=20)
