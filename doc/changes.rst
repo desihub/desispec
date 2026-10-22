@@ -2,7 +2,7 @@
 desispec Change Log
 ===================
 
-0.72.2 (unreleased)
+0.73.4 (unreleased)
 -------------------
 
 * Rewrite ``desi_tsnr_afterburner`` as ``desispec.scripts.tsnr_afterburner``,
@@ -16,6 +16,67 @@ desispec Change Log
   (PR `#XXXX`_).
 
 .. _`#XXXX`: https://github.com/desihub/desispec/pull/XXXX
+
+0.73.3 (2026-10-14)
+-------------------
+
+* special case tile 83063 skip TARGETID check (PR `#2897`_, see `desitarget #892`_).
+
+.. _`#2897`: https://github.com/desihub/desispec/pull/2897
+.. _`desitarget #892`: https://github.com/desihub/desitarget/issues/892
+
+0.73.2 (2026-10-13)
+-------------------
+
+* Skip stucksky check if FIBER_RA/DEC=0 (PR `#2883`_).
+* Patch zcatalog TARGETID check (commit `#0e7fd54`_).
+* Improve trace shifts when one amp is masked (PR `#2887`_).
+
+.. _`#0e7fd54`: https://github.com/desihub/desispec/commit/0e7fd546a40917a0f43b2225295996d4438c5931
+.. _`#2883`: https://github.com/desihub/desispec/pull/2883
+.. _`#2887`: https://github.com/desihub/desispec/pull/2887
+
+0.73.1 (2026-10-02)
+-------------------
+
+* Add ``desi_use_reservation --deps-ok`` option to allow moving jobs into
+  reservation even if waiting on dependencies (PR `#2872`_).
+* Update trace shift peak finding to be weighted matched filter and adjust
+  detection threshold. Fixes crash of too many spots. (PRs `#2874`_, `#2875`_).
+
+.. _`#2872`: https://github.com/desihub/desispec/pull/2872
+.. _`#2874`: https://github.com/desihub/desispec/pull/2874
+.. _`#2875`: https://github.com/desihub/desispec/pull/2875
+
+0.73.0 (2026-10-02)
+-------------------
+
+First tag for Nevis / DR3 production.
+
+* Improve flux calibration around bad stdstar pixels (PR `#2871`_).
+* Revert PR `#2642`_, i.e. do not apply flux calibration updates to
+  resolution matrix (PR `#2871`_).
+* Fix dark reset end bookkeeping bug (PR `#2867`_).
+
+.. _`#2867`: https://github.com/desihub/desispec/pull/2867
+.. _`#2871`: https://github.com/desihub/desispec/pull/2871
+
+0.72.2 (2026-09-29)
+-------------------
+
+* Fix get_nights_up_to_date return value (PR `#2860`_).
+* Use fiberassign's LKSKYSRC when rechecking stuck-sky positioners (PR `#2862`_).
+* Remove abs() on QSO MgII sigma/deltachi2 (PR `#2863`_).
+* Speed up tilenight and night purge scripts (PR `#2865`_).
+* Extract fail fast when outputs are corrupted (PR `#2866`_).
+* Improve the layout and rendering of the processing dashboards (PR `#2868`_).
+
+.. _`#2860`: https://github.com/desihub/desispec/pull/2860
+.. _`#2862`: https://github.com/desihub/desispec/pull/2862
+.. _`#2863`: https://github.com/desihub/desispec/pull/2863
+.. _`#2865`: https://github.com/desihub/desispec/pull/2865
+.. _`#2866`: https://github.com/desihub/desispec/pull/2866
+.. _`#2868`: https://github.com/desihub/desispec/pull/2868
 
 0.72.1 (2026-09-25)
 -------------------

@@ -714,6 +714,9 @@ def main(args=None) :
 
     log= get_logger()
 
+    if isinstance(args, (list, tuple)):
+        log.info('Running desi_compute_trace_shifts {}'.format(' '.join(args)))
+
     if not isinstance(args, argparse.Namespace):
         args = parse(args)
 

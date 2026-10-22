@@ -119,6 +119,8 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     Options:
         header : dict-like object of key/value pairs to include in header
     """
+    # Avoid a circular import conflict at package install/build_sphinx time.
+    from ..fluxcalibration import DECONV_QA_COMMENTS, _header_value
     log = get_logger()
     hx = fits.HDUList()
 
@@ -127,6 +129,11 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
 
     hdr['EXTNAME'] = 'FLUXCALIB'
     hdr['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
+    deconv_qa = getattr(fluxcalib, 'deconv_qa', None)
+    if deconv_qa is not None:
+        for key, comment in DECONV_QA_COMMENTS.items():
+            if key in deconv_qa:
+                hdr[key] = (_header_value(deconv_qa[key]), comment)
     hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f8'), header=hdr) )
     hx.append( fits.ImageHDU(fluxcalib.ivar.astype('f4'), name='IVAR') )
     # hx.append( fits.CompImageHDU(fluxcalib.mask, name='MASK') )
@@ -156,6 +163,13 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
         hx.append( fits.ImageHDU(fluxcalib.deconvolved_calib.astype('f8'), name='DECONVOLVED_CALIB') )
         hx[-1].header['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (elec/A) / (1e-17 erg/s/cm2/A)')
 
+        deconvolved_calib_ivar = getattr(fluxcalib, 'deconvolved_calib_ivar', None)
+        if deconvolved_calib_ivar is not None:
+            hx.append( fits.ImageHDU(deconvolved_calib_ivar.astype('f4'), name='DECONVOLVED_CALIB_IVAR') )
+            hx[-1].header['BUNIT'] = ('10**-34 erg2 / (cm4 count2 s2)', '1/DECONVOLVED_CALIB units**2')
+            hx[-1].header.add_comment('Formal inverse variance; underestimates the pixel to pixel')
+            hx[-1].header.add_comment('scatter of DECONVOLVED_CALIB by about 2-3x (desispec #2869)')
+
     t0 = time.time()
     tmpfile = get_tempfilename(outfile)
     hx.writeto(tmpfile, overwrite=True, checksum=True)
@@ -170,7 +184,7 @@ def read_flux_calibration(filename):
     """Read flux calibration file; returns a FluxCalib object
     """
     # Avoid a circular import conflict at package install/build_sphinx time.
-    from ..fluxcalibration import FluxCalib
+    from ..fluxcalibration import FluxCalib, DECONV_QA_COMMENTS
     log = get_logger()
     t0 = time.time()
     filename = checkgzip(filename)
@@ -203,13 +217,24 @@ def read_flux_calibration(filename):
         else :
             deconvolved_calib = None
 
+        if 'DECONVOLVED_CALIB_IVAR' in fx:
+            deconvolved_calib_ivar = native_endian(fx['DECONVOLVED_CALIB_IVAR'].data.astype('f8'))
+        else :
+            deconvolved_calib_ivar = None
+
+    deconv_qa = {key: header[key] for key in DECONV_QA_COMMENTS if key in header}
+    if len(deconv_qa) == 0:
+        deconv_qa = None
+
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
 
     fluxcalib = FluxCalib(wave, calib, ivar, mask,
                           fibercorr=fibercorr, fibercorr_comments=fibercorr_comments,
                           stdstar_fibermap = stdstar_fibermap,
-                          deconvolved_calib=deconvolved_calib)
+                          deconvolved_calib=deconvolved_calib,
+                          deconvolved_calib_ivar=deconvolved_calib_ivar,
+                          deconv_qa=deconv_qa)
     fluxcalib.header = header
 
     return fluxcalib

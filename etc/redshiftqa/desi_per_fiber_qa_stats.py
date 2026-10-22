@@ -3,9 +3,10 @@
 # This is step 1 of the redshift QA generation procedure
 # Compute the per-fiber redshift success rates and save them to disk
 
-# Usage:
-# export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desicollab/users/rongpu/tmp/zcatalog/v0.4/main
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_stats.py -i $ZCAT_MAIN_DIR -o per_fiber_qa_stats.fits
+# Example usage:
+# export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desi/spectro/redux/nevis/zcatalog/v2/main
+# export QA_DIR=/global/cfs/cdirs/desicollab/users/rongpu/redshift_qa/nevis
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_stats.py -i $ZCAT_MAIN_DIR -o $QA_DIR/per_fiber_qa_stats.fits
 
 from __future__ import division, print_function
 import sys, os, glob, time, warnings, gc
@@ -43,11 +44,11 @@ def main():
     all_stats = Table()
     all_stats['FIBER'] = np.arange(5000)
 
-    for tracer in ['LRG', 'ELG_LOP', 'ELG_VLO', 'QSO', 'BGS_BRIGHT', 'BGS_FAINT']:
+    for tracer in ['LRG', 'LGE', 'ELG_LOP', 'ELG_VLO', 'QSO', 'BGS_BRIGHT', 'BGS_FAINT']:
 
         print(tracer)
 
-        if tracer in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
+        if tracer in ['LRG', 'LGE', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
             fn = os.path.join(indir, 'ztile-main-dark-cumulative.fits')
             fn1 = os.path.join(indir, 'ztile-main-dark-cumulative-extra.fits')
             cat = Table(fitsio.read(fn, columns=['DESI_TARGET', 'FIBER', 'COADD_FIBERSTATUS', 'EFFTIME_SPEC', 'TARGETID', 'PRIORITY']))
@@ -97,14 +98,14 @@ def main():
             lrgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/LRGtargetsDR9v1.1.1_lrgimask.fits')
             lrgmask = Table(fitsio.read(lrgmask_fn))
             lrgmask = lrgmask[lrgmask['lrg_mask']==0]
-            mask = np.in1d(cat['TARGETID'], lrgmask['TARGETID'])
+            mask = np.isin(cat['TARGETID'], lrgmask['TARGETID'])
             print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
             cat = cat[mask]
         elif tracer in ['ELG', 'ELG_LOP', 'ELG_VLO']:
             elgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/ELGtargetsDR9v1.1.1_elgimask.fits')
             elgmask = Table(fitsio.read(elgmask_fn))
             elgmask = elgmask[elgmask['elg_mask']==0]
-            mask = np.in1d(cat['TARGETID'], elgmask['TARGETID'])
+            mask = np.isin(cat['TARGETID'], elgmask['TARGETID'])
             print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
             cat = cat[mask]
 
@@ -118,7 +119,10 @@ def main():
 
         print(tracer, len(cat))
 
-        good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
+        if tracer=='LGE':
+            good_z_col = 'GOOD_Z_LRG'  # LGE and LRG share the same redshift quality cuts
+        else:
+            good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
         print(tracer, 'average failure rate', np.sum(~cat[good_z_col])/len(cat))
 
         stats = Table()
@@ -144,7 +148,7 @@ def main():
 
                 for ii in range(3):  # 3 iterations
                     print('iteration', ii+1)
-                    mask = ~np.in1d(cat['FIBER'], outliers)
+                    mask = ~np.isin(cat['FIBER'], outliers)
                     if apply_good_z_cut:
                         mask &= cat[good_z_col]
                     allz = np.sort(np.array(cat[z_col][mask]))

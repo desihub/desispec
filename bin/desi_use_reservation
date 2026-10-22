@@ -35,7 +35,8 @@ def get_reservation_info(name):
 
     return resinfo
 
-def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
+def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False,
+                    include_waiting_on_dependencies=False):
     """
     Move jobs from regular queue into a reservation
 
@@ -44,6 +45,7 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
         resinfo (dict): dictionary of reservation info from get_reservation_info
         extra_nodes (int): over-fill the reservation by this many jobs
         dry_run (bool): if True, print scontrol commands but don't move jobs
+        include_waiting_on_dependencies (bool): if True, include jobs that are waiting on dependencies
 
     Must provide name or pre-cached resinfo=get_reservation_info(name).
 
@@ -53,7 +55,8 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
     of jobs are most important to move first (e.g. psfnight jobs because
     those block other jobs more than a single arc job does).
 
-    It does not move jobs that are still waiting on dependencies so that
+    Unless `include_waiting_on_dependencies` is True,
+    this does not move jobs that are still waiting on dependencies so that
     they don't fill up a spot in the reservation without being able to run.
     """
 
@@ -114,7 +117,8 @@ def use_reservation(name=None, resinfo=None, extra_nodes=0, dry_run=False):
     #- Note: NODELISTREASON can have multiple values for eligible jobs, not just "Priority",
     #-       so we exclude Dependency-jobs rather than try to include every possible good state
     eligible_for_reservation &= jobs['ST'] == 'PD'
-    eligible_for_reservation &= jobs['NODELISTREASON'] != 'Dependency'
+    if not include_waiting_on_dependencies:
+        eligible_for_reservation &= jobs['NODELISTREASON'] != 'Dependency'
     eligible_for_reservation &= jobs['NODELISTREASON'] != 'DependencyNeverSatisfied'
     jobs_eligible = jobs[eligible_for_reservation]
 
@@ -205,6 +209,7 @@ def main():
                    help="Add jobs for this number of additional nodes beyond reservation size")
     p.add_argument('--sleep', type=int, help="Sleep this number of minutes between checks")
     p.add_argument('--until', type=str, help="Keep running until this YEAR-MM-DDThh:mm(:ss) time")
+    p.add_argument('--deps-ok', action="store_true", help="Include jobs that are still waiting on dependencies (not recommended)")
     p.add_argument('--dry-run', action="store_true", help="Print what to do, but don't actually move jobs to reservation")
     args = p.parse_args()
 
@@ -226,7 +231,8 @@ def main():
 
     #- Move jobs into the reservation; optionally sleep, repeat
     while (datetime_until is None) or datetime.datetime.now() < datetime_until:
-        use_reservation(resinfo=resinfo, extra_nodes=args.extra_nodes, dry_run=args.dry_run)
+        use_reservation(resinfo=resinfo, extra_nodes=args.extra_nodes, dry_run=args.dry_run,
+                        include_waiting_on_dependencies=args.deps_ok)
         if args.sleep is None:
             break
         else:

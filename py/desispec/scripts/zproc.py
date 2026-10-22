@@ -101,6 +101,8 @@ def parse(options=None):
                         help="Whether to run zmtl or not")
     processing_options.add_argument("--no-afterburners", action="store_true",
                         help="Set if you don't want to run afterburners")
+    processing_options.add_argument("--no-tileqa", action="store_true",
+                        help="Set if you don't want to run tile QA")
     processing_options.add_argument("--starttime", type=float,
                         help='start time; use "--starttime $(date +%%s)"')
     processing_options.add_argument("--timingfile", type=str,
@@ -656,7 +658,7 @@ def main(args=None, comm=None):
     ## Do tileqa if a tile (i.e. not for uniqpix)
     timer.start('tileqa')
 
-    if rank == 0 and groupname in ['pernight', 'cumulative']:
+    if rank == 0 and groupname in ['pernight', 'cumulative'] and not args.no_tileqa:
         from desispec.scripts import tileqa
 
         result, success = 0, True

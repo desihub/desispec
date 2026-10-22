@@ -738,6 +738,21 @@ class TestIO(unittest.TestCase):
         # DECONVOLVED_CALIB HDU: round-trip equality and dtype; note no f8 -> f4 -> f8; it is saved as f8
         self.assertEqual(fx.deconvolved_calib.dtype, np.float64)
         self.assertTrue(np.all(fx.deconvolved_calib == fc.deconvolved_calib))
+        # no IVAR or QA metrics written if not provided
+        self.assertIsNone(fx.deconvolved_calib_ivar)
+        self.assertIsNone(fx.deconv_qa)
+
+        # DECONVOLVED_CALIB_IVAR is saved as f4; QA metrics as header keywords, nan -> -1
+        deconvolved_calib_ivar = np.random.uniform(size=nwave)
+        deconv_qa = dict(DCSNRMED=4.5, DCSNRP10=np.nan, DCFNEG=0.02, DCNHOLE=3)
+        fc = FluxCalib(wave, calib, ivar, mask, deconvolved_calib=deconvolved_calib,
+                       deconvolved_calib_ivar=deconvolved_calib_ivar, deconv_qa=deconv_qa)
+        write_flux_calibration(self.testfile, fc)
+        fx = read_flux_calibration(self.testfile)
+        self.assertTrue(np.all(fx.deconvolved_calib == fc.deconvolved_calib))
+        self.assertTrue(np.all(fx.deconvolved_calib_ivar == deconvolved_calib_ivar.astype('f4').astype('f8')))
+        self.assertEqual(fx.deconv_qa, dict(DCSNRMED=4.5, DCSNRP10=-1.0, DCFNEG=0.02, DCNHOLE=3))
+        self.assertTrue(len(fx.header.comments['DCSNRMED']) > 0)
 
     def test_image_rw(self):
         """Test reading and writing of Image objects.
@@ -1384,6 +1399,31 @@ class TestIO(unittest.TestCase):
         # Calib
         nights = get_nights(sub_folder='calibnight')
         self.assertTrue('20150102' in nights)
+
+    def test_get_nights_up_to_date(self):
+        """ Test desispec.io.meta.get_nights_up_to_date
+        """
+        from ..io.meta import get_nights_up_to_date
+        from ..io.meta import findfile
+        from ..io.util import makepath
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        for night in [20150101, 20150102, 20150201]:
+            filename = findfile('exposure_table', night=night)
+            makepath(filename)
+            open(filename, 'w').close()
+        # override file for one night must not cause that night to be listed twice
+        filename = findfile('override', night=20150102)
+        makepath(filename)
+        open(filename, 'w').close()
+        # override file without an exposure table is not a night with an exposure table
+        filename = findfile('override', night=20150103)
+        makepath(filename)
+        open(filename, 'w').close()
+
+        self.assertEqual(get_nights_up_to_date(20150201), [20150101, 20150102, 20150201])
+        self.assertEqual(get_nights_up_to_date(20150102), [20150101, 20150102])
+        self.assertEqual(get_nights_up_to_date(20141231), [])
 
     def test_search_framefile(self):
         """ Test desispec.io.frame.search_for_framefile

@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 
-# This is step 2 of the redshift QA generation procedure
+# This is step 3 of the redshift QA generation procedure
 # Make per-fiber per-tracer redshift QA plots
 
-# Usage:
-# export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desicollab/users/rongpu/tmp/zcatalog/v0.4/main
-# export QA_DIR=/global/cfs/cdirs/desicollab/users/rongpu/redshift_qa/new/loa
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer LRG --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_LOP --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_VLO --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer QSO --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_BRIGHT --stats per_fiber_qa_stats.fits -o $QA_DIR
-# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_FAINT --stats per_fiber_qa_stats.fits -o $QA_DIR
+# Example usage:
+# export ZCAT_MAIN_DIR=/dvs_ro/cfs/cdirs/desi/spectro/redux/nevis/zcatalog/v2/main
+# export QA_DIR=/global/cfs/cdirs/desicollab/users/rongpu/redshift_qa/nevis
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer LRG --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer LGE --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_LOP --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer ELG_VLO --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer QSO --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_BRIGHT --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
+# srun -N 1 -C cpu -t 04:00:00 -q interactive ./desi_per_fiber_qa_plots.py -i $ZCAT_MAIN_DIR --tracer BGS_FAINT --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
 
 from __future__ import division, print_function
 import sys, os, glob, time, warnings, gc
@@ -51,7 +52,7 @@ stats = Table(fitsio.read(stats_fn))
 
 print(tracer)
 
-if tracer in ['LRG', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
+if tracer in ['LRG', 'LGE', 'ELG', 'QSO', 'ELG_LOP', 'ELG_VLO', 'BGS_ANY']:
     fn = os.path.join(indir, 'ztile-main-dark-cumulative.fits')
     fn1 = os.path.join(indir, 'ztile-main-dark-cumulative-extra.fits')
     cat = Table(fitsio.read(fn, columns=['DESI_TARGET', 'FIBER', 'COADD_FIBERSTATUS', 'EFFTIME_SPEC', 'TARGETID', 'PRIORITY', 'LASTNIGHT']))
@@ -97,14 +98,14 @@ if tracer=='LRG':
     lrgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/LRGtargetsDR9v1.1.1_lrgimask.fits')
     lrgmask = Table(fitsio.read(lrgmask_fn))
     lrgmask = lrgmask[lrgmask['lrg_mask']==0]
-    mask = np.in1d(cat['TARGETID'], lrgmask['TARGETID'])
+    mask = np.isin(cat['TARGETID'], lrgmask['TARGETID'])
     print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
     cat = cat[mask]
 elif tracer in ['ELG', 'ELG_LOP', 'ELG_VLO']:
     elgmask_fn = os.path.expandvars('$DESI_ROOT_READONLY/survey/catalogs/DA2/main/LSS/ELGtargetsDR9v1.1.1_elgimask.fits')
     elgmask = Table(fitsio.read(elgmask_fn))
     elgmask = elgmask[elgmask['elg_mask']==0]
-    mask = np.in1d(cat['TARGETID'], elgmask['TARGETID'])
+    mask = np.isin(cat['TARGETID'], elgmask['TARGETID'])
     print('Mask', np.sum(~mask), np.sum(mask), np.sum(~mask)/len(mask))
     cat = cat[mask]
 
@@ -117,7 +118,10 @@ if tracer=='QSO':
 else:
     z_col = 'Z'
 
-good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
+if tracer=='LGE':
+    good_z_col = 'GOOD_Z_LRG'  # LGE and LRG share the same redshift quality cuts
+else:
+    good_z_col = 'GOOD_Z_' + tracer.split('_')[0]
 print(tracer, 'average failure rate', np.sum(~cat[good_z_col])/len(cat))
 
 datemin = datetime.strptime(str(cat['LASTNIGHT'].min()), '%Y%m%d') - timedelta(days=20)
@@ -132,12 +136,6 @@ bin_centers = (bins[1:]+bins[:-1])/2
 
 for apply_good_z_cut in [True, False]:
 
-    if apply_good_z_cut:
-        output_fn = os.path.join(output_dir, 'per_fiber_redshifts_{}_goodz.pdf'.format(tracer.lower()))
-    else:
-        output_fn = os.path.join(output_dir, 'per_fiber_redshifts_{}_allz.pdf'.format(tracer.lower()))
-    print(output_fn)
-
     if stats_fn is not None:
         if apply_good_z_cut:
             pvalue_col = tracer.lower()+'_ks_pvalue_goodz'
@@ -149,6 +147,13 @@ for apply_good_z_cut in [True, False]:
         outliers = []
 
     if save_pdf:
+
+        if apply_good_z_cut:
+            output_fn = os.path.join(output_dir, 'per_fiber_redshifts_{}_goodz.pdf'.format(tracer.lower()))
+        else:
+            output_fn = os.path.join(output_dir, 'per_fiber_redshifts_{}_allz.pdf'.format(tracer.lower()))
+        print(output_fn)
+
         from matplotlib.backends.backend_pdf import PdfPages
         with PdfPages(output_fn) as pdf:
             # for ii in range(1):
@@ -172,7 +177,7 @@ for apply_good_z_cut in [True, False]:
                     vmin = vmin - (vmax-vmin)*0.05
                     vmax = vmax + (vmax-vmin)*0.05
                     ax.hist(bin_size*np.digitize(cat[z_col][mask], bins=bins), bins=bins, label='single fiber', rasterized=True)
-                    mask1 = ~np.in1d(cat['FIBER'], outliers)
+                    mask1 = ~np.isin(cat['FIBER'], outliers)
                     if apply_good_z_cut:
                         mask1 &= cat[good_z_col]
                     ax.hist(bin_size*np.digitize(cat[z_col][mask1], bins=bins), bins=bins, histtype='step', weights=np.full(np.sum(mask1), np.sum(mask)/np.sum(mask1)), color='red', alpha=1., label='all good fibers', rasterized=True)
@@ -226,7 +231,7 @@ for apply_good_z_cut in [True, False]:
                 vmin = vmin - (vmax-vmin)*0.05
                 vmax = vmax + (vmax-vmin)*0.05
                 ax.hist(bin_size*np.digitize(cat[z_col][mask], bins=bins), bins=bins, label='single fiber')
-                mask1 = ~np.in1d(cat['FIBER'], outliers)
+                mask1 = ~np.isin(cat['FIBER'], outliers)
                 if apply_good_z_cut:
                     mask1 &= cat[good_z_col]
                 ax.hist(bin_size*np.digitize(cat[z_col][mask1], bins=bins), bins=bins, histtype='step', weights=np.full(np.sum(mask1), np.sum(mask)/np.sum(mask1)), color='red', alpha=1., label='all good fibers')
@@ -254,9 +259,9 @@ for apply_good_z_cut in [True, False]:
 
             return None
 
-        from multiprocessing import Pool
+        import multiprocessing
         n_process = 128
-        with Pool(processes=n_process) as pool:
+        with multiprocessing.get_context('fork').Pool(processes=n_process) as pool:
             res = pool.map(write_png, np.arange(5000), chunksize=1)
 
         print('PNGs done!', time.strftime('%H:%M:%S', time.gmtime(time.time() - time_start)))
