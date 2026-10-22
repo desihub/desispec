@@ -870,10 +870,14 @@ def _read_exposureqa(night, expid, recompute_skymags=False, exptab_entry=None, c
     # value was instead copied from the first camera's petal.
     entry['EBV'] = np.float32(0.0)
     entry['PETAL_EBV'] = {}
+    # set once FIBERQA EBV has been read; otherwise read_one_exposure uses the
+    # cframe fibermaps, if it reads any
+    entry['_QA_EBV'] = False
     try:
         if fiberqa_error is not None:
             raise fiberqa_error
         ebv_vals = fiberqa_data['EBV']
+        entry['_QA_EBV'] = True
         sel = ebv_vals > 0
         if sel.sum() > 0:
             entry['EBV'] = np.float32(np.median(ebv_vals[sel]))
@@ -996,10 +1000,11 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
         log.error('No cameras could be read for night={} expid={}; no outputs found'.format(
             night, expid))
         return None
-    if entry.get('PETALQA') is None and entry.get('PETAL_EBV') is None:
-        # No QA file: the exposure was built from its first camera. Use the
-        # median over all fibers with EBV > 0, as the QA path does, taking
-        # one camera per petal (all cameras of a petal share its fibers).
+    if not entry.get('_QA_EBV', False):
+        # No EBV from a QA file (no QA file, or a FIBERQA without EBV): use
+        # the median over all fibers with EBV > 0 of the cframes that were
+        # read, as the QA path does, taking one camera per petal (all cameras
+        # of a petal share its fibers).  Without cframes, EBV is unchanged.
         petal_ebv = {}
         for camera, row in camera_rows.items():
             if '_FIBER_EBV' in row:
@@ -1010,6 +1015,7 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
     # the per-fiber values are only needed above; don't send them back from
     # the worker processes
     entry.pop('_FIBER_EBV', None)
+    entry.pop('_QA_EBV', None)
     for row in camera_rows.values():
         row.pop('_FIBER_EBV', None)
     entry['CAMERA_ROWS'] = camera_rows

@@ -284,6 +284,23 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(float(exposures['EBV'][0]), 0.)
         self.assertEqual(float(exposures['TSNR2_ELG'][0]), 30.)
 
+    def test_qa_without_ebv_uses_cframe_ebv_when_cframes_read(self):
+        # FIBERQA without EBV, and b0 is read from its cframe: the exposure
+        # EBV comes from the cframe fibermaps, like FRAMES EBV
+        qa = write_qa_fixture(self.prod, 20211001, 100, missing=['TSNR2_ELG_B'])
+        with fits.open(qa) as hdus:
+            fiberqa = Table(hdus['FIBERQA'].data)
+            fiberqa.remove_column('EBV')
+            fiberqa['TARGETID'] = np.arange(len(fiberqa))
+            hdus['FIBERQA'] = fits.BinTableHDU(fiberqa, header=hdus['FIBERQA'].header, name='FIBERQA')
+            hdus.writeto(qa + '.new')
+        os.replace(qa + '.new', qa)
+        write_cframe_fixture(self.prod, 20211001, 100, 'b0', ebv=(.01, .02, .04, 0.))
+        self.assertEqual(self._run(), 0)
+        exposures, frames = self._tables()
+        self.assertAlmostEqual(float(exposures['EBV'][0]), .02, places=6)
+        self.assertAlmostEqual(float(frames['EBV'][frames['CAMERA'] == 'b0'][0]), .02, places=6)
+
     def test_absent_fiberqa_uses_cframe_metadata(self):
         qa = write_qa_fixture(self.prod, 20211001, 100)
         fits.HDUList([fits.PrimaryHDU()]).writeto(qa, overwrite=True)

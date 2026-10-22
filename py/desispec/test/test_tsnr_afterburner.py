@@ -1592,6 +1592,8 @@ class TestReadOneCamera(unittest.TestCase):
         mock_fibermap_ext = MagicMock()
         mock_fibermap_ext.read.return_value = fibermap
         mock_fibermap_ext.read_header.return_value = fibermap_hdr
+        mock_fibermap_ext.get_nrows.return_value = len(fibermap)
+        mock_fibermap_ext.get_colnames.return_value = list(fibermap.dtype.names)
 
         def _getitem(_self, key):
             if key == 0:
@@ -1658,6 +1660,9 @@ class TestReadOneCamera(unittest.TestCase):
         for key in required:
             self.assertIn(key, result, 'Missing key: {}'.format(key))
         self.assertEqual(result['CAMERA'], 'b0')
+        # EBV is the median of the fibermap's positive EBV values (all 0.05)
+        self.assertAlmostEqual(float(result['EBV']), 0.05, places=6)
+        self.assertEqual(len(result['_FIBER_EBV']), 500)
 
     def test_tsnr2_median_ignores_zeros(self):
         """Median TSNR2 should be computed only over nonzero fibers."""
