@@ -85,15 +85,16 @@ def write_qa_fixture(prod, night, expid, tileid=1234, value=10., missing=(), pet
     return filename
 
 
-def write_cframe_fixture(prod, night, expid, camera, value=20., missing=(), scores=True):
-    """Write a cframe with metadata, fibermap, and optional per-fiber SCORES."""
+def write_cframe_fixture(prod, night, expid, camera, value=20., missing=(), scores=True, ebv=(.05, .05)):
+    """Write a cframe with metadata, fibermap (with the given fiber EBV values),
+    and optional per-fiber SCORES."""
     filename = findfile('cframe', night=night, expid=expid, camera=camera, specprod_dir=str(prod))
     Path(filename).parent.mkdir(parents=True, exist_ok=True)
     flat = Path(filename).parent / 'test-flat.fits'
     flat.touch()
     header = exposure_header(night, expid)
     header['FIBERFLT'] = str(flat)
-    fibermap = fits.BinTableHDU(Table({'EBV': [.05, .05]}), header=header, name='FIBERMAP')
+    fibermap = fits.BinTableHDU(Table({'EBV': np.array(ebv, dtype=np.float32)}), header=header, name='FIBERMAP')
     hdus = [fits.PrimaryHDU(header=header), fits.ImageHDU(), fibermap]
     if scores:
         table = Table()

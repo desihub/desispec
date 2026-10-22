@@ -245,6 +245,45 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(int(exposures['TILEID'][0]), 1234)
         self.assertEqual(float(exposures['TSNR2_ELG'][0]), 20.)
 
+    def test_cframe_only_exposure_ebv_and_exptime(self):
+        # no QA file: exposure EBV is the median over all fibers with EBV > 0
+        # (one cframe per petal), FRAMES keep each petal's median, and
+        # EXPTIME is float64 as in production files
+        write_exptable_fixture(self.prod, 20211001, 100, camword='a01')
+        Path(mod.findfile('exposureqa', night=20211001, expid=100)).unlink()
+        for camera in ('b0', 'r0', 'z0'):
+            write_cframe_fixture(self.prod, 20211001, 100, camera, ebv=(.01, .02, .03, 0.))
+        for camera in ('b1', 'r1', 'z1'):
+            write_cframe_fixture(self.prod, 20211001, 100, camera, ebv=(.10, .11, .12))
+        self.assertEqual(self._run('--overwrite'), 0)
+        exposures, frames = self._tables()
+        self.assertAlmostEqual(float(exposures['EBV'][0]), .065, places=6)
+        self.assertEqual(exposures['EXPTIME'].dtype.kind + str(exposures['EXPTIME'].dtype.itemsize), 'f8')
+        for camera, expected in (('b0', .02), ('z0', .02), ('r1', .11)):
+            self.assertAlmostEqual(float(frames['EBV'][frames['CAMERA'] == camera][0]), expected, places=6)
+        # the per-fiber values used for the median are not returned
+        result = mod.read_one_exposure(20211001, 100)
+        self.assertNotIn('_FIBER_EBV', result)
+        for row in result['CAMERA_ROWS'].values():
+            self.assertNotIn('_FIBER_EBV', row)
+
+    def test_qa_fiberqa_without_ebv_column(self):
+        # FIBERQA without an EBV column: EBV falls back to 0, the rest is read
+        qa = mod.findfile('exposureqa', night=20211001, expid=100)
+        with fits.open(qa) as hdus:
+            fiberqa = Table(hdus['FIBERQA'].data)
+            fiberqa.remove_column('EBV')
+            fiberqa['TARGETID'] = np.arange(len(fiberqa))
+            hdus['FIBERQA'] = fits.BinTableHDU(fiberqa, header=hdus['FIBERQA'].header, name='FIBERQA')
+            hdus.writeto(qa + '.new')
+        os.replace(qa + '.new', qa)
+        with patch.object(mod, 'read_one_camera') as camera:
+            self.assertEqual(self._run(), 0)
+        camera.assert_not_called()
+        exposures, _ = self._tables()
+        self.assertEqual(float(exposures['EBV'][0]), 0.)
+        self.assertEqual(float(exposures['TSNR2_ELG'][0]), 30.)
+
     def test_absent_fiberqa_uses_cframe_metadata(self):
         qa = write_qa_fixture(self.prod, 20211001, 100)
         fits.HDUList([fits.PrimaryHDU()]).writeto(qa, overwrite=True)

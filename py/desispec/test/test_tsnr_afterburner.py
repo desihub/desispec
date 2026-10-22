@@ -349,8 +349,8 @@ class TestGetSkymag(unittest.TestCase):
 class TestReadOneExposureSkymag(unittest.TestCase):
     """Test sky mag branching logic in read_one_exposure()."""
 
-    def _make_fitsio_mock(self, has_skymags=True, tileid=1234):
-        """Build a minimal fitsio mock returning synthetic headers/data."""
+    def _qa_header(self, has_skymags=True, tileid=1234):
+        """Return a minimal synthetic FIBERQA header."""
         hdr = {
             'TILEID': tileid, 'TILERA': 180.0, 'TILEDEC': 30.0,
             'MJD-OBS': 59366.5, 'EXPTIME': 900.0, 'AIRMASS': 1.1,
@@ -364,27 +364,28 @@ class TestReadOneExposureSkymag(unittest.TestCase):
             hdr['SKY_MAG_Z_SPEC'] = 19.0
         return hdr
 
-    def _fake_fitsio_read(self, filename, hdu, columns=None):
-        """Return HDU-appropriate synthetic data for fitsio.read calls."""
-        if hdu == 'FIBERQA':
-            ebv = np.zeros(10, dtype=[('EBV', np.float32)])
-            ebv['EBV'] = 0.05
-            return ebv
-        if hdu == 'PETALQA':
-            return _make_petalqa([0, 1, 2])
-        raise ValueError('Unexpected HDU in fitsio.read mock: {}'.format(hdu))
+    def _write_qa(self, tmpdir, has_skymags=True):
+        """Write a minimal exposure-QA file and return its path."""
+        from astropy.io import fits
+        hdr = fits.Header()
+        for key, value in self._qa_header(has_skymags=has_skymags).items():
+            hdr['HIERARCH ' + key if len(key) > 8 else key] = value
+        fiberqa = Table({'EBV': np.full(10, 0.05, dtype=np.float32)})
+        filename = os.path.join(tmpdir, 'exposure-qa-00012345.fits')
+        fits.HDUList([fits.PrimaryHDU(), fits.BinTableHDU(fiberqa, header=hdr, name='FIBERQA'),
+                      fits.BinTableHDU(Table(_make_petalqa([0, 1, 2])), name='PETALQA')]).writeto(filename)
+        return filename
 
-    @patch('desispec.scripts.tsnr_afterburner.findfile')
-    def test_uses_header_skymags_when_present(self, mock_ff):
-        mock_ff.return_value = '/fake/path'
-        with patch('os.path.isfile', return_value=True), \
-             patch('desispec.scripts.tsnr_afterburner.fitsio.read_header',
-                   return_value=self._make_fitsio_mock(has_skymags=True)), \
-             patch('desispec.scripts.tsnr_afterburner.fitsio.read',
-                   side_effect=self._fake_fitsio_read):
-            from desispec.scripts.tsnr_afterburner import read_one_exposure
-            result = read_one_exposure(20210601, 12345, recompute_skymags=False)
-        self.assertIsNotNone(result, 'read_one_exposure returned None — check mock setup')
+    def _read(self, has_skymags):
+        from desispec.scripts.tsnr_afterburner import read_one_exposure
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = self._write_qa(tmpdir, has_skymags=has_skymags)
+            with patch('desispec.scripts.tsnr_afterburner.findfile', return_value=filename):
+                return read_one_exposure(20210601, 12345, recompute_skymags=False)
+
+    def test_uses_header_skymags_when_present(self):
+        result = self._read(has_skymags=True)
+        self.assertIsNotNone(result, 'read_one_exposure returned None - check the QA file')
         self.assertIn('SKY_MAG_G_SPEC', result)
         self.assertAlmostEqual(float(result['SKY_MAG_G_SPEC']), 22.0, places=4)
         self.assertAlmostEqual(float(result['SKY_MAG_R_SPEC']), 21.0, places=4)
@@ -392,18 +393,10 @@ class TestReadOneExposureSkymag(unittest.TestCase):
 
     @patch('desispec.scripts.tsnr_afterburner.get_skymag_values',
            return_value={'SKY_MAG_G_SPEC': 99.0, 'SKY_MAG_R_SPEC': 99.0, 'SKY_MAG_Z_SPEC': 99.0})
-    @patch('desispec.scripts.tsnr_afterburner.findfile')
-    def test_falls_back_to_computed_skymags_when_missing(self, mock_ff, mock_skymag):
+    def test_falls_back_to_computed_skymags_when_missing(self, mock_skymag):
         """When sky-mag header keywords are absent, get_skymag_values() should be called."""
-        mock_ff.return_value = '/fake/path'
-        with patch('os.path.isfile', return_value=True), \
-             patch('desispec.scripts.tsnr_afterburner.fitsio.read_header',
-                   return_value=self._make_fitsio_mock(has_skymags=False)), \
-             patch('desispec.scripts.tsnr_afterburner.fitsio.read',
-                   side_effect=self._fake_fitsio_read):
-            from desispec.scripts.tsnr_afterburner import read_one_exposure
-            result = read_one_exposure(20210601, 12345, recompute_skymags=False)
-        self.assertIsNotNone(result, 'read_one_exposure returned None — check mock setup')
+        result = self._read(has_skymags=False)
+        self.assertIsNotNone(result, 'read_one_exposure returned None - check the QA file')
         mock_skymag.assert_called_once()
         self.assertAlmostEqual(float(result['SKY_MAG_G_SPEC']), 99.0, places=4)
 
@@ -1172,6 +1165,24 @@ class TestUpdateExposureTsnr(unittest.TestCase):
         self.assertEqual(float(result['TSNR2_ELG'][0]), 8.0)
         self.assertEqual(float(result['TSNR2_LYA'][0]), 8.0)
 
+    def test_nan_frame_counts_as_zero(self):
+        """An unmasked NaN TSNR2 in FRAMES is treated like a missing (0) value."""
+        from desispec.scripts.tsnr_afterburner import update_exposure_tsnr
+        rows = build_tables([_make_exposure_row(expid=10)], camword_map={10: ['b0']})[1]
+        def frames(values):
+            table = Table({'EXPID': np.array([10, 10, 10, 10], dtype=np.int32),
+                           'CAMERA': np.array(['b0', 'r0', 'z0', 'b1'])})
+            for tracer in _TSNR2_TRACERS:
+                table['TSNR2_' + tracer] = np.array(values, dtype=np.float32)
+            return table
+        with patch('desispec.scripts.tsnr_afterburner.tsnr2_to_efftime', side_effect=_mock_tsnr2_to_efftime):
+            with_nan = update_exposure_tsnr(rows, frames([1., np.nan, 3., 10.]), [10])
+            with_zero = update_exposure_tsnr(rows, frames([1., 0., 3., 10.]), [10])
+        for tracer in _TSNR2_TRACERS:
+            col = 'TSNR2_' + tracer
+            self.assertEqual(float(with_nan[col][0]), float(with_zero[col][0]))
+        self.assertEqual(float(with_nan['TSNR2_ELG'][0]), 7.0)
+
     def test_expid_without_frames_gets_zero(self):
         from desispec.scripts.tsnr_afterburner import update_exposure_tsnr
         rows = build_tables([_make_exposure_row(expid=10)], camword_map={10: ['b0']})[1]
@@ -1537,7 +1548,7 @@ class TestCollectScienceExpids(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestReadOneCamera(unittest.TestCase):
-    """Tests for read_one_camera() — the --recompute I/O path."""
+    """Tests for read_one_camera() - the --recompute I/O path."""
 
     def _make_tsnr2_results(self, band='b', nfiber=500, value=10.0):
         """Return a (results_dict, alpha) pair mimicking calc_tsnr2 output."""

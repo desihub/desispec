@@ -392,7 +392,11 @@ def read_one_camera(night, expid, camera, alpha_only=False, details_dir=None,
         hdr0 = cframe_fits[0].read_header()
         if hdr0.get('FLAVOR', '') != 'science':
             return None
-        fibermap = cframe_fits['FIBERMAP'].read()
+        # only EBV and the number of fibers are needed from the fibermap
+        nfibers = cframe_fits['FIBERMAP'].get_nrows()
+        fiber_ebv = None
+        if 'EBV' in cframe_fits['FIBERMAP'].get_colnames():
+            fiber_ebv = cframe_fits['FIBERMAP'].read(columns=['EBV'])['EBV']
         fibermap_hdr = cframe_fits['FIBERMAP'].read_header()
         values = {}
         alpha = None
@@ -445,7 +449,7 @@ def read_one_camera(night, expid, camera, alpha_only=False, details_dir=None,
                     alpha_only=alpha_only and not missing)
                 tsnr_table = Table({k: np.asarray(v, dtype=np.float32) for k, v in results.items()})
                 # alpha-only returns no tracer arrays; use the fibermap length.
-                tsnr_table['TSNR2_ALPHA_' + camera[0].upper()] = np.full(len(fibermap), alpha, dtype=np.float32)
+                tsnr_table['TSNR2_ALPHA_' + camera[0].upper()] = np.full(nfibers, alpha, dtype=np.float32)
                 if table_output_filename is not None:
                     Path(os.path.dirname(table_output_filename)).mkdir(parents=True, exist_ok=True)
                     tmpfile = get_tempfilename(table_output_filename)
@@ -480,10 +484,14 @@ def read_one_camera(night, expid, camera, alpha_only=False, details_dir=None,
 
     # -- EBV from fibermap --------------------------------------------------
     entry['EBV'] = 0.0
-    if 'EBV' in fibermap.dtype.names:
-        sel = fibermap['EBV'] > 0
+    entry['_FIBER_EBV'] = np.array([], dtype=np.float32)
+    if fiber_ebv is not None:
+        sel = fiber_ebv > 0
+        # positive fiber values, for the exposure-wide median when an
+        # exposure has no QA file (see read_one_exposure)
+        entry['_FIBER_EBV'] = np.asarray(fiber_ebv[sel])
         if sel.sum() > 0:
-            entry['EBV'] = np.float32(np.median(fibermap['EBV'][sel]))
+            entry['EBV'] = np.float32(np.median(fiber_ebv[sel]))
 
     # -- SEEING_ETC, EFFTIME_ETC from header with ETC JSON fallback ---------
     entry['SEEING_ETC'], entry['EFFTIME_ETC'] = _read_etc_values(night, expid, hdr0)
@@ -790,10 +798,26 @@ def _read_exposureqa(night, expid, recompute_skymags=False, exptab_entry=None, c
 
     log.debug('Reading {}'.format(filename))
 
-    # -- metadata from FIBERQA header ---------------------------------------
+    # -- read the FIBERQA header, its EBV/PETAL_LOC columns and PETALQA ------
+    # from one open file; only the header is required
+    fiberqa_data = petalqa = None
+    fiberqa_error = petalqa_error = None
     try:
-        fiberqa_hdr = fitsio.read_header(filename, 'FIBERQA')
-    except (OSError, KeyError) as error:
+        with fitsio.FITS(filename) as qa_fits:
+            fiberqa_hdr = qa_fits['FIBERQA'].read_header()
+            try:
+                colnames = qa_fits['FIBERQA'].get_colnames()
+                if 'EBV' not in colnames:
+                    raise KeyError('EBV')
+                fiberqa_data = qa_fits['FIBERQA'].read(
+                    columns=[c for c in ('EBV', 'PETAL_LOC') if c in colnames])
+            except Exception as error:
+                fiberqa_error = error
+            try:
+                petalqa = qa_fits['PETALQA'].read()
+            except Exception as error:
+                petalqa_error = error
+    except (OSError, KeyError, ValueError) as error:
         log.warning('Cannot read FIBERQA in {}: {}; using cframes'.format(filename, error))
         return None
 
@@ -847,7 +871,8 @@ def _read_exposureqa(night, expid, recompute_skymags=False, exptab_entry=None, c
     entry['EBV'] = np.float32(0.0)
     entry['PETAL_EBV'] = {}
     try:
-        fiberqa_data = fitsio.read(filename, 'FIBERQA')
+        if fiberqa_error is not None:
+            raise fiberqa_error
         ebv_vals = fiberqa_data['EBV']
         sel = ebv_vals > 0
         if sel.sum() > 0:
@@ -873,12 +898,9 @@ def _read_exposureqa(night, expid, recompute_skymags=False, exptab_entry=None, c
         entry.update(skymags)
 
     # -- PETALQA data -------------------------------------------------------
-    try:
-        petalqa = fitsio.read(filename, 'PETALQA')
-        entry['PETALQA'] = petalqa
-    except Exception as e:
-        log.warning('Could not read PETALQA for expid={}: {}'.format(expid, e))
-        entry['PETALQA'] = None
+    if petalqa_error is not None:
+        log.warning('Could not read PETALQA for expid={}: {}'.format(expid, petalqa_error))
+    entry['PETALQA'] = petalqa
 
     return entry
 
@@ -974,6 +996,22 @@ def read_one_exposure(night, expid, recompute_skymags=False, cameras=None,
         log.error('No cameras could be read for night={} expid={}; no outputs found'.format(
             night, expid))
         return None
+    if entry.get('PETALQA') is None and entry.get('PETAL_EBV') is None:
+        # No QA file: the exposure was built from its first camera. Use the
+        # median over all fibers with EBV > 0, as the QA path does, taking
+        # one camera per petal (all cameras of a petal share its fibers).
+        petal_ebv = {}
+        for camera, row in camera_rows.items():
+            if '_FIBER_EBV' in row:
+                petal_ebv.setdefault(int(camera[1]), row['_FIBER_EBV'])
+        if petal_ebv:
+            values = np.concatenate([petal_ebv[petal] for petal in sorted(petal_ebv)])
+            entry['EBV'] = np.float32(np.median(values)) if len(values) else np.float32(0.0)
+    # the per-fiber values are only needed above; don't send them back from
+    # the worker processes
+    entry.pop('_FIBER_EBV', None)
+    for row in camera_rows.values():
+        row.pop('_FIBER_EBV', None)
     entry['CAMERA_ROWS'] = camera_rows
     return entry
 
@@ -1236,6 +1274,9 @@ def _reorder_exposures(table):
     for col in _EXP_SUMMARY_COLUMN_ORDER:
         if col in table.colnames:
             new_table[col] = table[col]
+            # e.g. EXPTIME is float32 when an exposure is built from a cframe
+            if col in _FLOAT64_COLS and new_table[col].dtype.kind == 'f' and new_table[col].dtype.itemsize < 8:
+                new_table[col] = new_table[col].astype(np.float64)
         elif col in _STR_COLS:
             new_table[col] = np.full(len(table), '', dtype='U32')
         else:
@@ -1827,8 +1868,11 @@ def update_exposure_tsnr(exposures_table, frames_table, expids):
     sums = {}
     for tracer in _TSNR2_TRACERS:
         values = np.ma.filled(np.ma.asarray(frames_table['TSNR2_' + tracer])[in_selected], 0.0)
+        # unmasked NaN (e.g. 2021 daily rows from before a tracer existed)
+        # counts as 0, like masked or missing values
+        values = np.where(np.isfinite(values), values, 0.0).astype(np.float64)
         petal_sums = np.zeros(len(group_keys), dtype=np.float64)
-        np.add.at(petal_sums, inverse, np.asarray(values, dtype=np.float64))
+        np.add.at(petal_sums, inverse, values)
         sums[tracer] = petal_sums[order]
 
     rows = []
@@ -2187,7 +2231,8 @@ def main(options=None):
     if len(exposures_table):
         exposures_table.sort('EXPID')
     if len(frames_table):
-        frames_table.sort(['EXPID', 'CAMERA'])
+        # same order as sorting by (EXPID, CAMERA), using integer keys
+        frames_table = frames_table[np.argsort(_frame_codes(frames_table)[0], kind='stable')]
 
     # An empty result is only written when rows were intentionally removed.
     if len(exposures_table) == 0 and not removed_any:
