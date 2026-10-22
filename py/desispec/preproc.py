@@ -1095,8 +1095,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         no_overscan_per_row = no_overscan_per_row_orig
 
         # GOODBIASSEC covers fewer rows than the active area, so only use an average overscan
-        use_goodbiassec = cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}')
-        if use_goodbiassec:
+        if cfinder is not None and cfinder.haskey(f'GOODBIASSEC{amp}'):
             use_overscan_row = False
             no_overscan_per_row = True
 
@@ -1205,26 +1204,29 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         # find rows impacted by a large cosmic charge deposit
         badrows, active_col_val = find_overscan_cosmic_trails(rawimage, ov_col, overscan_values = overscan_col, reading_to_the_left = reading_to_the_left)
 
-        if not use_goodbiassec:
-            # also mask overscan rows that are entirely masked in the active region
-            masked_rows = find_masked_rows(mask, header, amp)
-            num_masked_rows = np.sum(masked_rows)
-            log.info(f'{num_masked_rows} rows entirely masked on amp {amp} of camera {camera}')
-            badrows |= masked_rows
+        # also mask overscan rows that are entirely masked in the active region;
+        # masked_rows covers the full amp (CCDSEC rows), so keep only the rows in ov_col,
+        # which can be fewer than the active area when GOODBIASSEC is used
+        masked_rows = find_masked_rows(mask, header, amp)
+        datasec = parse_sec_keyword(header['DATASEC'+amp])
+        masked_rows = masked_rows[ov_col[0].start-datasec[0].start:ov_col[0].stop-datasec[0].start]
+        num_masked_rows = np.sum(masked_rows)
+        log.info(f'{num_masked_rows} rows entirely masked on amp {amp} of camera {camera}')
+        badrows |= masked_rows
 
-            if np.any(badrows) :
-                log.warning("Camera {} amp {}, ignore overscan rows = {} because of large charge deposit = {} ADUs".format(
-                    camera,amp,np.where(badrows)[0],active_col_val[badrows]))
-                # do not use overscan value for those, use interpolation
-                goodrows = ~badrows
-                rr=np.arange(nrows)
-                try:
-                    overscan_col[badrows] = np.interp(rr[badrows],rr[goodrows],overscan_col[goodrows])
-                except ValueError:
-                    # If can't interpolate, log error but don't crash and let ostep do the flagging
-                    ngood = np.sum(goodrows)
-                    nbad = np.sum(badrows)
-                    log.error(f'Camera {camera} amp {amp} unable to interpolate overscan_col over {nbad} bad rows using {ngood} good rows')
+        if np.any(badrows) :
+            log.warning("Camera {} amp {}, ignore overscan rows = {} because of large charge deposit = {} ADUs".format(
+                camera,amp,np.where(badrows)[0],active_col_val[badrows]))
+            # do not use overscan value for those, use interpolation
+            goodrows = ~badrows
+            rr=np.arange(nrows)
+            try:
+                overscan_col[badrows] = np.interp(rr[badrows],rr[goodrows],overscan_col[goodrows])
+            except ValueError:
+                # If can't interpolate, log error but don't crash and let ostep do the flagging
+                ngood = np.sum(goodrows)
+                nbad = np.sum(badrows)
+                log.error(f'Camera {camera} amp {amp} unable to interpolate overscan_col over {nbad} bad rows using {ngood} good rows')
 
         overscan_step = compute_overscan_step(overscan_col)
         header['OSTEP'+amp] = (overscan_step,'ADUs (max-min of median overscan per row)')
