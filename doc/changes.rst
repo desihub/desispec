@@ -5,7 +5,17 @@ desispec Change Log
 0.73.4 (unreleased)
 -------------------
 
-* No changes yet.
+* Reduce ``desi_zproc`` tile QA wall time by overlapping slow I/O
+  (branch ``ztile-overlap``):
+
+  * ``desi_tile_qa --nworkers N`` reads the gzipped ``spectra`` files in
+    parallel (processes), reads frame headers in parallel (threads), and
+    downloads the sky cutout in the background. Default ``N=1`` is unchanged.
+  * ``desi_zproc --tileqa-nworkers N`` passes this through.
+  * ``desi_zproc`` runs tile QA on rank 0 while the other ranks run the
+    afterburners, instead of one after another; use ``--no-overlap-tileqa``
+    for sequential tile QA then afterburners. zmtl now runs after both,
+    since it reads the tile-qa file.
 
 0.73.3 (2026-10-14)
 -------------------

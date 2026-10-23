@@ -103,6 +103,12 @@ def parse(options=None):
                         help="Set if you don't want to run afterburners")
     processing_options.add_argument("--no-tileqa", action="store_true",
                         help="Set if you don't want to run tile QA")
+    processing_options.add_argument("--tileqa-nworkers", type=int, default=1,
+                        help="Parallel workers for the slow I/O in tile QA (default %(default)s)")
+    processing_options.add_argument("--no-overlap-tileqa", action="store_true",
+                        help="Run tile QA, zmtl, and afterburners one after another "
+                             "instead of running tile QA on rank 0 while the other ranks "
+                             "do zmtl and afterburners")
     processing_options.add_argument("--starttime", type=float,
                         help='start time; use "--starttime $(date +%%s)"')
     processing_options.add_argument("--timingfile", type=str,
@@ -656,9 +662,31 @@ def main(args=None, comm=None):
 
     #-------------------------------------------------------------------------
     ## Do tileqa if a tile (i.e. not for uniqpix)
+    run_tileqa = groupname in ['pernight', 'cumulative'] and not args.no_tileqa
+
+    #- Tile QA runs on rank 0 only and takes about as long as zmtl + afterburners
+    #- together, with no dependencies between them: tile QA reads coadd and
+    #- redrock files, while zmtl and the afterburners write their own files.
+    #- With more than one rank, let rank 0 do tile QA while the other ranks do
+    #- zmtl and afterburners, instead of leaving all of them idle.
+    overlap_tileqa = (comm is not None and size > 1 and run_tileqa
+                      and not args.no_overlap_tileqa)
+    if overlap_tileqa:
+        wrank, wsize = rank - 1, size - 1     #- rank 0 is not a worker
+    else:
+        wrank, wsize = rank, size
+
+    #- Create a subcommunicator with just this rank, e.g. for
+    #- qsoqn afterburner that needs a communicator to pass to
+    #- redrock, but is otherwise only a single rank.
+    #- This is a collective call, so it must happen before ranks diverge.
+    monocomm = None
+    if comm is not None and not args.no_afterburners:
+        monocomm = comm.Split(color=comm.rank)
+
     timer.start('tileqa')
 
-    if rank == 0 and groupname in ['pernight', 'cumulative'] and not args.no_tileqa:
+    if rank == 0 and run_tileqa:
         from desispec.scripts import tileqa
 
         result, success = 0, True
@@ -677,6 +705,8 @@ def main(args=None, comm=None):
             infiles.append(findfile('coadd', **findfileopts))
             infiles.append(findfile('redrock', **findfileopts))
         cmd = f"desi_tile_qa -g {groupname} -n {thrunight} -t {tileid}"
+        if args.tileqa_nworkers > 1:
+            cmd += f" --nworkers {args.tileqa_nworkers}"
         cmdargs = cmd.split()[1:]
         if args.dryrun:
             log.info(f"dryrun: Would have run {cmd} with"
@@ -695,46 +725,7 @@ def main(args=None, comm=None):
 
     timer.stop('tileqa')
 
-    if comm is not None:
-        comm.barrier()
-
-    #-------------------------------------------------------------------------
-    ## Do zmtl if asked to
-    if args.run_zmtl:
-        from desispec.scripts import makezmtl
-
-        timer.start('zmtl')
-        if block_rank == 0:
-            for i in range(block_num, len(all_subgroups), nblocks):
-                result, success = 0, True
-                if groupname == 'uniqpix':
-                    findfileopts['uniqpix'] = all_subgroups[i]
-                else:
-                    findfileopts['spectrograph'] = all_subgroups[i]
-
-                rrfile = findfile('redrock', **findfileopts)
-                zmtlfile = findfile('zmtl', **findfileopts)
-                zmtllog = findfile('zmtl', logfile=True, **findfileopts)
-                cmd = f"make_zmtl_files --input_file {rrfile} --output_file {zmtlfile}"
-                cmdargs = cmd.split()[1:]
-                if args.dryrun:
-                    if rank == 0:
-                        log.info(f"dryrun: Would have run {cmd}")
-                else:
-                    with stdouterr_redirected(zmtllog):
-                        result, success = runcmd(makezmtl.main, args=cmdargs,
-                                                 inputs=[rrfile],
-                                                 outputs=[zmtlfile])
-                if not success:
-                    log.error(f'zmtl petal/uniqpix {all_subgroups[i]} failed; see {zmtllog}')
-                    error_count += 1
-
-        if rank == 0:
-            log.info("Done with zmtl")
-
-        timer.stop('zmtl')
-
-    if comm is not None:
+    if comm is not None and not overlap_tileqa:
         comm.barrier()
 
     #-------------------------------------------------------------------------
@@ -762,16 +753,11 @@ def main(args=None, comm=None):
 
         # TODO: for 64//3, this creates 4 blocks, with rank 63/64 being block 3 block_rank==0,
         # which ends up running mgii afterburner twice
-        nblocks, block_size, block_rank, block_num = \
-            distribute_ranks_to_blocks(ntasks, rank=rank, size=size, log=log)
-
-        #- Create a subcommunicator with just this rank, e.g. for
-        #- qsoqn afterburner that needs a communicator to pass to
-        #- redrock, but is otherwise only a single rank.
-        if comm is not None:
-            monocomm = comm.Split(color=comm.rank)
+        if wrank >= 0:
+            nblocks, block_size, block_rank, block_num = \
+                distribute_ranks_to_blocks(ntasks, rank=wrank, size=wsize, log=log)
         else:
-            monocomm = None
+            nblocks, block_size, block_rank, block_num = 0, 0, -1, 0   #- rank 0 doing tile QA
 
         if block_rank == 0:
             ## If running mutiple afterburners at once, wait some time so
@@ -869,6 +855,48 @@ def main(args=None, comm=None):
 
     if rank == 0 and not args.no_afterburners:
         log.info("Done with afterburners")
+
+    #- zmtl reads the tile-qa file (zmtl.add_tileqa_data), so it runs after tile QA
+    #- has finished. The afterburners do not read zmtl output, so it is fine for
+    #- them to run before zmtl, and concurrently with tile QA.
+    #-------------------------------------------------------------------------
+    ## Do zmtl if asked to
+    if args.run_zmtl:
+        from desispec.scripts import makezmtl
+
+        timer.start('zmtl')
+        if block_rank == 0:
+            for i in range(block_num, len(all_subgroups), nblocks):
+                result, success = 0, True
+                if groupname == 'uniqpix':
+                    findfileopts['uniqpix'] = all_subgroups[i]
+                else:
+                    findfileopts['spectrograph'] = all_subgroups[i]
+
+                rrfile = findfile('redrock', **findfileopts)
+                zmtlfile = findfile('zmtl', **findfileopts)
+                zmtllog = findfile('zmtl', logfile=True, **findfileopts)
+                cmd = f"make_zmtl_files --input_file {rrfile} --output_file {zmtlfile}"
+                cmdargs = cmd.split()[1:]
+                if args.dryrun:
+                    if rank == 0:
+                        log.info(f"dryrun: Would have run {cmd}")
+                else:
+                    with stdouterr_redirected(zmtllog):
+                        result, success = runcmd(makezmtl.main, args=cmdargs,
+                                                 inputs=[rrfile],
+                                                 outputs=[zmtlfile])
+                if not success:
+                    log.error(f'zmtl petal/uniqpix {all_subgroups[i]} failed; see {zmtllog}')
+                    error_count += 1
+
+        if rank == 0:
+            log.info("Done with zmtl")
+
+        timer.stop('zmtl')
+
+    if comm is not None:
+        comm.barrier()
 
     #-------------------------------------------------------------------------
     ## Collect error count and wrap up

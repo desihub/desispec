@@ -50,7 +50,10 @@ def parse(options=None):
     parser.add_argument('-n','--nights', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
     parser.add_argument('--nproc', type = int, default = 1,
-                        help = 'Multiprocessing.')
+                        help = 'Multiprocessing across tiles.')
+    parser.add_argument('--nworkers', type = int, default = 1,
+                        help = 'Parallel workers within a tile, to overlap the slow I/O '
+                               'when making the QA plot (spectra files, frame headers, sky cutout).')
 
     args = None
     if options is None:
@@ -59,7 +62,7 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None, group='cumulative') :
+def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None, group='cumulative', nworkers=1) :
     """
     Wrapper function to compute_tile_qa for multiprocessing
     """
@@ -70,7 +73,7 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None, group='cumulati
 
     write_tile_qa(outfile,fiberqa_table,petalqa_table)
     log.info("wrote {}".format(outfile))
-    _wrap_make_tile_qa_plot(outfile, specprod_dir)
+    _wrap_make_tile_qa_plot(outfile, specprod_dir, nworkers=nworkers)
 
     if "EXTNAME" in fiberqa_table.meta :
         fiberqa_table.meta.pop("EXTNAME")
@@ -83,7 +86,7 @@ def _func(arg) :
     """
     return func(**arg)
 
-def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None):
+def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None, nworkers=1):
     """
     Utility wrapper to make qa plot with try/except/log wrappers
 
@@ -92,6 +95,7 @@ def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None):
 
     Options:
         specprod_dir (str): full path to production directory
+        nworkers (int): parallel workers within the tile; see make_tile_qa_plot
 
     Returns: full path to qapngfile, or None upon failure
 
@@ -111,7 +115,7 @@ def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None):
     #    lines = traceback.format_exception(*sys.exc_info())
     #    log.error("make_tile_qa_plot raised an exception:")
     #    print("".join(lines))
-    figfile = make_tile_qa_plot(qafitsfile, specprod_dir)
+    figfile = make_tile_qa_plot(qafitsfile, specprod_dir, nworkers=nworkers)
 
     if figfile is not None :
         log.info("wrote QA plot {}".format(figfile))
@@ -196,7 +200,7 @@ def main(args=None):
                         entry[k]=r['value']
                     summary_rows.append(entry)
                     continue
-            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'outfile':filename, 'group':args.group})
+            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'outfile':filename, 'group':args.group, 'nworkers':args.nworkers})
 
         if args.nproc == 1 :
             for func_arg in func_args :
@@ -224,7 +228,7 @@ def main(args=None):
 
             if os.path.exists(qafitsfile) and not os.path.exists(qapngfile):
                 log.info(f'Trying again on '+os.path.basename(qapngfile))
-                _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=args.prod)
+                _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=args.prod, nworkers=args.nworkers)
 
     if args.outfile is not None and len(summary_rows)>0 :
         colnames=None
