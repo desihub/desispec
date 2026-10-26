@@ -186,6 +186,8 @@ def main(args=None):
         except Exception as e:
             log.error(e)
 
+    # fibermap of this camera (or None) for the trace shifts (sky fibers)
+    image.fibermap = fibermap
 
     if "OBSTYPE" in image.meta :
         obstype = image.meta["OBSTYPE"].upper()
