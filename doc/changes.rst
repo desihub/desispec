@@ -5,7 +5,10 @@ desispec Change Log
 0.73.4 (unreleased)
 -------------------
 
-* No changes yet.
+* Speed up ``coadd`` by about 15 s per 500-target petal: compute the
+  camera-overlap flags and merged wavelength grid in
+  ``per_exposure_normalization`` once instead of for every target, and
+  vectorize the overlap test. Results are unchanged.
 
 0.73.3 (2026-10-14)
 -------------------
