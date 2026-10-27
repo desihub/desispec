@@ -238,6 +238,31 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
+    def test_regroup_inframes_mpi(self):
+        """Test grouping from an input list of frames with --mpi on a one-rank communicator"""
+        try:
+            from mpi4py import MPI
+        except ImportError:
+            self.skipTest('mpi4py not available')
+
+        cmd = 'desi_group_spectra -o {}'.format(self.specfile)
+        cmd += ' --inframes ' + ' '.join(self.framefiles)
+
+        group_spectra.main(group_spectra.parse(cmd.split()[1:]))
+        serial = read_spectra(self.specfile)
+        os.remove(self.specfile)
+
+        args = group_spectra.parse((cmd + ' --mpi').split()[1:])
+        group_spectra.main(args, comm=MPI.COMM_WORLD)
+        parallel = read_spectra(self.specfile)
+
+        self.assertEqual(len(serial.fibermap), len(parallel.fibermap))
+        nt.assert_array_equal(serial.fibermap['TARGETID'], parallel.fibermap['TARGETID'])
+        for band in serial.bands:
+            nt.assert_array_equal(serial.flux[band], parallel.flux[band])
+            nt.assert_array_equal(serial.ivar[band], parallel.ivar[band])
+            nt.assert_array_equal(serial.mask[band], parallel.mask[band])
+
     def test_regroup_inframes(self):
         """Test grouping from an input list of frames"""
         cmd = 'desi_group_spectra -o {}'.format(self.specfile)
