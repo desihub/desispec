@@ -106,9 +106,10 @@ def parse(options=None):
     processing_options.add_argument("--tileqa-nworkers", type=int, default=1,
                         help="Parallel workers for the slow I/O in tile QA (default %(default)s)")
     processing_options.add_argument("--no-overlap-tileqa", action="store_true",
-                        help="Run tile QA, zmtl, and afterburners one after another "
+                        help="Run tile QA and the afterburners one after another "
                              "instead of running tile QA on rank 0 while the other ranks "
-                             "do zmtl and afterburners")
+                             "run the afterburners; zmtl always runs after both "
+                             "because it reads the tile-qa file")
     processing_options.add_argument("--starttime", type=float,
                         help='start time; use "--starttime $(date +%%s)"')
     processing_options.add_argument("--timingfile", type=str,
