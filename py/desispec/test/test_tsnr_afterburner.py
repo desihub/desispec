@@ -1151,6 +1151,14 @@ class TestFrameKeys(unittest.TestCase):
 class TestUpdateExposureTsnr(unittest.TestCase):
     """update_exposure_tsnr() sums bands per petal and averages over petals."""
 
+    def setUp(self):
+        # build_tables() and update_exposure_tsnr() both compute efftimes,
+        # whose real implementation needs $DESIMODEL
+        patcher = patch('desispec.scripts.tsnr_afterburner.tsnr2_to_efftime',
+                        side_effect=_mock_tsnr2_to_efftime)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_sum_over_bands_mean_over_petals(self):
         from desispec.scripts.tsnr_afterburner import update_exposure_tsnr
         exposures = _make_exposure_row(expid=10)
@@ -1159,8 +1167,7 @@ class TestUpdateExposureTsnr(unittest.TestCase):
                         'CAMERA': np.array(['b0', 'r0', 'z0', 'b1'])})
         for tracer in _TSNR2_TRACERS:
             frames['TSNR2_' + tracer] = np.array([1., 2., 3., 10.], dtype=np.float32)
-        with patch('desispec.scripts.tsnr_afterburner.tsnr2_to_efftime', side_effect=_mock_tsnr2_to_efftime):
-            result = update_exposure_tsnr(rows, frames, [10])
+        result = update_exposure_tsnr(rows, frames, [10])
         # petal 0: 1 + 2 + 3 = 6; petal 1: 10; mean 8
         self.assertEqual(float(result['TSNR2_ELG'][0]), 8.0)
         self.assertEqual(float(result['TSNR2_LYA'][0]), 8.0)
@@ -1175,9 +1182,8 @@ class TestUpdateExposureTsnr(unittest.TestCase):
             for tracer in _TSNR2_TRACERS:
                 table['TSNR2_' + tracer] = np.array(values, dtype=np.float32)
             return table
-        with patch('desispec.scripts.tsnr_afterburner.tsnr2_to_efftime', side_effect=_mock_tsnr2_to_efftime):
-            with_nan = update_exposure_tsnr(rows, frames([1., np.nan, 3., 10.]), [10])
-            with_zero = update_exposure_tsnr(rows, frames([1., 0., 3., 10.]), [10])
+        with_nan = update_exposure_tsnr(rows, frames([1., np.nan, 3., 10.]), [10])
+        with_zero = update_exposure_tsnr(rows, frames([1., 0., 3., 10.]), [10])
         for tracer in _TSNR2_TRACERS:
             col = 'TSNR2_' + tracer
             self.assertEqual(float(with_nan[col][0]), float(with_zero[col][0]))
@@ -1189,8 +1195,7 @@ class TestUpdateExposureTsnr(unittest.TestCase):
         frames = Table({'EXPID': np.array([], dtype=np.int32), 'CAMERA': np.array([], dtype='U2')})
         for tracer in _TSNR2_TRACERS:
             frames['TSNR2_' + tracer] = np.array([], dtype=np.float32)
-        with patch('desispec.scripts.tsnr_afterburner.tsnr2_to_efftime', side_effect=_mock_tsnr2_to_efftime):
-            result = update_exposure_tsnr(rows, frames, [10])
+        result = update_exposure_tsnr(rows, frames, [10])
         self.assertEqual(float(result['TSNR2_ELG'][0]), 0.0)
 
 
