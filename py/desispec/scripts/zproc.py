@@ -503,8 +503,17 @@ def main(args=None, comm=None):
     ## Do spectral grouping and coadding
     timer.start('groupspec')
 
-    nblocks, block_size, block_rank, block_num = \
-        distribute_ranks_to_blocks(len(all_subgroups), rank=rank, size=size, log=log)
+    #- All ranks of a block work on the same subgroup (petal) so that
+    #- desi_group_spectra can read the frames and compress the output in
+    #- parallel instead of leaving the extra ranks of the block idle
+    if comm is not None and size > 1:
+        nblocks, block_size, block_rank, block_num, block_comm = \
+            distribute_ranks_to_blocks(len(all_subgroups), rank=rank, size=size,
+                                       comm=comm, log=log, split_comm=True)
+    else:
+        nblocks, block_size, block_rank, block_num = \
+            distribute_ranks_to_blocks(len(all_subgroups), rank=rank, size=size, log=log)
+        block_comm = None
 
     if rank == 0:
         if groupname == 'uniqpix':
@@ -519,12 +528,13 @@ def main(args=None, comm=None):
     if comm is not None:
         comm.barrier()
 
-    if block_rank == 0:
+    if block_comm is not None or block_rank == 0:
         for i in range(block_num, len(all_subgroups), nblocks):
             result, success = 0, True
             if groupname == 'uniqpix':
                 uniqpix = all_subgroups[i]
-                log.info(f'Coadding spectra for uniqpix {uniqpix}')
+                if block_rank == 0:
+                    log.info(f'Coadding spectra for uniqpix {uniqpix}')
                 findfileopts['uniqpix'] = uniqpix
 
                 cframes = []
@@ -540,13 +550,15 @@ def main(args=None, comm=None):
                             log.warning(f'Missing {filename}')
 
                 if len(cframes) < 3:
-                    log.error(f'uniqpix {uniqpix} only has {len(cframes)} cframes; skipping')
-                    error_count += 1
+                    if block_rank == 0:
+                        log.error(f'uniqpix {uniqpix} only has {len(cframes)} cframes; skipping')
+                        error_count += 1
                     continue
 
             else:
                 spectro = all_subgroups[i]
-                log.info(f'Coadding spectra for spectrograph {spectro}')
+                if block_rank == 0:
+                    log.info(f'Coadding spectra for spectrograph {spectro}')
                 findfileopts['spectrograph'] = spectro
 
                 # generate list of cframes from dict of exposures, nights, and cameras
@@ -562,7 +574,19 @@ def main(args=None, comm=None):
             splog = findfile('spectra', logfile=True, **findfileopts)
             coaddfile = findfile('coadd', **findfileopts)
 
-            if os.path.exists(spectrafile):
+            #- all ranks of the block need to agree on what to run
+            spectrafile_exists = os.path.exists(spectrafile)
+            if block_comm is not None:
+                spectrafile_exists = block_comm.bcast(spectrafile_exists, root=0)
+
+            #- desi_group_spectra runs in parallel on the block_comm;
+            #- desi_coadd_spectra is serial and only runs on block_rank 0
+            group_comm = None
+
+            if spectrafile_exists:
+                if block_rank != 0:
+                    continue
+
                 log.info(f'Spectra file {os.path.basename(spectrafile)} already exists; only running coaddition')
                 group_func = coadd_spectra.main
                 inputs = [spectrafile,]
@@ -578,6 +602,10 @@ def main(args=None, comm=None):
                 cmd = f"desi_group_spectra --inframes {' '.join(cframes)} " \
                       + f"--outfile {spectrafile} " \
                       + f"--coaddfile {coaddfile} "
+
+                if block_comm is not None and block_comm.size > 1:
+                    cmd += "--mpi "
+                    group_comm = block_comm
 
                 if groupname == 'uniqpix':
                     cmd += f"--uniqpix {uniqpix} "
@@ -595,12 +623,12 @@ def main(args=None, comm=None):
                 if rank == 0:
                     log.info(f"dryrun: Would have run {cmd}")
             else:
-                with stdouterr_redirected(splog):
-                    result, success = runcmd(group_func,
+                with stdouterr_redirected(splog, comm=group_comm):
+                    result, success = runcmd(group_func, comm=group_comm,
                                              args=cmdargs, inputs=inputs,
                                              outputs=outputs)
 
-            if not success:
+            if not success and block_rank == 0:
                 log.error(f'desi_group_spectra petal {spectro} failed; see {splog}')
                 error_count += 1
 
