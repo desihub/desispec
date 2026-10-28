@@ -58,6 +58,27 @@ class TestDatabase(unittest.TestCase):
             rmtree(cls.testDir)
 
     @unittest.skipUnless(sqlalchemy_available, "SQLAlchemy not installed; skipping datachallenge DB tests.")
+    def test_select_hdu(self):
+        """A sequence of HDU names selects the first one present in the file.
+        """
+        import tempfile
+        import numpy as np
+        from astropy.io import fits
+        from ..database.redshift import _select_hdu
+        names = ('TILES', 'TILE_COMPLETENESS')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for extname in names:
+                filename = os.path.join(tmpdir, 'tiles-{}.fits'.format(extname))
+                table = fits.BinTableHDU.from_columns([fits.Column(name='TILEID', format='J',
+                                                                   array=np.arange(3))], name=extname)
+                fits.HDUList([fits.PrimaryHDU(), fits.ImageHDU(name='OTHER'), table]).writeto(filename)
+                self.assertEqual(_select_hdu(filename, names), extname)
+            self.assertEqual(_select_hdu(filename, 2), 2)
+            self.assertEqual(_select_hdu(filename, 'TILE_COMPLETENESS'), 'TILE_COMPLETENESS')
+            with self.assertRaises(KeyError):
+                _select_hdu(filename, ('EXPOSURES',))
+
+    @unittest.skipUnless(sqlalchemy_available, "SQLAlchemy not installed; skipping datachallenge DB tests.")
     def test_datachallenge_classes(self):
         """Test SQLAlchemy classes in desispec.database.datachallenge.
         """

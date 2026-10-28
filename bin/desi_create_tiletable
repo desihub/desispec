@@ -138,7 +138,7 @@ def main():
         tileinfo = pool.map(get_tile_info, tileids)
 
     results = Table(tileinfo)
-    results.meta['EXTNAME'] = 'TILE_COMPLETENESS'
+    results.meta['EXTNAME'] = 'TILES'
 
     tmpfile = get_tempfilename(args.outfile)
     results.write(tmpfile)

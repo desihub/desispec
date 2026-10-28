@@ -123,7 +123,9 @@ def compute_tile_completeness_table(exposure_table,specprod_dir,auxiliary_table_
     #
     timestamp = datetime.datetime.now(tz=pytz.timezone('US/Pacific')).strftime("%Y-%m-%dT%H:%M:%S%z")
     res["UPDATED"] = np.array(np.repeat(timestamp, ntiles))
-    res.meta['EXTNAME'] = 'TILE_COMPLETENESS'
+    # same EXTNAME as merge_tile_completeness_table(), so tiles files are
+    # labelled the same however they are produced
+    res.meta['EXTNAME'] = 'TILES'
 
     # case is /global/cfs/cdirs/desi/survey/observations/SV1/sv1-tiles.fits
     if auxiliary_table_filenames is not None :

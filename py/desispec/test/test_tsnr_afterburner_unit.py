@@ -696,6 +696,18 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(len(frames), 0)
         self.assertEqual(len(Table.read(str(tiles))), 0)
 
+    def test_tiles_extname_is_tiles_for_fresh_and_merged_files(self):
+        # the real tile completeness functions, not mocks: a fresh tiles file
+        # and one merged into on a rerun are both labelled TILES
+        tiles = self.prod / 'tiles.fits'
+        with self._no_fiberassign():
+            self.assertEqual(self._run('--tile-completeness', str(tiles)), 0)
+            self.assertEqual(fits.getheader(str(tiles), 1)['EXTNAME'], 'TILES')
+            self._add_exposure(night=20211002, expid=200, tileid=5678)
+            self.assertEqual(self._run('--tile-completeness', str(tiles)), 0)
+        self.assertEqual(fits.getheader(str(tiles), 1)['EXTNAME'], 'TILES')
+        self.assertEqual(sorted(Table.read(str(tiles))['TILEID'].tolist()), [1234, 5678])
+
     def test_empty_tile_csv_can_be_repopulated(self):
         # remove the last exposure with a CSV tile file, then add a new exposure
         tiles = self.prod / 'tiles.csv'

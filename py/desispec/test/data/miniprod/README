@@ -107,7 +107,8 @@ fitsio.write('exposures-miniprod.fits', exp, header=hdr, extname='EXPOSURES', cl
 fitsio.write('exposures-miniprod.fits', frames, header=framehdr, extname='FRAMES')
 print('Wrote exposures-miniprod.fits')
 
-fitsio.write('tiles-miniprod.fits', tiletable, header=hdr, extname='TILE_COMPLETENESS', clobber=True)
+#- iron's tiles file uses EXTNAME TILE_COMPLETENESS; newer productions use TILES
+fitsio.write('tiles-miniprod.fits', tiletable, header=hdr, extname='TILES', clobber=True)
 print('Wrote tiles-miniprod.fits')
 
 os.makedirs(f'exposure_tables/{night//100}', exist_ok=True)

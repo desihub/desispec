@@ -5,10 +5,21 @@
 import os
 import unittest
 from unittest.mock import patch, call
-from ..tilecompleteness import read_gfa_data
+from ..tilecompleteness import read_gfa_data, compute_tile_completeness_table, merge_tile_completeness_table
 
 
 class TestTileCompleteness(unittest.TestCase):
+
+    def test_extname_is_tiles(self):
+        """Fresh and merged tile tables have the same EXTNAME."""
+        import tempfile
+        from ..scripts.tsnr_afterburner import _empty_tables
+        exposures = _empty_tables()[1]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fresh = compute_tile_completeness_table(exposures, tmpdir, None)
+        self.assertEqual(fresh.meta['EXTNAME'], 'TILES')
+        self.assertEqual(merge_tile_completeness_table(fresh.copy(), fresh).meta['EXTNAME'], 'TILES')
+
     """Test desispec.tilecompleteness.
     """
 
