@@ -7,6 +7,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 import numpy as np
 from astropy.table import Table
@@ -92,7 +93,11 @@ class TestTileQAParallel(unittest.TestCase):
         d = read_spectra_tsnr2(fn, "TSNR2_BGS")
         self.assertTrue(np.all(d["TSNR2_B"] == 0))
 
-    def test_get_expids_efftimes_parallel(self):
+    #- tsnr2_to_efftime needs the $DESIMODEL tsnr ensembles; use a simple
+    #- stand-in since this test is only about serial vs parallel reading
+    @mock.patch('desispec.tile_qa_plot.tsnr2_to_efftime',
+                side_effect=lambda tsnr2, tsnr2_key: 0.1 * tsnr2)
+    def test_get_expids_efftimes_parallel(self, mock_efftime):
         serial = get_expids_efftimes(self.tileqafits, self.testdir)
         self.assertEqual(len(serial), 2)
         self.assertTrue(np.all(serial["EFFTIME_SPEC"] > 0))
