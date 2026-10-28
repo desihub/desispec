@@ -727,7 +727,83 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
 
     return coadded_spectra
 
-def _build_crude_coadd_arrays(spectra, all_idx, good_idx, bands_to_use, sbands):
+def _wave_near(wave, other, tol=1e-4):
+    """
+    Return boolean array, True where ``wave`` is within ``tol`` of any
+    wavelength in ``other``.
+
+    Args:
+        wave: 1D array of wavelengths to test
+        other: 1D array of wavelengths to compare against
+
+    Options:
+        tol: absolute tolerance in Angstroms
+
+    Returns:
+        boolean array with the same shape as ``wave``
+    """
+    other = np.sort(other)
+    if other.size == 0:
+        return np.zeros(np.shape(wave), dtype=bool)
+
+    i = np.searchsorted(other, wave)
+    lo = other[np.clip(i - 1, 0, other.size - 1)]
+    hi = other[np.clip(i, 0, other.size - 1)]
+    return (np.abs(wave - lo) <= tol) | (np.abs(wave - hi) <= tol)
+
+
+def _crude_coadd_grid(spectra, bands_list, sbands, cache=None):
+    """
+    Return the non-overlapping wavelength grid used for the crude coadd.
+
+    Overlap with adjacent bands is excluded so that cameras are not coadded.
+    The result depends only on the wavelength grids and the list of bands,
+    so it can be cached and reused for every target.
+
+    Args:
+        spectra: desispec.spectra.Spectra object
+        bands_list: ordered list of band names to include
+        sbands: wavelength-sorted array of all band names
+
+    Options:
+        cache: dict to store and reuse results, keyed by ``bands_list``
+
+    Returns:
+        tuple (overlap, coadd_wave) where overlap is a dict of 0/1 int arrays
+        per band flagging pixels that overlap an adjacent band, and
+        coadd_wave is the merged wavelength grid skipping overlaps.
+    """
+    key = tuple(bands_list)
+    if cache is not None and key in cache:
+        return cache[key]
+
+    overlap = {}
+    for j, b in enumerate(bands_list):
+        wave_b = spectra.wave[b]
+        overlap_flag = np.zeros(wave_b.size, dtype=int)
+
+        if j > 0:
+            overlap_flag[_wave_near(wave_b, spectra.wave[bands_list[j - 1]])] = 1
+
+        if j < len(bands_list) - 1:
+            overlap_flag[_wave_near(wave_b, spectra.wave[bands_list[j + 1]])] = 1
+
+        overlap[b] = overlap_flag
+
+    # construct coadd wave grid, skipping overlap regions
+    coadd_wave = None
+    for b in sbands[np.isin(sbands, bands_list)]:
+        wave_b = spectra.wave[b][overlap[b] == 0]
+        coadd_wave = wave_b if coadd_wave is None else np.append(coadd_wave, wave_b)
+
+    if cache is not None:
+        cache[key] = (overlap, coadd_wave)
+
+    return overlap, coadd_wave
+
+
+def _build_crude_coadd_arrays(spectra, all_idx, good_idx, bands_to_use, sbands,
+                              grid_cache=None):
     """
     Build per-exposure flux and weight arrays on a merged from wavelength bands
     in non-overlapping regions, and compute the corresponding inverse-variance
@@ -743,6 +819,11 @@ def _build_crude_coadd_arrays(spectra, all_idx, good_idx, bands_to_use, sbands):
                        the same wavelength ordering as spectra.bands so
                        that adjacent entries share wavelength overlaps
 
+    Options:
+        grid_cache   : dict reused across calls for the same ``spectra`` to
+                       avoid recomputing the band overlaps and wavelength grid
+                       (see :func:`_crude_coadd_grid`)
+
     Returns:
         f_i         ndarray (n_exp, n_wave)  per-exposure flux
         w_i         ndarray (n_exp, n_wave)  per-exposure ivar weights
@@ -752,32 +833,9 @@ def _build_crude_coadd_arrays(spectra, all_idx, good_idx, bands_to_use, sbands):
     """
     bands_list = list(bands_to_use)
 
-    # check for overlap between usable bands,
-    # exclude these regions to avoid coadding cameras
-    overlap = {}
-    for j, b in enumerate(bands_list):
-        wave_b = spectra.wave[b]
-        overlap_flag = np.zeros(wave_b.size, dtype=int)
-
-        if j > 0:
-            wave_prev = spectra.wave[bands_list[j - 1]]
-            for k, w in enumerate(wave_b):
-                if np.any(np.abs(w - wave_prev) <= 1e-4):
-                    overlap_flag[k] = 1
-
-        if j < len(bands_list) - 1:
-            wave_next = spectra.wave[bands_list[j + 1]]
-            for k, w in enumerate(wave_b):
-                if np.any(np.abs(w - wave_next) <= 1e-4):
-                    overlap_flag[k] = 1
-
-        overlap[b] = overlap_flag
-
-    # construct coadd wave grid, skipping overlap regions
-    coadd_wave = None
-    for b in sbands[np.isin(sbands, bands_list)]:
-        wave_b = spectra.wave[b][overlap[b] == 0]
-        coadd_wave = wave_b if coadd_wave is None else np.append(coadd_wave, wave_b)
+    # overlapping regions between usable bands are excluded to avoid
+    # coadding cameras
+    overlap, coadd_wave = _crude_coadd_grid(spectra, bands_list, sbands, grid_cache)
 
     # fill per-exposure flux and weight arrays
     f_i = np.zeros((all_idx.size, coadd_wave.size))
@@ -863,6 +921,9 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
     spectra.fibermap['COADD_NORM'] = 1.
     spectra.fibermap['SIGMA_COADD_NORM'] = 0.
 
+    # wavelength grids do not depend on the target; compute once per set of bands
+    grid_cache = dict()
+
     # compute normalization terms per exposure
     for i,tgt in enumerate(targets):
 
@@ -913,7 +974,8 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
 
                 # construct flux, weights, and crude coadd from the usable_bands and good indices
                 f_i, w_i, coadd_wave, crude_coadd, w_tot = _build_crude_coadd_arrays(
-                    spectra, idx_good_init, idx_good, usable_bands, sbands
+                    spectra, idx_good_init, idx_good, usable_bands, sbands,
+                    grid_cache=grid_cache
                 )
 
                 # compute unbiased normalization constant by minimizing chi2
@@ -977,7 +1039,8 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
             if not np.all(np.isin(bands, usable_bands)):
                 # usable_bands is a strict subset: recompute over all bands for comparison
                 f_i, w_i, coadd_wave, crude_coadd, w_tot = _build_crude_coadd_arrays(
-                    spectra, idx_good_init, idx_good, bands, sbands
+                    spectra, idx_good_init, idx_good, bands, sbands,
+                    grid_cache=grid_cache
                 )
                 # else: f_i, w_i, crude_coadd, w_tot from the normalization loop are still valid
 

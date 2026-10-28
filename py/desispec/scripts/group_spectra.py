@@ -6,7 +6,7 @@ Regroup spectra by healpix.
 """
 
 from __future__ import absolute_import, division, print_function
-import os, sys, time
+import os, sys, time, shutil, subprocess
 
 import numpy as np
 import argparse
@@ -18,7 +18,7 @@ from desimodel.footprint import radec2pix
 
 from .. import io
 from ..io.meta import shorten_filename
-from ..io.util import checkgzip
+from ..io.util import checkgzip, get_tempfilename
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import add_missing_frames, frames2spectra
 from ..coaddition import coadd
@@ -92,6 +92,57 @@ def _read_framefile(filename, nside=None, healpix=None, ifile=None):
 
     return frame
 
+def _write_spectra_pigz(outfile, spectra, cpus, min_cpus=4):
+    """
+    Write spectra to ``outfile``, compressing .gz files with pigz on ``cpus``
+
+    Args:
+        outfile (str): output filename
+        spectra (Spectra): spectra to write
+        cpus (list): CPU ids that pigz may use, e.g. those of idle MPI ranks
+
+    Options:
+        min_cpus (int): only use pigz if at least this many CPUs are available
+
+    The serial gzip used by :func:`desispec.io.write_spectra` for ``.gz`` files
+    takes much longer than the rest of this script. If pigz is available and
+    there are enough CPUs, write the uncompressed file and compress it with
+    pigz using all of ``cpus``; otherwise write with ``write_spectra``.
+    """
+    log = get_logger()
+    pigz = shutil.which('pigz')
+    if (not outfile.endswith('.gz')) or pigz is None or len(cpus) < min_cpus:
+        io.write_spectra(outfile, spectra)
+        return
+
+    plainfile = outfile[:-3]
+    tmpfile = get_tempfilename(outfile)
+    t0 = time.time()
+    io.write_spectra(plainfile, spectra)
+
+    #- child processes inherit the CPU affinity of this process
+    original_cpus = os.sched_getaffinity(0)
+    try:
+        os.sched_setaffinity(0, cpus)
+        with open(tmpfile, 'wb') as fx:
+            subprocess.run([pigz, '-p', str(len(cpus)), '-c', plainfile],
+                           stdout=fx, check=True)
+    except Exception as err:
+        log.warning(f'pigz of {plainfile} failed ({err}); falling back to write_spectra')
+        if os.path.exists(tmpfile):
+            os.remove(tmpfile)
+        os.sched_setaffinity(0, original_cpus)
+        io.write_spectra(outfile, spectra)
+    else:
+        os.sched_setaffinity(0, original_cpus)
+        os.rename(tmpfile, outfile)
+        log.info(f'Wrote {outfile} with pigz on {len(cpus)} CPUs in {time.time()-t0:.1f} sec')
+    finally:
+        os.sched_setaffinity(0, original_cpus)
+        if os.path.exists(plainfile):
+            os.remove(plainfile)
+
+
 def main(args=None, comm=None):
 
     t0 = time.time()
@@ -105,9 +156,13 @@ def main(args=None, comm=None):
 
         rank = comm.rank
         size = comm.size
+        #- CPUs of all ranks in comm; used to compress the output with pigz
+        #- using the CPUs of the other, otherwise idle, ranks
+        cpus = sorted(set().union(*comm.allgather(os.sched_getaffinity(0))))
     else:
         rank = 0
         size = 1
+        cpus = []
 
     #- logger for all ranks
     log = get_logger()
@@ -250,7 +305,7 @@ def main(args=None, comm=None):
 
         if args.outfile is not None:
             log.info('Writing {}'.format(args.outfile))
-            io.write_spectra(args.outfile, spectra)
+            _write_spectra_pigz(args.outfile, spectra, cpus)
 
         if args.coaddfile is not None:
             log.info('Coadding spectra')

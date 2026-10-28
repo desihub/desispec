@@ -5,7 +5,29 @@ desispec Change Log
 0.73.4 (unreleased)
 -------------------
 
-* No changes yet.
+* Reduce ``desi_zproc`` tile QA wall time by overlapping slow I/O
+  (branch ``ztile-overlap``):
+
+  * ``desi_tile_qa --nworkers N`` reads the gzipped ``spectra`` files in
+    parallel (processes), reads frame headers in parallel (threads), and
+    downloads the sky cutout in the background. Default ``N=1`` is unchanged.
+  * ``desi_zproc --tileqa-nworkers N`` passes this through.
+  * ``desi_zproc`` runs tile QA on rank 0 while the other ranks run the
+    afterburners, instead of one after another; use ``--no-overlap-tileqa``
+    for sequential tile QA then afterburners. zmtl now runs after both,
+    since it reads the tile-qa file.
+
+* Speed up ``coadd`` by about 15 s per 500-target petal: compute the
+  camera-overlap flags and merged wavelength grid in
+  ``per_exposure_normalization`` once instead of for every target, and
+  vectorize the overlap test. Results are unchanged.
+
+* ``desi_zproc`` now runs ``desi_group_spectra --mpi`` on all ranks of each
+  petal's block instead of leaving all but one rank idle, so frames are read
+  in parallel. ``desi_group_spectra`` compresses ``.gz`` output with ``pigz``
+  on the CPUs of the other ranks when ``pigz`` is available, which cuts the
+  group spectra stage from about 80 s to about 25 s for a tile. Table data
+  in the outputs is unchanged.
 
 0.73.3 (2026-10-14)
 -------------------
