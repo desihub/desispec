@@ -125,7 +125,8 @@ def parse(options=None):
     parser.add_argument('-c', '--cameras', type=str, default=None, required=False,
                         help='Comma-separated list of cameras to include, e.g. b0,r0,z0.')
     parser.add_argument('-t', '--tile-completeness', type=str, default=None, required=False,
-                        help='Output tile completeness file (FITS/CSV base path).')
+                        help='Output tile completeness file; both .fits and .csv versions are written. '
+                             'The previous table is read from the .fits version if it exists.')
     parser.add_argument('--aux', type=str, default=None, required=False, nargs='*',
                         help='Auxiliary tile table files (e.g. SV1 tiles).')
     parser.add_argument('--gfa-proc-dir', type=str, default=None, required=False,
@@ -2290,8 +2291,17 @@ def main(options=None):
         new_tile_table = compute_tile_completeness_table(
             exposures_table[selection], prod, auxiliary_table_filenames=args.aux)
 
-        if os.path.isfile(args.tile_completeness):
-            previous = Table.read(args.tile_completeness)
+        # Merge with the previous tiles file, preferring its FITS copy: a CSV
+        # reads back with 64-bit integers (and integer columns if empty).
+        previous_file = os.path.splitext(args.tile_completeness)[0] + '.fits'
+        if os.path.isfile(previous_file):
+            if os.path.abspath(previous_file) != os.path.abspath(args.tile_completeness):
+                log.warning('Reading previous tile completeness from {} instead of {}'.format(
+                    previous_file, args.tile_completeness))
+        else:
+            previous_file = args.tile_completeness
+        if os.path.isfile(previous_file):
+            previous = Table.read(previous_file)
             # An empty CSV reads back with integer text columns, so only merge
             # when there are previous rows.
             if len(previous) > 0:

@@ -708,6 +708,40 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(fits.getheader(str(tiles), 1)['EXTNAME'], 'TILES')
         self.assertEqual(sorted(Table.read(str(tiles))['TILEID'].tolist()), [1234, 5678])
 
+    def _tile_warnings(self, *options):
+        """Run main() and return its warning messages about the tiles file."""
+        logger = mod.get_logger()
+        with patch.object(logger, 'warning', wraps=logger.warning) as warning, self._no_fiberassign():
+            self.assertEqual(self._run(*options), 0)
+        return [str(c.args[0]) for c in warning.call_args_list if 'tile completeness' in str(c.args[0])]
+
+    def test_previous_tiles_read_from_fits_copy(self):
+        # --tile-completeness tiles.csv: the merge reads tiles.fits (CSV
+        # integers would come back 64-bit), with a warning
+        tiles = self.prod / 'tiles.csv'
+        fits_file = self.prod / 'tiles.fits'
+        self._tile_warnings('--tile-completeness', str(tiles))
+        dtypes = {c: Table.read(str(fits_file))[c].dtype for c in ('TILEID', 'LASTNIGHT')}
+        tiles.write_text('not a valid table\n')
+        self._add_exposure(night=20211002, expid=200, tileid=5678)
+        warnings = self._tile_warnings('--tile-completeness', str(tiles))
+        self.assertTrue(any('instead of' in w and str(fits_file) in w for w in warnings), warnings)
+        merged = Table.read(str(fits_file))
+        self.assertEqual(sorted(merged['TILEID'].tolist()), [1234, 5678])
+        for col, dtype in dtypes.items():
+            self.assertEqual(merged[col].dtype, dtype, col)
+        # asking for the .fits file directly gives no warning
+        self.assertEqual(self._tile_warnings('--tile-completeness', str(fits_file)), [])
+
+    def test_previous_tiles_fall_back_to_given_file(self):
+        # no FITS copy: the given CSV is merged
+        tiles = self.prod / 'tiles.csv'
+        self._tile_warnings('--tile-completeness', str(tiles))
+        (self.prod / 'tiles.fits').unlink()
+        self._add_exposure(night=20211002, expid=200, tileid=5678)
+        self.assertEqual(self._tile_warnings('--tile-completeness', str(tiles)), [])
+        self.assertEqual(sorted(Table.read(str(self.prod / 'tiles.fits'))['TILEID'].tolist()), [1234, 5678])
+
     def test_empty_tile_csv_can_be_repopulated(self):
         # remove the last exposure with a CSV tile file, then add a new exposure
         tiles = self.prod / 'tiles.csv'
