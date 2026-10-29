@@ -76,6 +76,55 @@ def use_mpi():
 
     return False
 
+# CPU affinity
+
+def get_cpu_affinity():
+    """
+    Return the set of CPU ids that this process may run on
+
+    On platforms without CPU affinity support (e.g. macOS), the process
+    may run on any CPU, so this returns all CPU ids.
+    """
+    if hasattr(os, 'sched_getaffinity'):
+        return os.sched_getaffinity(0)
+    else:
+        return set(range(os.cpu_count()))
+
+def gather_cpu_affinity(comm):
+    """
+    Return sorted list of CPU ids that any rank of ``comm`` may run on
+
+    Args:
+        comm (mpi4py.MPI.Comm): MPI communicator
+
+    Note: CPU ids are not unique across nodes, so this is only meaningful
+    if all ranks of ``comm`` are on the same node.
+    """
+    return sorted(set().union(*comm.allgather(get_cpu_affinity())))
+
+@contextmanager
+def cpu_affinity(cpus):
+    """
+    Context manager to run this process on ``cpus``, restoring the original
+    CPU affinity on exit
+
+    Args:
+        cpus (list or set): CPU ids to run on
+
+    Child processes started within the context inherit the CPU affinity.
+    This is a no-op on platforms without CPU affinity support (e.g. macOS).
+    """
+    if not hasattr(os, 'sched_setaffinity'):
+        yield
+        return
+
+    original_cpus = os.sched_getaffinity(0)
+    os.sched_setaffinity(0, cpus)
+    try:
+        yield
+    finally:
+        os.sched_setaffinity(0, original_cpus)
+
 # Functions for static distribution
 
 def dist_uniform(nwork, nworkers, id=None):

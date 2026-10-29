@@ -14,6 +14,7 @@ import numpy as np
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap, read_spectra, write_spectra
 from desispec.scripts import group_spectra
+from desispec.parallel import get_cpu_affinity
 
 
 @unittest.skipIf(shutil.which('pigz') is None, 'pigz not installed')
@@ -21,8 +22,8 @@ class TestWriteSpectraPigz(unittest.TestCase):
 
     def setUp(self):
         self.testdir = tempfile.mkdtemp()
-        self.cpus = sorted(os.sched_getaffinity(0))
-        self.original_cpus = os.sched_getaffinity(0)
+        self.original_cpus = get_cpu_affinity()
+        self.cpus = sorted(self.original_cpus)
 
         bands = ['b', 'r', 'z']
         wave = {'b': np.arange(3600, 5800.8, 0.8),
@@ -44,7 +45,6 @@ class TestWriteSpectraPigz(unittest.TestCase):
                                mask=None, resolution_data=rdat, fibermap=fmap)
 
     def tearDown(self):
-        os.sched_setaffinity(0, self.original_cpus)
         shutil.rmtree(self.testdir, ignore_errors=True)
 
     def _assert_same_spectra(self, filename):
@@ -93,7 +93,7 @@ class TestWriteSpectraPigz(unittest.TestCase):
         """CPU affinity of the calling process is restored"""
         outfile = os.path.join(self.testdir, 'spectra.fits.gz')
         group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
-        self.assertEqual(os.sched_getaffinity(0), self.original_cpus)
+        self.assertEqual(get_cpu_affinity(), self.original_cpus)
 
     def test_not_gz(self):
         """Files not ending in .gz are written directly"""
@@ -127,7 +127,7 @@ class TestWriteSpectraPigz(unittest.TestCase):
             group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
         self._assert_only_output(outfile)
         self._assert_same_spectra(outfile)
-        self.assertEqual(os.sched_getaffinity(0), self.original_cpus)
+        self.assertEqual(get_cpu_affinity(), self.original_cpus)
 
 
 if __name__ == '__main__':

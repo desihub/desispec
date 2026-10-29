@@ -23,6 +23,7 @@ from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import add_missing_frames, frames2spectra
 from ..coaddition import coadd
 from ..util import parse_keyval
+from ..parallel import cpu_affinity, gather_cpu_affinity
 
 
 def parse(options=None):
@@ -120,25 +121,20 @@ def _write_spectra_pigz(outfile, spectra, cpus, min_cpus=4):
     t0 = time.time()
     io.write_spectra(plainfile, spectra)
 
-    #- child processes inherit the CPU affinity of this process
-    original_cpus = os.sched_getaffinity(0)
     try:
-        os.sched_setaffinity(0, cpus)
-        with open(tmpfile, 'wb') as fx:
+        #- pigz inherits the CPU affinity of this process
+        with cpu_affinity(cpus), open(tmpfile, 'wb') as fx:
             subprocess.run([pigz, '-p', str(len(cpus)), '-c', plainfile],
                            stdout=fx, check=True)
     except Exception as err:
         log.warning(f'pigz of {plainfile} failed ({err}); falling back to write_spectra')
         if os.path.exists(tmpfile):
             os.remove(tmpfile)
-        os.sched_setaffinity(0, original_cpus)
         io.write_spectra(outfile, spectra)
     else:
-        os.sched_setaffinity(0, original_cpus)
         os.rename(tmpfile, outfile)
         log.info(f'Wrote {outfile} with pigz on {len(cpus)} CPUs in {time.time()-t0:.1f} sec')
     finally:
-        os.sched_setaffinity(0, original_cpus)
         if os.path.exists(plainfile):
             os.remove(plainfile)
 
@@ -158,7 +154,7 @@ def main(args=None, comm=None):
         size = comm.size
         #- CPUs of all ranks in comm; used to compress the output with pigz
         #- using the CPUs of the other, otherwise idle, ranks
-        cpus = sorted(set().union(*comm.allgather(os.sched_getaffinity(0))))
+        cpus = gather_cpu_affinity(comm)
     else:
         rank = 0
         size = 1
