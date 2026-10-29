@@ -6,7 +6,7 @@ Utility to run multiple other batch scripts in parallel within a larger job
 e.g. given a set of N>>1 slurm scripts that want 10 nodes each, running 5
 at a time in a 50-node interactive job:
 
-    salloc -N 50 -C haswell -t 2:00:00 -q interactive
+    salloc -N 50 -C cpu -t 2:00:00 -q interactive
     desi_run_scripts -n 5 *.slurm
 
 As each script finishes, another one takes its place without waiting for
@@ -20,6 +20,11 @@ Notes:
     except for --time / -t which sets the per-script timeout.  In particular
     #SBATCH -N is ignored, so choose --nworkers such that
     nworkers * (nodes per script) <= nodes in the allocation.
+  * Scripts without #SBATCH --time (or with --time=UNLIMITED) have no
+    timeout unless --maxtime is given, and can hold a worker slot until
+    the allocation ends.
+  * Each input script must be unique, and scripts must not share a logfile
+    (e.g. same filename in different directories with --logdir).
   * When a script times out, its entire process group is terminated so that
     the srun job steps that it launched are cancelled and free their nodes.
   * --joblog FILE appends one tab-separated row per script with its start
@@ -80,6 +85,29 @@ def _joblog_key(script, fullpath=False):
         return os.path.abspath(script)
     else:
         return os.path.basename(script)
+
+def _logfile_name(script, jobid, logdir=None):
+    """Return the logfile name for script
+
+    Args:
+        script (str): script filename
+        jobid (str): job ID to include in the logfile name
+
+    Options:
+        logdir (str): directory for logfile; default same directory as script
+
+    Returns logfile name, replacing scriptname.ext -> scriptname-{jobid}.log
+    """
+    root, ext = os.path.splitext(script)
+    if logdir is None:
+        return f'{root}-{jobid}.log'
+    else:
+        root = os.path.basename(root)
+        return os.path.join(logdir, f'{root}-{jobid}.log')
+
+def _get_jobid():
+    """Return $SLURM_JOBID, or the pid of this process if not in a slurm job"""
+    return os.getenv('SLURM_JOBID', str(os.getpid()))
 
 def _write_joblog_row(joblog, values):
     """Append one row to the joblog, writing the header first if the file is new
@@ -273,19 +301,13 @@ def run_one_script(script, index, ntot, maxtime=None, logdir=None, delay=None,
     if it already exists it is appended to instead of overwritten.
 
     Returns 0 for success, TIMEOUT_EXITCODE (99) for timeout,
-    NOTRUN_EXITCODE (98) if not started because the wrapper is stopping,
+    None if not started because the wrapper is stopping,
     or the script's non-zero exit code (negative for killed by signal N)
     """
     log = get_logger(timestamp=True)
-    jobid = os.getenv('SLURM_JOBID', str(os.getpid()))
-
-    #- Generate logfile name from script name
-    root, ext = os.path.splitext(script)
-    if logdir is None:
-        logfile = f'{root}-{jobid}.log'
-    else:
-        root = os.path.basename(root)
-        logfile = os.path.join(logdir, f'{root}-{jobid}.log')
+    jobid = _get_jobid()
+    logfile = _logfile_name(script, jobid, logdir)
+    timeout = '-' if maxtime is None else f'{maxtime:.0f}'
 
     basename = os.path.basename(script)
     linesep = '-'*78+'\n'
@@ -296,33 +318,44 @@ def run_one_script(script, index, ntot, maxtime=None, logdir=None, delay=None,
         _launch_cond.wait_for(lambda: _next_launch[0] == index or _stop_launching.is_set())
         try:
             if _stop_launching.is_set():
-                return NOTRUN_EXITCODE
+                return None
 
+            #- wait (not sleep) releases _launch_cond so that an interrupt
+            #- isn't blocked, and wakes up early if launching is stopped
             if delay:
                 dt = _last_launch[0] + delay - time.time()
                 if dt > 0:
-                    time.sleep(dt)
+                    _launch_cond.wait_for(_stop_launching.is_set, timeout=dt)
+                    if _stop_launching.is_set():
+                        return None
 
             log.info(f'RUNNING {index+1}/{ntot} {script}; logging to {logfile}')
-            logx = open(logfile, 'a')
-            if logx.tell() > 0:
-                logx.write('\n' + '='*78 + '\n')
-            logx.write(f'Starting {basename} at {time.asctime()}\n')
-            logx.write(f'Running /bin/sh {script}\n')
-            logx.write(linesep)
-            logx.flush()
-
-            #- start_new_session puts the script and its srun in their own
-            #- process group so that they can be terminated together;
-            #- stdin=DEVNULL so that srun doesn't read the terminal
             t0 = time.time()
             start = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(t0))
             try:
-                proc = subprocess.Popen(['/bin/sh', script], text=True,
-                        stdin=subprocess.DEVNULL, stdout=logx, stderr=subprocess.STDOUT,
-                        start_new_session=True)
+                logx = open(logfile, 'a')
+                if logx.tell() > 0:
+                    logx.write('\n' + '='*78 + '\n')
+                logx.write(f'Starting {basename} at {time.asctime()}\n')
+                logx.write(f'Running /bin/sh {script}\n')
+                logx.write(linesep)
+                logx.flush()
+
+                #- start_new_session puts the script and its srun in their own
+                #- process group so that they can be terminated together;
+                #- stdin=DEVNULL so that srun doesn't read the terminal
+                try:
+                    proc = subprocess.Popen(['/bin/sh', script], text=True,
+                            stdin=subprocess.DEVNULL, stdout=logx, stderr=subprocess.STDOUT,
+                            start_new_session=True)
+                except Exception:
+                    logx.close()
+                    raise
             except Exception:
-                logx.close()
+                #- record the failed launch; run_scripts reports the exception
+                if joblog is not None:
+                    _write_joblog_row(joblog, [jobid, joblog_key, start, '0.0', '-', 'FAILED',
+                                               timeout, logfile])
                 raise
 
             _last_launch[0] = time.time()
@@ -370,7 +403,6 @@ def run_one_script(script, index, ntot, maxtime=None, logdir=None, delay=None,
             logx.write(f'FAILED {basename} (exit code {err}) at {timemsg}\n')
 
     if joblog is not None:
-        timeout = '-' if maxtime is None else f'{maxtime:.0f}'
         _write_joblog_row(joblog, [jobid, joblog_key, start, f'{dt:.1f}', err, status,
                                    timeout, logfile])
 
@@ -426,6 +458,11 @@ def run_scripts(scripts, nworkers, maxtime=None, logdir=None, delay=None,
 
         wait(results)
     except KeyboardInterrupt as err:
+        #- ignore further signals so that a second Ctrl-C/SIGTERM doesn't
+        #- interrupt the cleanup and leave scripts running
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            signal.signal(signum, signal.SIG_IGN)
+
         log.error(f'Interrupted ({err}); not starting any more scripts')
         _stop_launching.set()
         pool.shutdown(wait=False, cancel_futures=True)
@@ -450,13 +487,13 @@ def run_scripts(scripts, nworkers, maxtime=None, logdir=None, delay=None,
         elif r.exception() is not None:
             log.error(f'{script} raised {r.exception()!r}')
             failed.append(script)
-        elif r.result() == NOTRUN_EXITCODE:
+        elif r.result() is None:
             notrun.append(script)
         elif r.result() != 0:
             failed.append(script)
 
     if joblog is not None:
-        jobid = os.getenv('SLURM_JOBID', str(os.getpid()))
+        jobid = _get_jobid()
         notrun_set = set(notrun)
         for i, script in enumerate(scripts):
             if script in notrun_set:
@@ -509,6 +546,9 @@ def main():
 
     log = get_logger()
 
+    if args.nworkers < 1:
+        p.error(f'--nworkers must be >= 1, not {args.nworkers}')
+
     if args.resume and args.joblog is None:
         log.critical('--resume requires --joblog')
         sys.exit(1)
@@ -529,8 +569,12 @@ def main():
         with open(args.infile) as fx:
             for line in fx.readlines():
                 line = line.strip()
-                if len(line)>2 and not line.startswith('#'):
+                if line and not line.startswith('#'):
                     scripts.append(line)
+
+    if len(scripts) == 0:
+        log.critical('No input scripts given')
+        sys.exit(1)
 
     missing = 0
     for script in scripts:
@@ -540,6 +584,30 @@ def main():
 
     if missing > 0:
         log.critical(f'Missing {missing}/{len(scripts)} input scripts; exiting')
+        sys.exit(1)
+
+    #- running the same script twice at the same time is almost certainly a mistake
+    paths = dict()
+    for script in scripts:
+        paths.setdefault(os.path.abspath(script), list()).append(script)
+    duplicates = [x for x in paths.values() if len(x) > 1]
+    if len(duplicates) > 0:
+        for dups in duplicates:
+            log.error(f'Duplicate scripts: {dups}')
+        log.critical('Input scripts must be unique')
+        sys.exit(1)
+
+    #- scripts must not interleave their output in a shared logfile,
+    #- e.g. same filename in different directories with --logdir
+    jobid = _get_jobid()
+    logfiles = dict()
+    for script in scripts:
+        logfiles.setdefault(_logfile_name(script, jobid, args.logdir), list()).append(script)
+    collisions = [x for x in logfiles.values() if len(x) > 1]
+    if len(collisions) > 0:
+        for dups in collisions:
+            log.error(f'Scripts would share a logfile: {dups}')
+        log.critical('Rename scripts so that their logfiles are unique')
         sys.exit(1)
 
     #- joblog identifies scripts by filename by default, so they must be unique
@@ -566,10 +634,16 @@ def main():
 
         nskip = len(scripts) - len(remaining)
         log.info(f'Skipping {nskip}/{len(scripts)} scripts that already succeeded in {args.joblog}')
+        if nskip == 0 and len(successes) > 0:
+            log.warning(f'None of the {len(successes)} SUCCESS rows in {args.joblog} match the input '
+                        'scripts; if it was written without --joblog-fullpath, resume without it too')
         scripts = remaining
         if len(scripts) == 0:
             log.info('No scripts left to run')
             return 0
+
+    if args.logdir is not None:
+        os.makedirs(args.logdir, exist_ok=True)
 
     #- Treat SIGTERM (e.g. end of allocation) and SIGHUP like Ctrl-C so that
     #- running scripts are terminated instead of left behind
