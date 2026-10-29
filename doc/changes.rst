@@ -7,9 +7,9 @@ desispec Change Log
 
 * Rewrite ``desi_tsnr_afterburner`` as ``desispec.scripts.tsnr_afterburner``,
   reading TSNR2 and sky magnitudes from exposure QA files when available and
-  falling back to cframes otherwise (PR `#XXXX`_). 
+  falling back to cframes otherwise (PR `#2911`_). 
 
-.. _`#XXXX`: https://github.com/desihub/desispec/pull/XXXX
+.. _`#2911`: https://github.com/desihub/desispec/pull/2911
 
 0.73.3 (2026-10-14)
 -------------------
