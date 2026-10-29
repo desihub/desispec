@@ -71,19 +71,16 @@ _PETALS = list(range(10))
 _TSNR2_TRACERS = ('ELG', 'QSO', 'LRG', 'LYA', 'BGS', 'GPBDARK', 'GPBBRIGHT', 'GPBBACKUP')
 
 #: Columns stored as float64 in production exposures files; other float
-#: columns are float32. EXPTIME is float64 in EXPOSURES but float32 in FRAMES.
+#: columns, including all TSNR2_* and per-tracer effective times, are float32.
+#: EXPTIME is float64 in EXPOSURES but float32 in FRAMES.
 _FLOAT64_COLS = frozenset({
-    'TILERA', 'TILEDEC', 'MJD', 'EXPTIME', 'EFFTIME_SPEC', 'TSNR2_LYA', 'LYA_EFFTIME_DARK',
+    'TILERA', 'TILEDEC', 'MJD', 'EXPTIME', 'EFFTIME_SPEC',
     'SKY_MAG_G_SPEC', 'SKY_MAG_R_SPEC', 'SKY_MAG_Z_SPEC',
 })
 
-
-def _tsnr2_value(tracer, value):
-    """Return a TSNR2 value with the dtype used in production files.
-
-    TSNR2_LYA is float64 and the other tracers are float32.
-    """
-    return np.float64(value) if tracer == 'LYA' else np.float32(value)
+#: Per-tracer effective times derived from TSNR2_* (float32, like TSNR2_*).
+_TRACER_EFFTIME_COLS = ('LRG_EFFTIME_DARK', 'ELG_EFFTIME_DARK', 'BGS_EFFTIME_BRIGHT', 'LYA_EFFTIME_DARK',
+                        'GPB_EFFTIME_DARK', 'GPB_EFFTIME_BRIGHT', 'GPB_EFFTIME_BACKUP')
 
 
 #: Default values for targeting metadata fields.
@@ -355,9 +352,9 @@ def _median_tsnr_values(table, band):
             finite = np.isfinite(vals)
             positive = finite & (vals > 0)
             if positive.any():
-                values['TSNR2_' + tracer] = _tsnr2_value(tracer, np.float32(np.median(vals[positive])))
+                values['TSNR2_' + tracer] = np.float32(np.median(vals[positive]))
             elif finite.any():
-                values['TSNR2_' + tracer] = _tsnr2_value(tracer, 0.0)
+                values['TSNR2_' + tracer] = np.float32(0.0)
     return values
 
 
@@ -937,7 +934,7 @@ def _petalqa_camera_values(petalqa, camera):
         if col in petalqa.dtype.names:
             value = petalqa[col][matches][0]
             if np.isfinite(value):
-                values['TSNR2_' + tracer] = _tsnr2_value(tracer, value)
+                values['TSNR2_' + tracer] = np.float32(value)
     if values and all(value == 0 for value in values.values()):
         return {}
     return values
@@ -1100,7 +1097,7 @@ def build_tables(exposure_rows, camword_map):
                 petal_tsnr2[petal] = {t: 0.0 for t in _TSNR2_TRACERS}
             for tracer in _TSNR2_TRACERS:
                 val = float(camera_rows[camera]['TSNR2_' + tracer])
-                frame_row['TSNR2_{}'.format(tracer)] = _tsnr2_value(tracer, val)
+                frame_row['TSNR2_{}'.format(tracer)] = np.float32(val)
                 petal_tsnr2[petal][tracer] += val
 
             # QA summaries do not store alpha; keep the column with NaN.
@@ -1117,8 +1114,8 @@ def build_tables(exposure_rows, camword_map):
         exp_row['SKY_MAG_R_SPEC'] = np.float64(row.get('SKY_MAG_R_SPEC', 99.0))
         exp_row['SKY_MAG_Z_SPEC'] = np.float64(row.get('SKY_MAG_Z_SPEC', 99.0))
         for tracer in _TSNR2_TRACERS:
-            exp_row['TSNR2_{}'.format(tracer)] = _tsnr2_value(
-                tracer, np.mean([petal_tsnr2[p][tracer] for p in petal_tsnr2]))
+            exp_row['TSNR2_{}'.format(tracer)] = np.float32(
+                np.mean([petal_tsnr2[p][tracer] for p in petal_tsnr2]))
 
         exp_row = _add_efftimes(exp_row)
         exp_row = _add_gfa_zero_cols(exp_row)
@@ -1190,7 +1187,7 @@ def _empty_tables():
     frames['CAMERA'] = np.array([], dtype='U2')
     frames['EXPTIME'] = np.array([], dtype='f4')
     for tracer in _TSNR2_TRACERS:
-        frames['TSNR2_' + tracer] = np.array([], dtype='f8' if tracer == 'LYA' else 'f4')
+        frames['TSNR2_' + tracer] = np.array([], dtype='f4')
     frames['TSNR2_ALPHA'] = np.array([], dtype='f4')
     frames.meta['EXTNAME'] = 'FRAMES'
     exposures.meta['EXTNAME'] = 'EXPOSURES'
@@ -1209,7 +1206,7 @@ def _add_efftimes(row):
     row['LRG_EFFTIME_DARK'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_LRG', 0.0), 'LRG'))
     row['ELG_EFFTIME_DARK'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_ELG', 0.0), 'ELG'))
     row['BGS_EFFTIME_BRIGHT'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_BGS', 0.0), 'BGS'))
-    row['LYA_EFFTIME_DARK'] = np.float64(tsnr2_to_efftime(row.get('TSNR2_LYA', 0.0), 'LYA'))
+    row['LYA_EFFTIME_DARK'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_LYA', 0.0), 'LYA'))
     row['GPB_EFFTIME_DARK'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_GPBDARK', 0.0), 'GPBDARK'))
     row['GPB_EFFTIME_BRIGHT'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_GPBBRIGHT', 0.0), 'GPBBRIGHT'))
     row['GPB_EFFTIME_BACKUP'] = np.float32(tsnr2_to_efftime(row.get('TSNR2_GPBBACKUP', 0.0), 'GPBBACKUP'))
@@ -1440,7 +1437,7 @@ def inject_bad_exposures(exposures_table, frames_table, bad_expids, cameras=None
             entry.update(_bad_exposure_skymags((be['NIGHT'], expid)))
 
         for tracer in _TSNR2_TRACERS:
-            entry['TSNR2_{}'.format(tracer)] = _tsnr2_value(tracer, 0.0)
+            entry['TSNR2_{}'.format(tracer)] = np.float32(0.0)
         entry['TSNR2_ALPHA'] = np.float32(np.nan)
         entry = _add_efftimes(entry)
         entry = _add_gfa_zero_cols(entry)
@@ -1888,7 +1885,7 @@ def update_exposure_tsnr(exposures_table, frames_table, expids):
         row = {'NIGHT': result['NIGHT'][i], 'GOALTYPE': result['GOALTYPE'][i]}
         for tracer in _TSNR2_TRACERS:
             petal_sums = sums[tracer][start:end]
-            row['TSNR2_' + tracer] = _tsnr2_value(tracer, np.mean(petal_sums) if end > start else 0.0)
+            row['TSNR2_' + tracer] = np.float32(np.mean(petal_sums) if end > start else 0.0)
         rows.append((i, _add_efftimes(row)))
 
     for col in result.colnames:
@@ -2232,6 +2229,15 @@ def main(options=None):
             removed_any = True
             frames_table = frames_table[~np.isin(frames_table['EXPID'], exposures_table['EXPID'][remove])]
             exposures_table = exposures_table[~remove]
+
+    # TSNR2 columns and the per-tracer effective times derived from them are
+    # float32; existing production files store them as float64, which
+    # merging would otherwise keep.
+    for table in (exposures_table, frames_table):
+        for col in table.colnames:
+            if ((col.startswith('TSNR2_') or col in _TRACER_EFFTIME_COLS)
+                    and table[col].dtype.kind == 'f' and table[col].dtype.itemsize > 4):
+                table[col] = table[col].astype(np.float32)
 
     exposures_table.meta['EXTNAME'] = 'EXPOSURES'
     frames_table.meta['EXTNAME'] = 'FRAMES'

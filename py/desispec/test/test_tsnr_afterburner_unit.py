@@ -101,12 +101,14 @@ class TestAfterburnerIntegration(unittest.TestCase):
 
     def test_output_dtypes_match_production(self):
         # production exposures files store these columns as float64; EXPTIME
-        # is float64 in EXPOSURES but float32 in FRAMES
-        float64 = {'EXPOSURES': ['TILERA', 'TILEDEC', 'MJD', 'EXPTIME', 'EFFTIME_SPEC', 'TSNR2_LYA',
-                                 'LYA_EFFTIME_DARK', 'SKY_MAG_G_SPEC', 'SKY_MAG_R_SPEC', 'SKY_MAG_Z_SPEC'],
-                   'FRAMES': ['TILERA', 'TILEDEC', 'MJD', 'TSNR2_LYA']}
-        float32 = {'EXPOSURES': ['TSNR2_ELG', 'LRG_EFFTIME_DARK', 'EBV'],
-                   'FRAMES': ['EXPTIME', 'TSNR2_ELG', 'EBV']}
+        # is float64 in EXPOSURES but float32 in FRAMES. All TSNR2_* and the
+        # per-tracer effective times are float32.
+        tsnr2 = ['TSNR2_' + tracer for tracer in mod._TSNR2_TRACERS]
+        float64 = {'EXPOSURES': ['TILERA', 'TILEDEC', 'MJD', 'EXPTIME', 'EFFTIME_SPEC',
+                                 'SKY_MAG_G_SPEC', 'SKY_MAG_R_SPEC', 'SKY_MAG_Z_SPEC'],
+                   'FRAMES': ['TILERA', 'TILEDEC', 'MJD']}
+        float32 = {'EXPOSURES': tsnr2 + list(mod._TRACER_EFFTIME_COLS) + ['EBV'],
+                   'FRAMES': tsnr2 + ['EXPTIME', 'EBV']}
         self._add_exposure(expid=101, laststep='skysub')
         with self._no_fiberassign():
             self.assertEqual(self._run('--add-badexp'), 0)
@@ -121,12 +123,31 @@ class TestAfterburnerIntegration(unittest.TestCase):
 
     def test_empty_tables_dtypes_match_production(self):
         frames, exposures = mod._empty_tables()
-        for col in ('TILERA', 'EXPTIME', 'EFFTIME_SPEC', 'TSNR2_LYA', 'SKY_MAG_R_SPEC', 'EFFTIME_GFA'):
+        for col in ('TILERA', 'EXPTIME', 'EFFTIME_SPEC', 'SKY_MAG_R_SPEC', 'EFFTIME_GFA'):
             self.assertEqual(exposures[col].dtype.itemsize, 8, col)
-        for col in ('TILERA', 'TSNR2_LYA'):
+        for col in ('TILERA',):
             self.assertEqual(frames[col].dtype.itemsize, 8, col)
-        for col in ('EXPTIME', 'TSNR2_ELG'):
+        for col in ('EXPTIME', 'TSNR2_ELG', 'TSNR2_LYA'):
             self.assertEqual(frames[col].dtype.itemsize, 4, col)
+        self.assertEqual(exposures['TSNR2_LYA'].dtype.itemsize, 4)
+        self.assertEqual(exposures['LYA_EFFTIME_DARK'].dtype.itemsize, 4)
+
+    def test_float64_tsnr2_in_existing_file_becomes_float32(self):
+        # production files store TSNR2 and per-tracer effective times as float64;
+        # after an update they are float32, including retained rows
+        self._add_exposure(expid=101)
+        self._run()
+        exposures, frames = self._tables()
+        for table in (exposures, frames):
+            table['TSNR2_LYA'] = table['TSNR2_LYA'].astype(np.float64) + 1e-9
+        for col in mod._TRACER_EFFTIME_COLS:
+            exposures[col] = exposures[col].astype(np.float64)
+        mod.write_output(exposures, frames, str(self.outfile))
+        self.assertEqual(self._run('--expids', '101'), 0)
+        exposures, frames = self._tables()
+        for table in (exposures, frames):
+            for col in [c for c in table.colnames if c.startswith('TSNR2_') or c in mod._TRACER_EFFTIME_COLS]:
+                self.assertEqual(table[col].dtype.itemsize, 4, col)
 
     def test_frames_ebv_is_per_petal(self):
         # FRAMES gets each petal's median EBV; EXPOSURES the median over all fibers
