@@ -17,9 +17,19 @@ Notes:
     or the body of an sbatch script), not under srun.  Otherwise the srun
     calls inside the scripts are nested job steps that never start.
   * Scripts are run with /bin/sh and their #SBATCH headers are ignored,
-    except for --time / -t which sets the per-script timeout.  In particular
-    #SBATCH -N is ignored, so choose --nworkers such that
+    except for --time / -t which sets the per-script timeout, and
+    -N / --nodes and -n / --ntasks described below.  Slurm does not limit
+    each script to its #SBATCH -N, so choose --nworkers such that
     nworkers * (nodes per script) <= nodes in the allocation.
+  * Scripts inherit the allocation's SLURM_* environment variables, so
+    for scripts with #SBATCH -N, SLURM_JOB_NUM_NODES and SLURM_NNODES are
+    set to that value, and SLURM_NTASKS and SLURM_NPROCS are set from
+    #SBATCH -n or else removed.  srun uses these as its default -N and -n,
+    and scripts like nightlyflat use $SLURM_JOB_NUM_NODES to size their
+    parallelism.  Other variables such as SLURM_JOB_NODELIST still describe
+    the whole allocation, so scripts must not use them to choose nodes.
+    Scripts without #SBATCH -N see the allocation's node count, so their
+    srun calls should have explicit -N and -n.
   * Scripts without #SBATCH --time (or with --time=UNLIMITED) have no
     timeout unless --maxtime is given, and can hold a worker slot until
     the allocation ends.
@@ -106,8 +116,8 @@ def _logfile_name(script, jobid, logdir=None):
         return os.path.join(logdir, f'{root}-{jobid}.log')
 
 def _get_jobid():
-    """Return $SLURM_JOBID, or the pid of this process if not in a slurm job"""
-    return os.getenv('SLURM_JOBID', str(os.getpid()))
+    """Return $SLURM_JOB_ID, or the pid of this process if not in a slurm job"""
+    return os.getenv('SLURM_JOB_ID', str(os.getpid()))
 
 def _write_joblog_row(joblog, values):
     """Append one row to the joblog, writing the header first if the file is new
@@ -202,6 +212,50 @@ def _parse_slurm_time(value):
     except ValueError:
         raise ValueError(f'Unable to parse slurm time limit {value!r}') from None
 
+def _sbatch_opts(script):
+    """Return list of option tokens from the #SBATCH headers of script
+
+    Args:
+        script (str): slurm batch script filename, possibly with #SBATCH headers
+
+    Like sbatch, only the #SBATCH lines before the first command are used.
+    """
+    opts = list()
+    with open(script) as fx:
+        for line in fx:
+            line = line.strip()
+            if line == '':
+                continue
+            elif not line.startswith('#'):
+                break   #- sbatch stops reading #SBATCH lines at first command
+            elif not line.startswith('#SBATCH'):
+                continue
+
+            opts.extend(line.split()[1:])
+
+    return opts
+
+def _sbatch_opt_value(opts, longopt, shortopt):
+    """Return the last value of an option in opts, or None if not found
+
+    Args:
+        opts: list of option tokens, e.g. from _sbatch_opts
+        longopt (str): long option name, e.g. '--time'
+        shortopt (str): short option name, e.g. '-t'
+
+    Supports --opt=V, --opt V, -o V, and -oV.
+    """
+    value = None
+    for i, opt in enumerate(opts):
+        if opt.startswith(longopt+'='):
+            value = opt.split('=', 1)[1]
+        elif opt in (longopt, shortopt) and i+1 < len(opts):
+            value = opts[i+1]
+        elif opt.startswith(shortopt) and not opt.startswith('--') and len(opt) > len(shortopt):
+            value = opt[len(shortopt):]
+
+    return value
+
 def _slurm_jobtime(script):
     """Derive job time from #SBATCH headers
 
@@ -213,27 +267,61 @@ def _slurm_jobtime(script):
     Like sbatch, only the #SBATCH lines before the first command are used.
     Supports --time=T, --time T, -t T, and -tT.
     """
-    jobtime = None
-    with open(script) as fx:
-        for line in fx:
-            line = line.strip()
-            if line == '':
-                continue
-            elif not line.startswith('#'):
-                break   #- sbatch stops reading #SBATCH lines at first command
-            elif not line.startswith('#SBATCH'):
-                continue
+    value = _sbatch_opt_value(_sbatch_opts(script), '--time', '-t')
+    if value is None:
+        return None
+    else:
+        return _parse_slurm_time(value)
 
-            opts = line.split()[1:]
-            for i, opt in enumerate(opts):
-                if opt.startswith('--time='):
-                    jobtime = _parse_slurm_time(opt.split('=', 1)[1])
-                elif opt in ('--time', '-t') and i+1 < len(opts):
-                    jobtime = _parse_slurm_time(opts[i+1])
-                elif opt.startswith('-t') and not opt.startswith('--') and len(opt) > 2:
-                    jobtime = _parse_slurm_time(opt[2:])
+def _slurm_nodes_ntasks(script):
+    """Derive number of nodes and tasks from #SBATCH headers
 
-    return jobtime
+    Args:
+        script (str): slurm batch script filename, possibly with #SBATCH headers
+
+    Returns (nodes, ntasks), each an int or None if not set.
+
+    Raises ValueError for values that aren't a positive integer,
+    including node ranges like -N 2-4
+    """
+    opts = _sbatch_opts(script)
+    results = list()
+    for longopt, shortopt in [('--nodes', '-N'), ('--ntasks', '-n')]:
+        value = _sbatch_opt_value(opts, longopt, shortopt)
+        if value is not None:
+            if not value.isdigit() or int(value) < 1:
+                raise ValueError(f'{script}: unsupported #SBATCH {longopt} value {value!r}; '
+                                 'only a single positive integer is supported')
+            value = int(value)
+        results.append(value)
+
+    return tuple(results)
+
+def _script_env(script):
+    """Return environment to run script with, or None to inherit unchanged
+
+    Args:
+        script (str): slurm batch script filename, possibly with #SBATCH headers
+
+    If script has #SBATCH -N, the allocation-wide SLURM_JOB_NUM_NODES and
+    SLURM_NNODES are replaced with that value, and SLURM_NTASKS and
+    SLURM_NPROCS are replaced with #SBATCH -n if set, or else removed.
+    srun uses these as its default -N and -n.
+    """
+    nodes, ntasks = _slurm_nodes_ntasks(script)
+    if nodes is None:
+        return None
+
+    env = os.environ.copy()
+    env['SLURM_JOB_NUM_NODES'] = str(nodes)
+    env['SLURM_NNODES'] = str(nodes)
+    for key in ('SLURM_NTASKS', 'SLURM_NPROCS'):
+        if ntasks is not None:
+            env[key] = str(ntasks)
+        else:
+            env.pop(key, None)
+
+    return env
 
 def _terminate(procs, grace=KILL_GRACE_SECONDS):
     """Terminate the process groups of procs, including any srun they launched
@@ -282,7 +370,7 @@ def _terminate(procs, grace=KILL_GRACE_SECONDS):
         p.wait()
 
 def run_one_script(script, index, ntot, maxtime=None, logdir=None, delay=None,
-                   joblog=None, joblog_key=None):
+                   joblog=None, joblog_key=None, env=None):
     """Run one script and return exit code
 
     Args:
@@ -296,8 +384,9 @@ def run_one_script(script, index, ntot, maxtime=None, logdir=None, delay=None,
         delay (float): minimum seconds between launching any two scripts
         joblog (str): if set, append a row for this script to this file
         joblog_key (str): name of script to record in joblog
+        env (dict): environment for the script; default inherits this process's
 
-    Logfile replaces scriptname.ext ->  scriptname-${SLURM_JOBID}.log;
+    Logfile replaces scriptname.ext ->  scriptname-${SLURM_JOB_ID}.log;
     if it already exists it is appended to instead of overwritten.
 
     Returns 0 for success, TIMEOUT_EXITCODE (99) for timeout,
@@ -338,6 +427,9 @@ def run_one_script(script, index, ntot, maxtime=None, logdir=None, delay=None,
                     logx.write('\n' + '='*78 + '\n')
                 logx.write(f'Starting {basename} at {time.asctime()}\n')
                 logx.write(f'Running /bin/sh {script}\n')
+                if env is not None:
+                    for key in ('SLURM_JOB_NUM_NODES', 'SLURM_NNODES', 'SLURM_NTASKS', 'SLURM_NPROCS'):
+                        logx.write(f'  {key}={env.get(key, "(unset)")}\n')
                 logx.write(linesep)
                 logx.flush()
 
@@ -347,7 +439,7 @@ def run_one_script(script, index, ntot, maxtime=None, logdir=None, delay=None,
                 try:
                     proc = subprocess.Popen(['/bin/sh', script], text=True,
                             stdin=subprocess.DEVNULL, stdout=logx, stderr=subprocess.STDOUT,
-                            start_new_session=True)
+                            start_new_session=True, env=env)
                 except Exception:
                     logx.close()
                     raise
@@ -444,6 +536,23 @@ def run_scripts(scripts, nworkers, maxtime=None, logdir=None, delay=None,
     else:
         maxtimes = [_slurm_jobtime(script) for script in scripts]
 
+    #- Likewise per-script SLURM_* node and task counts from #SBATCH -N/-n
+    envs = [_script_env(script) for script in scripts]
+
+    #- Slurm doesn't fail job steps that request more nodes than are free;
+    #- it queues them, so oversubscribing quietly serializes the scripts
+    allocnodes = os.getenv('SLURM_JOB_NUM_NODES')
+    if allocnodes is not None and allocnodes.isdigit():
+        allocnodes = int(allocnodes)
+        scriptnodes = [int(e['SLURM_JOB_NUM_NODES']) for e in envs if e is not None]
+        if len(scriptnodes) > 0:
+            maxnodes = max(scriptnodes)
+            if maxnodes > allocnodes:
+                log.warning(f'Some scripts want {maxnodes} nodes but the allocation has {allocnodes}')
+            elif min(nworkers, len(scripts)) * maxnodes > allocnodes:
+                log.warning(f'{nworkers} workers * up to {maxnodes} nodes per script > '
+                            f'{allocnodes} nodes in the allocation; scripts may wait for nodes')
+
     #- Each worker thread just waits on its subprocess, so threads (not
     #- processes) are sufficient and keep the bookkeeping in one process
     pool = ThreadPoolExecutor(max_workers=nworkers)
@@ -453,7 +562,7 @@ def run_scripts(scripts, nworkers, maxtime=None, logdir=None, delay=None,
         for i, script in enumerate(scripts):
             r = pool.submit(run_one_script, script, i, ntot, maxtime=maxtimes[i],
                             logdir=logdir, delay=delay, joblog=joblog,
-                            joblog_key=_joblog_key(script, joblog_fullpath))
+                            joblog_key=_joblog_key(script, joblog_fullpath), env=envs[i])
             results.append(r)
 
         wait(results)
