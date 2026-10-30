@@ -5,10 +5,14 @@ desispec Change Log
 0.73.4 (unreleased)
 -------------------
 
+* Fix bug preventing row-by-row overscan subtraction (PR `#2901`_).
+* Add ``desi_run_scripts`` wrapper (PR `#2905`_).
 * Rewrite ``desi_tsnr_afterburner`` as ``desispec.scripts.tsnr_afterburner``,
   reading TSNR2 and sky magnitudes from exposure QA files when available and
   falling back to cframes otherwise (PR `#2911`_). 
 
+.. _`#2901`: https://github.com/desihub/desispec/pull/2901
+.. _`#2905`: https://github.com/desihub/desispec/pull/2905
 .. _`#2911`: https://github.com/desihub/desispec/pull/2911
 
 0.73.3 (2026-10-14)
