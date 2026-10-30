@@ -512,6 +512,10 @@ def main(args=None, comm=None):
         nblocks, block_size, block_rank, block_num, block_comm = \
             distribute_ranks_to_blocks(len(all_subgroups), rank=rank, size=size,
                                        comm=comm, log=log, split_comm=True)
+        #- With size <= nblocks every block is a single rank, but block_comm
+        #- is then the full comm; don't use it as a per-block communicator
+        if block_size == 1:
+            block_comm = None
     else:
         nblocks, block_size, block_rank, block_num = \
             distribute_ranks_to_blocks(len(all_subgroups), rank=rank, size=size, log=log)
