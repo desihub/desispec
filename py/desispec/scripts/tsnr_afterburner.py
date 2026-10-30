@@ -71,16 +71,22 @@ _PETALS = list(range(10))
 _TSNR2_TRACERS = ('ELG', 'QSO', 'LRG', 'LYA', 'BGS', 'GPBDARK', 'GPBBRIGHT', 'GPBBACKUP')
 
 #: Columns stored as float64 in production exposures files; other float
-#: columns, including all TSNR2_* and per-tracer effective times, are float32.
+#: columns, including all TSNR2_* and effective times, are float32.
 #: EXPTIME is float64 in EXPOSURES but float32 in FRAMES.
 _FLOAT64_COLS = frozenset({
-    'TILERA', 'TILEDEC', 'MJD', 'EXPTIME', 'EFFTIME_SPEC',
+    'TILERA', 'TILEDEC', 'MJD', 'EXPTIME',
     'SKY_MAG_G_SPEC', 'SKY_MAG_R_SPEC', 'SKY_MAG_Z_SPEC',
 })
 
-#: Per-tracer effective times derived from TSNR2_* (float32, like TSNR2_*).
+#: Per-tracer effective times derived from TSNR2_*.
 _TRACER_EFFTIME_COLS = ('LRG_EFFTIME_DARK', 'ELG_EFFTIME_DARK', 'BGS_EFFTIME_BRIGHT', 'LYA_EFFTIME_DARK',
                         'GPB_EFFTIME_DARK', 'GPB_EFFTIME_BRIGHT', 'GPB_EFFTIME_BACKUP')
+
+#: Effective times from the GFA (computed by add_gfa_efftimes).
+_GFA_EFFTIME_COLS = ('EFFTIME_GFA', 'EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA')
+
+#: All effective-time columns; float32, like TSNR2_*.
+_EFFTIME_COLS = frozenset(_TRACER_EFFTIME_COLS + _GFA_EFFTIME_COLS + ('EFFTIME_SPEC', 'EFFTIME_ETC'))
 
 
 #: Default values for targeting metadata fields.
@@ -1178,7 +1184,7 @@ def _empty_tables():
             dtype = 'U32'
         elif col in int_cols:
             dtype = 'i4'
-        elif col in _FLOAT64_COLS or col.endswith('_GFA'):
+        elif col in _FLOAT64_COLS or (col.endswith('_GFA') and col not in _EFFTIME_COLS):
             dtype = 'f8'
         else:
             dtype = 'f4'
@@ -1226,7 +1232,7 @@ def _add_efftimes(row):
         else:
             efftime_spec = row['LRG_EFFTIME_DARK']
 
-    row['EFFTIME_SPEC'] = np.float64(efftime_spec)
+    row['EFFTIME_SPEC'] = np.float32(efftime_spec)
     return row
 
 
@@ -1244,10 +1250,11 @@ def _add_gfa_zero_cols(row):
                 'FIBERFAC_GFA', 'FIBERFAC_ELG_GFA', 'FIBERFAC_BGS_GFA',
                 'AIRMASS_GFA', 'SKY_MAG_AB_GFA',
                 'EFFTIME_GFA', 'EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA')
-    # float64, as in the stored files and the GFA tables, so comparisons of
-    # GFA values across runs are not affected by float32 rounding.
+    # GFA inputs are float64, as in the GFA tables, so comparisons of GFA
+    # values across runs are not affected by float32 rounding; effective
+    # times are float32 like the other effective times.
     for col in gfa_cols:
-        row.setdefault(col, np.float64(0.0))
+        row.setdefault(col, np.float32(0.0) if col in _EFFTIME_COLS else np.float64(0.0))
     return row
 
 
@@ -1603,9 +1610,8 @@ def add_gfa_efftimes(exposures_table):
 
     # A later GFA update can invalidate an earlier measurement. Clear stale
     # effective times before selecting the rows that can be recalculated.
-    # float64 matches the stored columns, so unchanged values round-trip exactly.
-    for col in ('EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA', 'EFFTIME_GFA'):
-        exposures_table[col] = np.zeros(len(exposures_table), dtype=np.float64)
+    for col in _GFA_EFFTIME_COLS:
+        exposures_table[col] = np.zeros(len(exposures_table), dtype=np.float32)
 
     # only rows with valid GFA data (transparency > 0) and a measured sky
     # (compute_skymag returns 99 when no sky data is available)
@@ -2230,12 +2236,12 @@ def main(options=None):
             frames_table = frames_table[~np.isin(frames_table['EXPID'], exposures_table['EXPID'][remove])]
             exposures_table = exposures_table[~remove]
 
-    # TSNR2 columns and the per-tracer effective times derived from them are
-    # float32; existing production files store them as float64, which
-    # merging would otherwise keep.
+    # TSNR2 columns and effective times are float32; existing production
+    # files store them as float64, which merging would otherwise keep. (GFA
+    # effective times are recomputed as float32 by add_gfa_efftimes.)
     for table in (exposures_table, frames_table):
         for col in table.colnames:
-            if ((col.startswith('TSNR2_') or col in _TRACER_EFFTIME_COLS)
+            if ((col.startswith('TSNR2_') or col in _EFFTIME_COLS)
                     and table[col].dtype.kind == 'f' and table[col].dtype.itemsize > 4):
                 table[col] = table[col].astype(np.float32)
 

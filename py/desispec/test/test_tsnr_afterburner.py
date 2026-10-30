@@ -839,13 +839,13 @@ class TestAddGfaEfftimes(unittest.TestCase):
 
     @patch('desispec.scripts.tsnr_afterburner.compute_efftime',
            return_value=(np.array([500.123456789]), np.array([400.0]), np.array([300.0])))
-    def test_efftimes_are_float64(self, mock_ce):
-        """GFA efftimes stay float64, as stored in production files, to avoid rounding changes."""
+    def test_efftimes_are_float32(self, mock_ce):
+        """GFA efftimes are float32, like the other effective times."""
         exposures = self._make_exposures_with_gfa('dark')
         exposures = add_gfa_efftimes(exposures)
         for col in ('EFFTIME_DARK_GFA', 'EFFTIME_BRIGHT_GFA', 'EFFTIME_BACKUP_GFA', 'EFFTIME_GFA'):
-            self.assertEqual(exposures[col].dtype, np.float64)
-        self.assertEqual(float(exposures['EFFTIME_DARK_GFA'][0]), 500.123456789)
+            self.assertEqual(exposures[col].dtype, np.float32)
+        self.assertEqual(float(exposures['EFFTIME_DARK_GFA'][0]), float(np.float32(500.123456789)))
 
     def test_unknown_sky_gives_zero_efftime(self):
         """SKY_MAG_R_SPEC=99 (unknown) or NaN must not produce a GFA effective time."""
@@ -857,9 +857,11 @@ class TestAddGfaEfftimes(unittest.TestCase):
             ce.assert_not_called()
             self.assertEqual(float(exposures['EFFTIME_GFA'][0]), 0.0)
 
-    def test_gfa_zero_cols_are_float64(self):
+    def test_gfa_zero_cols_dtypes(self):
+        """GFA inputs default to float64 and GFA effective times to float32."""
         row = _add_gfa_zero_cols({})
         self.assertEqual(np.asarray(row['TRANSPARENCY_GFA']).dtype, np.float64)
+        self.assertEqual(np.asarray(row['EFFTIME_GFA']).dtype, np.float32)
 
     @patch('desispec.scripts.tsnr_afterburner.compute_efftime',
            return_value=(np.array([500.0]), np.array([400.0]), np.array([300.0])))
