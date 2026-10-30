@@ -121,5 +121,21 @@ class TestTileQAParallel(unittest.TestCase):
         self.assertIn("z1", pb_campets)
 
 
+class TestTileQAOptions(unittest.TestCase):
+    """--nproc is the single parallelism option, applied within each tile"""
+
+    def test_tileqa_nproc(self):
+        from desispec.scripts.tileqa import parse
+        self.assertEqual(parse(['-n', '20210501', '-t', '1000']).nproc, 1)
+        self.assertEqual(parse(['-n', '20210501', '-t', '1000', '--nproc', '8']).nproc, 8)
+        with self.assertRaises(SystemExit):
+            parse(['-n', '20210501', '-t', '1000', '--nworkers', '8'])
+
+    def test_zproc_tileqa_nproc(self):
+        from desispec.scripts.zproc import parse
+        args = parse(['-g', 'cumulative', '-t', '1000', '-n', '20210501', '--tileqa-nproc', '8'])
+        self.assertEqual(args.tileqa_nproc, 8)
+
+
 if __name__ == '__main__':
     unittest.main()

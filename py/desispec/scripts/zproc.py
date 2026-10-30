@@ -103,7 +103,7 @@ def parse(options=None):
                         help="Set if you don't want to run afterburners")
     processing_options.add_argument("--no-tileqa", action="store_true",
                         help="Set if you don't want to run tile QA")
-    processing_options.add_argument("--tileqa-nworkers", type=int, default=1,
+    processing_options.add_argument("--tileqa-nproc", type=int, default=1,
                         help="Parallel workers for the slow I/O in tile QA (default %(default)s)")
     processing_options.add_argument("--no-overlap-tileqa", action="store_true",
                         help="Run tile QA and the afterburners one after another "
@@ -734,8 +734,8 @@ def main(args=None, comm=None):
             infiles.append(findfile('coadd', **findfileopts))
             infiles.append(findfile('redrock', **findfileopts))
         cmd = f"desi_tile_qa -g {groupname} -n {thrunight} -t {tileid}"
-        if args.tileqa_nworkers > 1:
-            cmd += f" --nworkers {args.tileqa_nworkers}"
+        if args.tileqa_nproc > 1:
+            cmd += f" --nproc {args.tileqa_nproc}"
         cmdargs = cmd.split()[1:]
         if args.dryrun:
             log.info(f"dryrun: Would have run {cmd} with"

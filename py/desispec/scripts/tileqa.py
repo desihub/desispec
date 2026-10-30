@@ -17,7 +17,6 @@ import os,sys
 import argparse
 import glob
 import numpy as np
-import multiprocessing
 from astropy.table import Table
 import fitsio
 
@@ -50,10 +49,9 @@ def parse(options=None):
     parser.add_argument('-n','--nights', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
     parser.add_argument('--nproc', type = int, default = 1,
-                        help = 'Multiprocessing across tiles.')
-    parser.add_argument('--nworkers', type = int, default = 1,
-                        help = 'Parallel workers within a tile, to overlap the slow I/O '
-                               'when making the QA plot (spectra files, frame headers, sky cutout).')
+                        help = 'Parallel workers within each tile, to overlap the slow I/O '
+                               'when making the QA plot (spectra files, frame headers, sky cutout). '
+                               'Multiple tiles are processed serially.')
 
     args = None
     if options is None:
@@ -64,7 +62,7 @@ def parse(options=None):
 
 def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None, group='cumulative', nworkers=1) :
     """
-    Wrapper function to compute_tile_qa for multiprocessing
+    Wrapper function to compute_tile_qa, write it, and make the QA plot
     """
     log = get_logger()
     fiberqa_table , petalqa_table = compute_tile_qa(night,tileid,specprod_dir,exposure_qa_dir,group=group)
@@ -79,12 +77,6 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None, group='cumulati
         fiberqa_table.meta.pop("EXTNAME")
 
     return(fiberqa_table.meta)
-
-def _func(arg) :
-    """
-    Wrapper function to compute_tile_qa for multiprocessing
-    """
-    return func(**arg)
 
 def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None, nworkers=1):
     """
@@ -200,22 +192,12 @@ def main(args=None):
                         entry[k]=r['value']
                     summary_rows.append(entry)
                     continue
-            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'outfile':filename, 'group':args.group, 'nworkers':args.nworkers})
+            func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'outfile':filename, 'group':args.group, 'nworkers':args.nproc})
 
-        if args.nproc == 1 :
-            for func_arg in func_args :
-                entry = func(**func_arg)
-                if entry is not None :
-                    summary_rows.append(entry)
-        else :
-            log.info("Multiprocessing with {} procs".format(args.nproc))
-            pool = multiprocessing.Pool(args.nproc)
-            results  =  pool.map(_func, func_args)
-            for entry in results :
-                if entry is not None :
-                    summary_rows.append(entry)
-            pool.close()
-            pool.join()
+        for func_arg in func_args :
+            entry = func(**func_arg)
+            if entry is not None :
+                summary_rows.append(entry)
 
     # check for missing png files and try again
     # could be missing due to skipped fits file, or sky cutout server glitch
@@ -228,7 +210,7 @@ def main(args=None):
 
             if os.path.exists(qafitsfile) and not os.path.exists(qapngfile):
                 log.info(f'Trying again on '+os.path.basename(qapngfile))
-                _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=args.prod, nworkers=args.nworkers)
+                _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=args.prod, nworkers=args.nproc)
 
     if args.outfile is not None and len(summary_rows)>0 :
         colnames=None
