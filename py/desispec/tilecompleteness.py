@@ -304,6 +304,38 @@ def is_same_table_rows(table1,index1,table2,index2) :
     return True
 
 
+def find_previous_tile_file(filename):
+    """Return the existing tile completeness file to merge with, if any.
+
+    For a ``.fits`` or ``.csv`` `filename`, the FITS version is preferred when
+    it exists, since a CSV reads back with 64-bit integer columns (and
+    integer-typed columns if empty); both versions are always written
+    together, so the FITS version is never older. A warning is logged when the
+    FITS version is used instead of a different `filename`. Any other
+    `filename` is used as given.
+
+    Parameters
+    ----------
+    filename : :class:`str`
+        The requested tile completeness file, e.g. ``tiles-daily.csv``.
+
+    Returns
+    -------
+    :class:`str` or ``None``
+        The file to read, or ``None`` if neither exists.
+    """
+    log = get_logger()
+    head, ext = os.path.splitext(filename)
+    fits_file = head + '.fits'
+    if ext in ('.fits', '.csv') and os.path.isfile(fits_file):
+        if os.path.abspath(fits_file) != os.path.abspath(filename):
+            log.warning('Reading previous tile completeness from {} instead of {}'.format(fits_file, filename))
+        return fits_file
+    if os.path.isfile(filename):
+        return filename
+    return None
+
+
 def merge_tile_completeness_table(previous_table, new_table):
     """Merges tile summary tables.
 

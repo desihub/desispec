@@ -40,7 +40,7 @@ from desispec.io.meta import findfile, specprod_root, faflavor2program
 from desispec.io.util import get_tempfilename, decode_camword, difference_camwords, parse_cameras
 from desispec.skymag import compute_skymag
 from desispec.tilecompleteness import (read_gfa_data, compute_tile_completeness_table,
-                                       merge_tile_completeness_table)
+                                       merge_tile_completeness_table, find_previous_tile_file)
 from desispec.tsnr import calc_tsnr2, tsnr2_to_efftime
 from desispec.util import parse_int_args
 from desispec.workflow.tableio import load_table
@@ -2303,16 +2303,9 @@ def main(options=None):
         new_tile_table = compute_tile_completeness_table(
             exposures_table[selection], prod, auxiliary_table_filenames=args.aux)
 
-        # Merge with the previous tiles file, preferring its FITS copy: a CSV
-        # reads back with 64-bit integers (and integer columns if empty).
-        previous_file = os.path.splitext(args.tile_completeness)[0] + '.fits'
-        if os.path.isfile(previous_file):
-            if os.path.abspath(previous_file) != os.path.abspath(args.tile_completeness):
-                log.warning('Reading previous tile completeness from {} instead of {}'.format(
-                    previous_file, args.tile_completeness))
-        else:
-            previous_file = args.tile_completeness
-        if os.path.isfile(previous_file):
+        # Merge with the previous tiles file, preferring its FITS version
+        previous_file = find_previous_tile_file(args.tile_completeness)
+        if previous_file is not None:
             previous = Table.read(previous_file)
             # An empty CSV reads back with integer text columns, so only merge
             # when there are previous rows.
