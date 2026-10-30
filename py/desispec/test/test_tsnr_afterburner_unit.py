@@ -99,10 +99,11 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('--recompute-skymags', result.stdout)
 
-    def test_output_dtypes_match_production(self):
-        # production exposures files store these columns as float64; EXPTIME
-        # is float64 in EXPOSURES but float32 in FRAMES. All TSNR2_* and
-        # effective times are float32; GFA inputs are float64.
+    def test_output_dtypes(self):
+        # header-derived columns and GFA inputs are float64, as in production
+        # files; EXPTIME is float64 in EXPOSURES but float32 in FRAMES. All
+        # TSNR2_* and effective times are float32 (production files written
+        # before this store them as float64).
         tsnr2 = ['TSNR2_' + tracer for tracer in mod._TSNR2_TRACERS]
         float64 = {'EXPOSURES': ['TILERA', 'TILEDEC', 'MJD', 'EXPTIME', 'TRANSPARENCY_GFA',
                                  'SKY_MAG_G_SPEC', 'SKY_MAG_R_SPEC', 'SKY_MAG_Z_SPEC'],
@@ -121,7 +122,7 @@ class TestAfterburnerIntegration(unittest.TestCase):
         # header values keep full float64 precision
         self.assertEqual(float(exposures['TILERA'][exposures['EXPID'] == 100][0]), 180.)
 
-    def test_empty_tables_dtypes_match_production(self):
+    def test_empty_tables_dtypes(self):
         frames, exposures = mod._empty_tables()
         for col in ('TILERA', 'EXPTIME', 'SKY_MAG_R_SPEC', 'TRANSPARENCY_GFA'):
             self.assertEqual(exposures[col].dtype.itemsize, 8, col)
@@ -135,8 +136,8 @@ class TestAfterburnerIntegration(unittest.TestCase):
         self.assertEqual(exposures['LYA_EFFTIME_DARK'].dtype.itemsize, 4)
 
     def test_float64_tsnr2_in_existing_file_becomes_float32(self):
-        # production files store TSNR2 and per-tracer effective times as float64;
-        # after an update they are float32, including retained rows
+        # production files store TSNR2 and effective times as float64; after
+        # an update they are float32, including retained rows
         self._add_exposure(expid=101)
         self._run()
         exposures, frames = self._tables()
