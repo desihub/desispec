@@ -51,7 +51,8 @@ def parse(options=None):
     parser.add_argument('--nproc', type = int, default = 1,
                         help = 'Parallel workers within each tile, to overlap the slow I/O '
                                'when making the QA plot (spectra files, frame headers, sky cutout). '
-                               'Multiple tiles are processed serially.')
+                               'Multiple tiles are processed serially. Workers share the CPUs '
+                               'this process is bound to, so more workers than those CPUs does not help.')
 
     args = None
     if options is None:

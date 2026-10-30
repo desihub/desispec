@@ -13,6 +13,7 @@ import yaml
 from glob import glob
 from datetime import datetime
 import tempfile
+import multiprocessing
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from desitarget.targetmask import desi_mask, bgs_mask
 from desitarget.geomask import hp_in_cap
@@ -877,7 +878,9 @@ def get_expids_efftimes(tileqafits, prod, nworkers=1):
         prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
         nworkers (optional, defaults to 1): if >1, read the spectra files in
             parallel with up to that many processes (decompressing the
-            gzipped spectra files dominates the cost)
+            gzipped spectra files dominates the cost); the processes are
+            started with forkserver (or spawn), not fork, and inherit the
+            CPU affinity of this process
 
     Returns:
         structured array: An array with the following keys::
@@ -938,7 +941,14 @@ def get_expids_efftimes(tileqafits, prod, nworkers=1):
     if len(spectra_fns) > 0:
         if nworkers > 1 and len(spectra_fns) > 1:
             nproc = min(nworkers, len(spectra_fns))
-            with ProcessPoolExecutor(nproc) as pool:
+            # AR do not fork: this may run inside an MPI rank (desi_zproc) that has
+            # AR used the GPU and has other threads running (e.g. the cutout download);
+            # AR forkserver starts workers from a fresh interpreter (default in python>=3.14)
+            if "forkserver" in multiprocessing.get_all_start_methods():
+                mp_context = multiprocessing.get_context("forkserver")
+            else:
+                mp_context = multiprocessing.get_context("spawn")
+            with ProcessPoolExecutor(nproc, mp_context=mp_context) as pool:
                 myds = list(pool.map(read_spectra_tsnr2, spectra_fns, [tsnr2_key] * len(spectra_fns)))
         else:
             myds = [read_spectra_tsnr2(spectra_fn, tsnr2_key) for spectra_fn in spectra_fns]

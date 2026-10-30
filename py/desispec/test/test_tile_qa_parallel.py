@@ -107,6 +107,23 @@ class TestTileQAParallel(unittest.TestCase):
             for col in serial.colnames:
                 self.assertTrue(np.array_equal(serial[col], parallel[col]), f"{col} differs for {nworkers=}")
 
+    @mock.patch('desispec.tile_qa_plot.tsnr2_to_efftime',
+                side_effect=lambda tsnr2, tsnr2_key: 0.1 * tsnr2)
+    def test_get_expids_efftimes_no_fork(self, mock_efftime):
+        """Worker processes are not forked, since this may run in an MPI rank"""
+        from concurrent.futures import ProcessPoolExecutor
+        start_methods = []
+
+        def _pool(*args, **kwargs):
+            start_methods.append(kwargs['mp_context'].get_start_method())
+            return ProcessPoolExecutor(*args, **kwargs)
+
+        with mock.patch('desispec.tile_qa_plot.ProcessPoolExecutor', side_effect=_pool):
+            get_expids_efftimes(self.tileqafits, self.testdir, nworkers=2)
+
+        self.assertEqual(len(start_methods), 1)
+        self.assertIn(start_methods[0], ('forkserver', 'spawn'))
+
     def test_get_expid_vccdsec_parallel(self):
         for expid in self.expids:
             serial = get_expid_vccdsec(expid, self.night, self.testdir)

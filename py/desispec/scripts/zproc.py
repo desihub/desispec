@@ -104,7 +104,8 @@ def parse(options=None):
     processing_options.add_argument("--no-tileqa", action="store_true",
                         help="Set if you don't want to run tile QA")
     processing_options.add_argument("--tileqa-nproc", type=int, default=1,
-                        help="Parallel workers for the slow I/O in tile QA (default %(default)s)")
+                        help="Parallel workers for the slow I/O in tile QA (default %(default)s); "
+                             "tile QA runs on rank 0, so workers share the CPUs bound to rank 0")
     processing_options.add_argument("--no-overlap-tileqa", action="store_true",
                         help="Run tile QA and the afterburners one after another "
                              "instead of running tile QA on rank 0 while the other ranks "
