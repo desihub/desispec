@@ -887,8 +887,12 @@ def main(args=None, comm=None):
     if comm is not None:
         comm.barrier()
 
-    if rank == 0 and not args.no_afterburners:
-        log.info("Done with afterburners")
+    if not args.no_afterburners:
+        if overlap_tileqa:
+            log_worker_timing(timer, 'afterburners', comm,
+                              note='concurrent with tileqa on rank 0')
+        if rank == 0:
+            log.info("Done with afterburners")
 
     #- zmtl reads the tile-qa file (zmtl.add_tileqa_data), so it runs after tile QA
     #- has finished. The afterburners do not read zmtl output, so it is fine for
@@ -924,13 +928,16 @@ def main(args=None, comm=None):
                     log.error(f'zmtl petal/uniqpix {all_subgroups[i]} failed; see {zmtllog}')
                     error_count += 1
 
-        if rank == 0:
-            log.info("Done with zmtl")
-
         timer.stop('zmtl')
 
     if comm is not None:
         comm.barrier()
+
+    if args.run_zmtl:
+        if overlap_tileqa:
+            log_worker_timing(timer, 'zmtl', comm)
+        if rank == 0:
+            log.info("Done with zmtl")
 
     #-------------------------------------------------------------------------
     ## Collect error count and wrap up
@@ -959,6 +966,47 @@ def main(args=None, comm=None):
             log.info(goodbye)
 
     return int(error_count)
+
+
+def log_worker_timing(timer, name, comm, note=None):
+    """
+    Log the time span of step `name` across worker ranks 1..size-1
+
+    When tile QA overlaps with the afterburners and zmtl, rank 0 runs tile QA
+    and the other ranks do the work, so rank 0's own TIMER log messages for
+    those steps don't reflect when the work happened. This gathers the
+    timing from all ranks and logs on rank 0 when the workers started and
+    stopped the step. This is a collective call.
+
+    Args:
+        timer: desiutil.timer.Timer object with step `name` stopped
+        name (str): timer step name, e.g. 'afterburners'
+        comm: MPI communicator
+
+    Options:
+        note (str): extra text to append to the log message
+    """
+    log = get_logger()
+    t = timer.timers.get(name, dict())
+    times = comm.gather((t.get('start'), t.get('stop')), root=0)
+    if comm.rank == 0:
+        #- skip rank 0 and any ranks without both start and stop
+        times = [(start, stop) for start, stop in times[1:]
+                 if start is not None and stop is not None]
+        if len(times) == 0:
+            log.warning(f'No worker timing for {name}')
+            return
+
+        first_start = min(t[0] for t in times)
+        last_stop = max(t[1] for t in times)
+        maxdur = max(t[1] - t[0] for t in times)
+        isostart = datetime.datetime.fromtimestamp(first_start).isoformat()
+        isostop = datetime.datetime.fromtimestamp(last_stop).isoformat()
+        msg = (f'{name} ran on ranks 1-{comm.size-1} from {isostart} to {isostop} '
+               f'(max duration {maxdur:.2f} seconds)')
+        if note is not None:
+            msg += f', {note}'
+        log.info(msg)
 
 
 def distribute_ranks_to_blocks(nblocks, rank=None, size=None, comm=None,
