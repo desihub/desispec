@@ -138,8 +138,83 @@ class TestTileQAParallel(unittest.TestCase):
         self.assertIn("z1", pb_campets)
 
 
+class _FakePool:
+    """Stand-in for multiprocessing.Pool that runs map in this process"""
+    sizes = []
+
+    def __init__(self, nproc):
+        _FakePool.sizes.append(nproc)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def map(self, function, iterable):
+        return [function(x) for x in iterable]
+
+
+class _FakeContext:
+    Pool = _FakePool
+
+
+class TestTileQADispatch(unittest.TestCase):
+    """--nproc parallelizes across tiles, or within a single tile"""
+
+    def setUp(self):
+        self.testdir = tempfile.mkdtemp()
+        #- tiles 1000 and 1001 on different nights, tile 1002 on the first night
+        self.night_tiles = {20210501: [1000, 1002], 20210502: [1001]}
+        for night, tiles in self.night_tiles.items():
+            os.makedirs(os.path.join(self.testdir, 'exposures', str(night)))
+            for tileid in tiles:
+                os.makedirs(os.path.join(self.testdir, 'tiles', 'cumulative', str(tileid), str(night)))
+        _FakePool.sizes = []
+
+    def tearDown(self):
+        shutil.rmtree(self.testdir)
+
+    def _run(self, options):
+        """Run desi_tile_qa main with func and the process pool mocked; return func calls"""
+        from desispec.scripts import tileqa
+        calls = []
+
+        def _func(**kwargs):
+            calls.append(kwargs)
+            return None
+
+        with mock.patch.object(tileqa, 'func', side_effect=_func), \
+             mock.patch.object(tileqa.multiprocessing, 'get_context', return_value=_FakeContext()):
+            tileqa.main(['--prod', self.testdir, '--recompute'] + options)
+
+        return calls
+
+    def test_multi_tile(self):
+        """Multiple tiles across nights share one pool, serial within each tile"""
+        calls = self._run(['-n', '20210501,20210502', '--nproc', '8'])
+        self.assertEqual(_FakePool.sizes, [3])  # one pool, capped at ntiles
+        self.assertEqual(sorted(c['tileid'] for c in calls), [1000, 1001, 1002])
+        self.assertTrue(all(c['nworkers'] == 1 for c in calls))
+
+    def test_single_tile(self):
+        """A single tile parallelizes within the tile, without a pool"""
+        calls = self._run(['-n', '20210501,20210502', '-t', '1001', '--nproc', '8'])
+        self.assertEqual(_FakePool.sizes, [])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['tileid'], 1001)
+        self.assertEqual(calls[0]['nworkers'], 8)
+
+    def test_serial(self):
+        """nproc=1 processes multiple tiles serially, without a pool"""
+        calls = self._run(['-n', '20210501,20210502'])
+        self.assertEqual(_FakePool.sizes, [])
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(all(c['nworkers'] == 1 for c in calls))
+
+
 class TestTileQAOptions(unittest.TestCase):
-    """--nproc is the single parallelism option, applied within each tile"""
+    """--nproc is the single parallelism option"""
 
     def test_tileqa_nproc(self):
         from desispec.scripts.tileqa import parse

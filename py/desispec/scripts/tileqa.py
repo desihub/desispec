@@ -16,6 +16,7 @@ set_backend()
 import os,sys
 import argparse
 import glob
+import multiprocessing
 import numpy as np
 from astropy.table import Table
 import fitsio
@@ -49,10 +50,11 @@ def parse(options=None):
     parser.add_argument('-n','--nights', type = str, default = None, required=False,
                         help = 'Comma, or colon separated list of nights to process. ex: 20210501,20210502 or 20210501:20210531')
     parser.add_argument('--nproc', type = int, default = 1,
-                        help = 'Parallel workers within each tile, to overlap the slow I/O '
-                               'when making the QA plot (spectra files, frame headers, sky cutout). '
-                               'Multiple tiles are processed serially. Workers share the CPUs '
-                               'this process is bound to, so more workers than those CPUs does not help.')
+                        help = 'Number of parallel processes. With multiple tiles to process, '
+                               'parallelize across tiles; with a single tile, parallelize the slow I/O '
+                               'within the tile when making the QA plot (spectra files, frame headers, '
+                               'sky cutout). Workers share the CPUs this process is bound to, '
+                               'so more workers than those CPUs does not help.')
 
     args = None
     if options is None:
@@ -78,6 +80,12 @@ def func(night,tileid,specprod_dir,exposure_qa_dir,outfile=None, group='cumulati
         fiberqa_table.meta.pop("EXTNAME")
 
     return(fiberqa_table.meta)
+
+def _func(arg) :
+    """
+    Wrapper function to func for multiprocessing
+    """
+    return func(**arg)
 
 def _wrap_make_tile_qa_plot(qafitsfile, specprod_dir=None, nworkers=1):
     """
@@ -161,6 +169,7 @@ def main(args=None):
 
     summary_rows  = list()
     night_tileids=dict()  # dict[night] = list(tiles...)
+    func_args = []
     for count,night in enumerate(nights) :
         dirnames = sorted(glob.glob('{}/tiles/{}/*/{}'.format(args.prod, args.group, night)))
         night_tileids[night] = list()
@@ -178,7 +187,6 @@ def main(args=None):
 
         log.info("{} {}".format(night,night_tileids[night]))
 
-        func_args = []
         for tileid in night_tileids[night] :
             filename = findfile("tileqa",night=night,tile=tileid,specprod_dir=args.outdir, groupname=args.group)
             if not args.recompute :
@@ -195,10 +203,26 @@ def main(args=None):
                     continue
             func_args.append({'night':night,'tileid':tileid,'specprod_dir':args.prod,'exposure_qa_dir':args.exposure_qa_dir,'outfile':filename, 'group':args.group, 'nworkers':args.nproc})
 
+    if len(func_args) > 1 and args.nproc > 1 :
+        #- parallelize across tiles, serial within each tile;
+        #- don't fork since this may run in an MPI rank
         for func_arg in func_args :
-            entry = func(**func_arg)
-            if entry is not None :
-                summary_rows.append(entry)
+            func_arg['nworkers'] = 1
+        nproc = min(args.nproc, len(func_args))
+        log.info("Multiprocessing {} tiles with {} procs".format(len(func_args), nproc))
+        if 'forkserver' in multiprocessing.get_all_start_methods() :
+            mp_context = multiprocessing.get_context('forkserver')
+        else :
+            mp_context = multiprocessing.get_context('spawn')
+        with mp_context.Pool(nproc) as pool :
+            results = pool.map(_func, func_args)
+    else :
+        #- single tile (or nproc=1): parallelize within the tile
+        results = [func(**func_arg) for func_arg in func_args]
+
+    for entry in results :
+        if entry is not None :
+            summary_rows.append(entry)
 
     # check for missing png files and try again
     # could be missing due to skipped fits file, or sky cutout server glitch

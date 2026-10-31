@@ -8,11 +8,12 @@ desispec Change Log
 * Reduce ``desi_zproc`` tile QA wall time by overlapping slow I/O
   (branch ``ztile-overlap``):
 
-  * ``desi_tile_qa --nproc N`` now parallelizes within each tile: it reads
-    the gzipped ``spectra`` files in parallel (processes), reads frame
-    headers in parallel (threads), and downloads the sky cutout in the
-    background. Default ``N=1`` is unchanged. Multiple tiles in one call are
-    now processed serially; ``--nproc`` no longer parallelizes across tiles.
+  * ``desi_tile_qa --nproc N`` with a single tile now parallelizes within
+    the tile: it reads the gzipped ``spectra`` files in parallel (processes),
+    reads frame headers in parallel (threads), and downloads the sky cutout
+    in the background. With multiple tiles it still parallelizes across
+    tiles, now pooling tiles from all nights together rather than per night.
+    Default ``N=1`` is unchanged.
   * ``desi_zproc --tileqa-nproc N`` passes this through.
   * ``desi_zproc`` runs tile QA on rank 0 while the other ranks run the
     afterburners, instead of one after another; use ``--no-overlap-tileqa``
