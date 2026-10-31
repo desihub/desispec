@@ -309,11 +309,17 @@ def get_viewer_cutout(
     )
     try:
         subprocess.check_call(tmpstr, stderr=subprocess.DEVNULL, shell=True)
-    except subprocess.CalledProcessError:
-        log.info("no cutout from viewer after {}s, stopping the wget call".format(timeout))
+    except subprocess.CalledProcessError as err:
+        # AR timeout returns 124 if the wget call timed out
+        if err.returncode == 124:
+            log.warning("no {} cutout from viewer after {}s, stopping the wget call".format(layer, timeout))
+        else:
+            log.warning("wget of {} cutout from viewer failed with exit code {}".format(layer, err.returncode))
     try:
         img = mpimg.imread(tmpfn)
     except:
+        # AR e.g. the viewer returns "No such layer" text for an unknown layer
+        log.warning("could not read {} cutout from viewer as an image".format(layer))
         img = np.zeros((size, size, 3))
     # AR check img is a np array with the correct shape
     # AR not sure why as mpimg.imread should return the correct shape,
