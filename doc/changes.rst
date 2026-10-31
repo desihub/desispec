@@ -20,6 +20,10 @@ desispec Change Log
     for sequential tile QA then afterburners. zmtl now runs after both,
     since it reads the tile-qa file.
 
+* Tile QA plot: request the ``ls-dr11`` sky cutout from the Legacy Surveys
+  viewer, which no longer serves ``ls-dr11-early-v2`` (EBV panel was blank),
+  and log why a cutout download failed.
+
 * Speed up ``coadd`` by about 15 s per 500-target petal: compute the
   camera-overlap flags and merged wavelength grid in
   ``per_exposure_normalization`` once instead of for every target, and

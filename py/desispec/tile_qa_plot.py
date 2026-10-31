@@ -277,7 +277,7 @@ def get_viewer_cutout(
     tmpoutdir=tempfile.mkdtemp(),
     width_deg=4,
     pixscale=10,
-    dr="dr11-early-v2",
+    dr="dr11",
     timeout=15,
 ):
     """
@@ -290,7 +290,7 @@ def get_viewer_cutout(
         tmpoutdir (optional, defaults to a temporary directory): temporary directory where
         width_deg (optional, defaults to 4): width of the cutout in degrees (float)
         pixscale (optional, defaults to 10): pixel scale of the cutout
-        dr (optional, default do "dr11-early-v2"): imaging data release
+        dr (optional, default do "dr11"): imaging data release
         timeout (optional, defaults to 15): time (in seconds) after which we quit the wget call (int)
 
     Returns:
@@ -380,7 +380,7 @@ def deg2pix(dras, ddecs, width_deg, width_pix):
 
 def plot_cutout(ax, tileid, tilera, tiledec, width_deg, petal_c="w", ebv_c="orange", img=None):
     """
-    Plots a ls-dr11-early-v2 cutout, with overlaying the petals and the EBV contours.
+    Plots a ls-dr11 cutout, with overlaying the petals and the EBV contours.
 
     Args:
         ax: pyplot object
@@ -399,7 +399,7 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, petal_c="w", ebv_c="oran
     # AR get the cutout
     if img is None:
         img = get_viewer_cutout(
-            tileid, tilera, tiledec, width_deg=width_deg, pixscale=10, dr="dr11-early-v2", timeout=15,
+            tileid, tilera, tiledec, width_deg=width_deg, pixscale=10, dr="dr11", timeout=15,
         )
 
     # AR display cutout
@@ -1402,7 +1402,7 @@ def make_tile_qa_plot(
             cutout_pool = ThreadPoolExecutor(1)
             cutout_future = cutout_pool.submit(
                 get_viewer_cutout, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"],
-                width_deg=4, pixscale=10, dr="dr11-early-v2", timeout=15,
+                width_deg=4, pixscale=10, dr="dr11", timeout=15,
             )
         except Exception as err:
             log.warning(f"could not start cutout download in the background: {err!r}")
