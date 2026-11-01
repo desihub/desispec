@@ -27,6 +27,12 @@ def write_sky(outfile, skymodel, header=None):
         dwavecoeff : 1D[ncoeff] array of PCA dwavelength coefficients
             (optional)
         dlsfcoeff : 1D[ncoeff] array of PCA dlsf coefficients (optional)
+        peak_dw_before : 2D[nspec, npeaks] wavelength offsets at peaks before PCA correction (optional)
+        peak_dlsf_before : 2D[nspec, npeaks] LSF width changes at peaks before PCA correction (optional)
+        peak_chi2pdf_before : 2D[nspec, npeaks] chi2/dof at peaks before PCA correction (optional)
+        peak_dw_after : 2D[nspec, npeaks] wavelength offsets at peaks after PCA correction (optional)
+        peak_dlsf_after : 2D[nspec, npeaks] LSF width changes at peaks after PCA correction (optional)
+        peak_chi2pdf_after : 2D[nspec, npeaks] chi2/dof at peaks after PCA correction (optional)
         header : optional fits header data (fits.Header, dict, or list)
     """
     from desiutil.depend import add_dependencies
@@ -71,6 +77,24 @@ def write_sky(outfile, skymodel, header=None):
     if skymodel.skytargetid is not None:
         hx.append(fits.ImageHDU(skymodel.skytargetid,
                                 name='SKYTARGETID'))
+    if skymodel.peak_dw_before is not None:
+        hx.append(fits.ImageHDU(skymodel.peak_dw_before.astype('f4'),
+                                name='PEAK_DW_BEFORE'))
+    if skymodel.peak_dlsf_before is not None:
+        hx.append(fits.ImageHDU(skymodel.peak_dlsf_before.astype('f4'),
+                                name='PEAK_DLSF_BEFORE'))
+    if skymodel.peak_chi2pdf_before is not None:
+        hx.append(fits.ImageHDU(skymodel.peak_chi2pdf_before.astype('f4'),
+                                name='PEAK_CHI2PDF_BEFORE'))
+    if skymodel.peak_dw_after is not None:
+        hx.append(fits.ImageHDU(skymodel.peak_dw_after.astype('f4'),
+                                name='PEAK_DW_AFTER'))
+    if skymodel.peak_dlsf_after is not None:
+        hx.append(fits.ImageHDU(skymodel.peak_dlsf_after.astype('f4'),
+                                name='PEAK_DLSF_AFTER'))
+    if skymodel.peak_chi2pdf_after is not None:
+        hx.append(fits.ImageHDU(skymodel.peak_chi2pdf_after.astype('f4'),
+                                name='PEAK_CHI2PDF_AFTER'))
 
 
     t0 = time.time()
@@ -130,6 +154,30 @@ def read_sky(filename):
         skygradpcacoeff = native_endian(fx['SKYGRADPCACOEFF'].data.astype('f8'))
     else:
         skygradpcacoeff = None
+    if "PEAK_DW_BEFORE" in fx:
+        peak_dw_before = native_endian(fx['PEAK_DW_BEFORE'].data.astype('f8'))
+    else:
+        peak_dw_before = None
+    if "PEAK_DLSF_BEFORE" in fx:
+        peak_dlsf_before = native_endian(fx['PEAK_DLSF_BEFORE'].data.astype('f8'))
+    else:
+        peak_dlsf_before = None
+    if "PEAK_CHI2PDF_BEFORE" in fx:
+        peak_chi2pdf_before = native_endian(fx['PEAK_CHI2PDF_BEFORE'].data.astype('f8'))
+    else:
+        peak_chi2pdf_before = None
+    if "PEAK_DW_AFTER" in fx:
+        peak_dw_after = native_endian(fx['PEAK_DW_AFTER'].data.astype('f8'))
+    else:
+        peak_dw_after = None
+    if "PEAK_DLSF_AFTER" in fx:
+        peak_dlsf_after = native_endian(fx['PEAK_DLSF_AFTER'].data.astype('f8'))
+    else:
+        peak_dlsf_after = None
+    if "PEAK_CHI2PDF_AFTER" in fx:
+        peak_chi2pdf_after = native_endian(fx['PEAK_CHI2PDF_AFTER'].data.astype('f8'))
+    else:
+        peak_chi2pdf_after = None
     fx.close()
     duration = time.time() - t0
     log.info(iotime.format('read', filename, duration))
@@ -138,6 +186,10 @@ def read_sky(filename):
                         throughput_corrections=throughput_corrections,
                         throughput_corrections_model=throughput_corrections_model,
                         dwavecoeff=dwavecoeff, dlsfcoeff=dlsfcoeff,
-                        skygradpcacoeff=skygradpcacoeff)
+                        skygradpcacoeff=skygradpcacoeff,
+                        peak_dw_before=peak_dw_before, peak_dlsf_before=peak_dlsf_before,
+                        peak_chi2pdf_before=peak_chi2pdf_before,
+                        peak_dw_after=peak_dw_after, peak_dlsf_after=peak_dlsf_after,
+                        peak_chi2pdf_after=peak_chi2pdf_after)
 
     return skymodel
