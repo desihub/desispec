@@ -913,6 +913,37 @@ def _remove_loaded_unique_id(data):
     return good_rows
 
 
+def _select_hdu(filepath, hdu):
+    """Return the HDU of `filepath` to read.
+
+    Parameters
+    ----------
+    filepath : :class:`str`
+        Full path to a FITS file.
+    hdu : :class:`int`, :class:`str`, :class:`list` or :class:`tuple`
+        An HDU number or name, returned unchanged, or a sequence of HDU
+        names, of which the first present in `filepath` is returned.
+
+    Returns
+    -------
+    :class:`int` or :class:`str`
+        The HDU number or name.
+
+    Raises
+    ------
+    KeyError
+        If none of the names in a sequence is present in `filepath`.
+    """
+    if not isinstance(hdu, (list, tuple)):
+        return hdu
+    with fits.open(filepath) as hdulist:
+        names = [h.name for h in hdulist]
+    for name in hdu:
+        if name.upper() in names:
+            return name
+    raise KeyError("None of HDUs {} found in {}.".format(list(hdu), filepath))
+
+
 def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, convert=None,
               index=None, rowfilter=None, q3c=None,
               chunksize=50000, maxrows=0):
@@ -925,8 +956,9 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
         Full path to the data file or set of data files.
     tcls : :class:`sqlalchemy.ext.declarative.api.DeclarativeMeta`
         The table to load, represented by its class.
-    hdu : :class:`int` or :class:`str`, optional
-        Read a data table from this HDU (default 1).
+    hdu : :class:`int`, :class:`str`, :class:`list` or :class:`tuple`, optional
+        Read a data table from this HDU (default 1). If a sequence of HDU
+        names, read the first one present in each file.
     preload : callable, optional
         A function that takes a :class:`~astropy.table.Table` as an argument.
         Use this for more complicated manipulation of the data before loading,
@@ -966,8 +998,9 @@ def load_file(filepaths, tcls, hdu=1, preload=None, expand=None, insert=None, co
     loaded_rows = 0
     for filepath in filepaths:
         if filepath.endswith('.fits') or filepath.endswith('.fits.gz'):
-            data = Table.read(filepath, hdu=hdu, format='fits')
-            log.info("Read %d rows of data from %s HDU %s.", len(data), filepath, hdu)
+            file_hdu = _select_hdu(filepath, hdu)
+            data = Table.read(filepath, hdu=file_hdu, format='fits')
+            log.info("Read %d rows of data from %s HDU %s.", len(data), filepath, file_hdu)
         elif filepath.endswith('.ecsv'):
             data = Table.read(filepath, format='ascii.ecsv')
             log.info("Read %d rows of data from %s.", len(data), filepath)
@@ -1439,7 +1472,9 @@ def main():
     #
     loaders = {'exposures': [{'filepaths': os.path.join(options.datapath, 'spectro', 'redux', os.environ['SPECPROD'], 'tiles-{specprod}.fits'.format(specprod=os.environ['SPECPROD'])),
                               'tcls': Tile,
-                              'hdu': 'TILE_COMPLETENESS',
+                              # older productions (e.g. iron) name it
+                              # TILE_COMPLETENESS, newer ones TILES
+                              'hdu': ('TILES', 'TILE_COMPLETENESS'),
                               'q3c': 'tilera',
                               'chunksize': options.chunksize,
                               'maxrows': options.maxrows

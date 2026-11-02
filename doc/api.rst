@@ -443,6 +443,9 @@ desispec API
 .. automodule:: desispec.scripts.trace_shifts
     :members:
 
+.. automodule:: desispec.scripts.tsnr_afterburner
+    :members:
+
 .. automodule:: desispec.scripts.uniqpix_redshifts
     :members:
 

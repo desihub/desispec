@@ -12,7 +12,7 @@ from astropy.table import Table
 from desiutil.log import get_logger
 
 from desispec.io.meta import findfile, specprod_root
-from desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table
+from desispec.tilecompleteness import compute_tile_completeness_table,merge_tile_completeness_table,find_previous_tile_file
 from desispec.util import parse_int_args
 
 
@@ -22,7 +22,8 @@ parser = argparse.ArgumentParser(
 parser.add_argument('-i','--infile', type=str, default=None, required=False,
                     help = 'Input exposure summary file')
 parser.add_argument('-o','--outfile', type=str, default=None, required=True,
-                    help = 'Output tiles completeness file')
+                    help = 'Output tiles completeness file; for a .fits or .csv name, both the .fits '
+                           'and .csv versions are written')
 parser.add_argument('--prod', type = str, default = None, required=False,
                     help = 'Path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/blanc/,  or simply prod version, like blanc, but requires env. variable DESI_SPECTRO_REDUX. Default is $DESI_SPECTRO_REDUX/$SPECPROD.')
 parser.add_argument('--aux', type = str, default = None, required=False, nargs="*",
@@ -63,13 +64,21 @@ if args.nights is not None:
 tile_table = compute_tile_completeness_table(exposure_table,args.prod,auxiliary_table_filenames=args.aux)
 print(tile_table)
 
-if os.path.isfile(args.outfile) :
-    previous_table = Table.read(args.outfile)
-    tile_table = merge_tile_completeness_table(previous_table,tile_table)
+#- merge with the previous table, preferring its .fits version if it exists
+previous_file = find_previous_tile_file(args.outfile)
+if previous_file is not None :
+    previous_table = Table.read(previous_file)
+    #- an empty CSV reads back with integer text columns; nothing to merge
+    if len(previous_table) > 0 :
+        tile_table = merge_tile_completeness_table(previous_table,tile_table)
 
-if args.outfile.endswith('.fits'):
-    tile_table.meta['EXTNAME'] = 'TILES'
-
-tile_table.write(args.outfile,overwrite=True)
-
-print("wrote {}".format(args.outfile))
+#- write both .fits and .csv versions, as desi_tsnr_afterburner does, so that
+#- the .fits version read above is never older than the .csv
+head, ext = os.path.splitext(args.outfile)
+if ext in ('.fits', '.csv'):
+    outfiles = {head + '.fits': 'fits', head + '.csv': 'ascii.csv'}
+else:
+    outfiles = {args.outfile: None}
+for outfile, fmt in outfiles.items():
+    tile_table.write(outfile, format=fmt, overwrite=True)
+    print("wrote {}".format(outfile))
