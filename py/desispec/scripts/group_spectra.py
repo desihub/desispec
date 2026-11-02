@@ -133,7 +133,9 @@ def _write_spectra_pigz(outfile, spectra, cpus, min_cpus=4):
         io.write_spectra(outfile, spectra)
         return
 
-    plainfile = outfile[:-3]
+    #- temporary names so that an interrupted write doesn't leave a partial
+    #- file with the final name (with or without .gz)
+    plainfile = get_tempfilename(outfile[:-3])
     tmpfile = get_tempfilename(outfile)
     t0 = time.time()
     io.write_spectra(plainfile, spectra)
@@ -169,8 +171,9 @@ def main(args=None, comm=None):
 
         rank = comm.rank
         size = comm.size
-        #- CPUs of all ranks in comm; used to compress the output with pigz
-        #- using the CPUs of the other, otherwise idle, ranks
+        #- CPUs of all ranks in comm on the same node as this rank; used by
+        #- rank 0 to compress the output with pigz using the CPUs of the
+        #- other, otherwise idle, ranks
         cpus = gather_cpu_affinity(comm)
     else:
         rank = 0

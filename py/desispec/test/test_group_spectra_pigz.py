@@ -95,6 +95,18 @@ class TestWriteSpectraPigz(unittest.TestCase):
         group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
         self.assertEqual(get_cpu_affinity(), self.original_cpus)
 
+    def test_temp_plainfile(self):
+        """The uncompressed file is written to a temporary name, not outfile[:-3]"""
+        outfile = os.path.join(self.testdir, 'spectra.fits.gz')
+        with mock.patch.object(group_spectra.io, 'write_spectra',
+                               side_effect=write_spectra) as ws:
+            group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
+        plainfile = ws.call_args[0][0]
+        self.assertNotIn(plainfile, (outfile, outfile[:-3]))
+        self.assertEqual(os.path.dirname(plainfile), self.testdir)
+        self._assert_only_output(outfile)
+        self._assert_same_spectra(outfile)
+
     def test_not_gz(self):
         """Files not ending in .gz are written directly"""
         outfile = os.path.join(self.testdir, 'spectra.fits')
