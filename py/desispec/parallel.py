@@ -8,6 +8,7 @@ and related topics.
 from __future__ import print_function, absolute_import, division
 
 import os
+import socket
 import sys
 import time
 import glob
@@ -92,15 +93,23 @@ def get_cpu_affinity():
 
 def gather_cpu_affinity(comm):
     """
-    Return sorted list of CPU ids that any rank of ``comm`` may run on
+    Return sorted list of CPU ids that any rank of ``comm`` on the same node
+    as this rank may run on
 
     Args:
         comm (mpi4py.MPI.Comm): MPI communicator
 
-    Note: CPU ids are not unique across nodes, so this is only meaningful
-    if all ranks of ``comm`` are on the same node.
+    CPU ids are not unique across nodes, so ranks on other nodes are ignored.
+    This is a collective operation that must be called by all ranks of ``comm``.
     """
-    return sorted(set().union(*comm.allgather(get_cpu_affinity())))
+    hostname = socket.gethostname()
+    hostcpus = comm.allgather((hostname, get_cpu_affinity()))
+    cpus = set()
+    for host, rankcpus in hostcpus:
+        if host == hostname:
+            cpus.update(rankcpus)
+
+    return sorted(cpus)
 
 @contextmanager
 def cpu_affinity(cpus):

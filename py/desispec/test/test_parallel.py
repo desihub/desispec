@@ -138,10 +138,18 @@ class TestParallel(unittest.TestCase):
             self.assertEqual(get_cpu_affinity(), {0, 1, 2, 3})
 
     def test_gather_cpu_affinity(self):
-        """test gather_cpu_affinity merging CPUs of all ranks"""
+        """test gather_cpu_affinity merging CPUs of ranks on the same node"""
         comm = MagicMock()
-        comm.allgather.return_value = [{0, 1}, {4, 2}, {1, 3}]
-        self.assertEqual(gather_cpu_affinity(comm), [0, 1, 2, 3, 4])
+        comm.allgather.return_value = [('a', {0, 1}), ('a', {4, 2}), ('a', {1, 3})]
+        with patch('desispec.parallel.socket.gethostname', return_value='a'):
+            self.assertEqual(gather_cpu_affinity(comm), [0, 1, 2, 3, 4])
+
+        #- ranks on other nodes are ignored
+        comm.allgather.return_value = [('a', {0, 1}), ('b', {4, 2}), ('a', {1, 3}), ('b', {5})]
+        with patch('desispec.parallel.socket.gethostname', return_value='a'):
+            self.assertEqual(gather_cpu_affinity(comm), [0, 1, 3])
+        with patch('desispec.parallel.socket.gethostname', return_value='b'):
+            self.assertEqual(gather_cpu_affinity(comm), [2, 4, 5])
 
     @unittest.skipUnless(hasattr(os, 'sched_setaffinity'), 'no CPU affinity support')
     def test_cpu_affinity(self):
