@@ -2,13 +2,47 @@
 desispec Change Log
 ===================
 
-0.73.2 (unreleased)
+0.73.4 (unreleased)
 -------------------
 
-* Skip stucksky check if FIBER_RA/DEC=0.
+* Fix bug preventing row-by-row overscan subtraction (PR `#2901`_).
+* Add ``desi_run_scripts`` wrapper (PR `#2905`_).
+* Rewrite ``desi_tsnr_afterburner`` as ``desispec.scripts.tsnr_afterburner``,
+  reading TSNR2 and sky magnitudes from exposure QA files when available and
+  falling back to cframes otherwise (PR `#2911`_). 
+* ``desi_zproc`` updates for speed and minor bug fixes (PR `#2907`_)
+
+  - Run tileqa in parallel with afterburners
+  - Add I/O parallelism to group_spectra and tileqa when running on a
+    single tile. Keep multi-tile parallelism when processing multiple tiles.
+  - Optionally use pigz for parallel gzip compression of spectra files.
+  - Cache camera overlap calculation for faster coaddition.
+  - Use ``ls-dr11`` sky cutout (ls-dr11-early-v2 no longer works).
+  - Fix timing log messages MPI barrier logic.
+
+.. _`#2901`: https://github.com/desihub/desispec/pull/2901
+.. _`#2905`: https://github.com/desihub/desispec/pull/2905
+.. _`#2907`: https://github.com/desihub/desispec/pull/2907
+.. _`#2911`: https://github.com/desihub/desispec/pull/2911
+
+0.73.3 (2026-10-14)
+-------------------
+
+* special case tile 83063 skip TARGETID check (PR `#2897`_, see `desitarget #892`_).
+
+.. _`#2897`: https://github.com/desihub/desispec/pull/2897
+.. _`desitarget #892`: https://github.com/desihub/desitarget/issues/892
+
+0.73.2 (2026-10-13)
+-------------------
+
+* Skip stucksky check if FIBER_RA/DEC=0 (PR `#2883`_).
 * Patch zcatalog TARGETID check (commit `#0e7fd54`_).
+* Improve trace shifts when one amp is masked (PR `#2887`_).
 
 .. _`#0e7fd54`: https://github.com/desihub/desispec/commit/0e7fd546a40917a0f43b2225295996d4438c5931
+.. _`#2883`: https://github.com/desihub/desispec/pull/2883
+.. _`#2887`: https://github.com/desihub/desispec/pull/2887
 
 0.73.1 (2026-10-02)
 -------------------

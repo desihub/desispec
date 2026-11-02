@@ -12,7 +12,9 @@ from desispec.io import empty_fibermap
 from desispec.coaddition import (coadd, coadd_exposures, fast_resample_spectra,
                                  spectroperf_resample_spectra,
                                  coadd_fibermap, coadd_cameras,
-                                 _mask_cosmics, coadd_frame_resolution)
+                                 _mask_cosmics, coadd_frame_resolution,
+                                 _wave_near, _crude_coadd_grid,
+                                 _build_crude_coadd_arrays)
 from desispec.specscore import compute_coadd_scores
 from desispec.resolution import Resolution
 from desispec.maskbits import fibermask
@@ -251,6 +253,79 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(s1.flux['b'].shape[0], 3)
         self.assertEqual(s1.exp_fibermap['COADD_NORM'][-1], 1)
         self.assertIsInstance(s1.scores, Table)
+
+    @staticmethod
+    def _wave_near_loop(wave, other, tol=1e-4):
+        """Reference implementation of _wave_near: loop over every pixel"""
+        flag = np.zeros(wave.size, dtype=bool)
+        for k, w in enumerate(wave):
+            if np.any(np.abs(w - other) <= tol):
+                flag[k] = True
+        return flag
+
+    def test_wave_near(self):
+        """Test vectorized band overlap matches a per-pixel loop"""
+        wave = self.spectra.wave
+        for b0, b1 in (('b', 'r'), ('r', 'b'), ('r', 'z'), ('z', 'r'), ('b', 'z')):
+            np.testing.assert_array_equal(
+                _wave_near(wave[b0], wave[b1]),
+                self._wave_near_loop(wave[b0], wave[b1]))
+
+        #- points just inside and just outside the tolerance, and out of range
+        other = np.array([5000.0, 5001.0, 5002.0])
+        test = np.array([4999.0, 4999.9999, 5000.00009, 5000.00011, 5000.5,
+                         5001.99991, 5002.00009, 5002.00011, 6000.0])
+        np.testing.assert_array_equal(_wave_near(test, other),
+                                      self._wave_near_loop(test, other))
+        np.testing.assert_array_equal(_wave_near(test, other[::-1]),
+                                      self._wave_near_loop(test, other))
+
+        #- nothing to overlap with
+        self.assertFalse(np.any(_wave_near(test, np.array([]))))
+
+    def test_crude_coadd_grid(self):
+        """Test the cached crude coadd wavelength grid"""
+        sp = self.spectra
+        sbands = np.array(['b', 'r', 'z'])
+        for bands_list in (['b', 'r', 'z'], ['b', 'z'], ['r', 'z'], ['z']):
+            #- reference: original per-pixel overlap loop
+            overlap = dict()
+            for j, b in enumerate(bands_list):
+                flag = np.zeros(sp.wave[b].size, dtype=int)
+                if j > 0:
+                    flag[self._wave_near_loop(sp.wave[b], sp.wave[bands_list[j-1]])] = 1
+                if j < len(bands_list) - 1:
+                    flag[self._wave_near_loop(sp.wave[b], sp.wave[bands_list[j+1]])] = 1
+                overlap[b] = flag
+            expected_wave = np.concatenate(
+                [sp.wave[b][overlap[b] == 0] for b in sbands[np.isin(sbands, bands_list)]])
+
+            cache = dict()
+            for ncall in range(2):   # second call comes from the cache
+                ov, cw = _crude_coadd_grid(sp, bands_list, sbands, cache)
+                np.testing.assert_array_equal(cw, expected_wave)
+                for b in bands_list:
+                    np.testing.assert_array_equal(ov[b], overlap[b])
+            self.assertEqual(len(cache), 1)
+
+        #- adjacent bands really do overlap
+        ov, cw = _crude_coadd_grid(sp, ['b', 'r', 'z'], sbands)
+        self.assertTrue(np.any(ov['b'] == 1) and np.any(ov['r'] == 1) and np.any(ov['z'] == 1))
+        self.assertEqual(len(cw), len(np.unique(cw)))
+
+    def test_build_crude_coadd_arrays_cache(self):
+        """Test _build_crude_coadd_arrays gives the same result with and without the grid cache"""
+        s1 = self._random_spectra(ns=4, nw=300, bands=('b', 'r', 'z'))
+        sbands = np.array(['b', 'r', 'z'])
+        all_idx = np.arange(4)
+        good_idx = np.array([0, 2, 3])
+        cache = dict()
+        for bands_list in (['b', 'r', 'z'], ['b', 'z'], ['b', 'r', 'z']):
+            ref = _build_crude_coadd_arrays(s1, all_idx, good_idx, bands_list, sbands)
+            got = _build_crude_coadd_arrays(s1, all_idx, good_idx, bands_list, sbands,
+                                            grid_cache=cache)
+            for r, g in zip(ref, got):
+                np.testing.assert_array_equal(r, g)
 
     def test_coadd_exposures(self):
         """Test coadd_exposures doesn't mutate input and matches in-place coadd"""

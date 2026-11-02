@@ -6,7 +6,7 @@ Regroup spectra by healpix.
 """
 
 from __future__ import absolute_import, division, print_function
-import os, sys, time
+import os, sys, time, shutil, subprocess
 
 import numpy as np
 import argparse
@@ -18,11 +18,12 @@ from desimodel.footprint import radec2pix
 
 from .. import io
 from ..io.meta import shorten_filename
-from ..io.util import checkgzip
+from ..io.util import checkgzip, get_tempfilename
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import add_missing_frames, frames2spectra
 from ..coaddition import coadd
 from ..util import parse_keyval
+from ..parallel import cpu_affinity, gather_cpu_affinity
 
 
 def parse(options=None):
@@ -92,6 +93,71 @@ def _read_framefile(filename, nside=None, healpix=None, ifile=None):
 
     return frame
 
+def _root_failed(error, comm):
+    """
+    Return True if rank 0 of ``comm`` had an ``error``
+
+    Args:
+        error (Exception or None): error on this rank; only rank 0 is used
+        comm (mpi4py.MPI.Comm or None): MPI communicator
+
+    This is a collective call. It lets the other ranks return instead of
+    waiting forever in a later collective call when rank 0 raises an exception.
+    """
+    failed = error is not None
+    if comm is not None:
+        failed = comm.bcast(failed, root=0)
+
+    return failed
+
+def _write_spectra_pigz(outfile, spectra, cpus, min_cpus=4):
+    """
+    Write spectra to ``outfile``, compressing .gz files with pigz on ``cpus``
+
+    Args:
+        outfile (str): output filename
+        spectra (Spectra): spectra to write
+        cpus (list): CPU ids that pigz may use, e.g. those of idle MPI ranks
+
+    Options:
+        min_cpus (int): only use pigz if at least this many CPUs are available
+
+    The serial gzip used by :func:`desispec.io.write_spectra` for ``.gz`` files
+    takes much longer than the rest of this script. If pigz is available and
+    there are enough CPUs, write the uncompressed file and compress it with
+    pigz using all of ``cpus``; otherwise write with ``write_spectra``.
+    """
+    log = get_logger()
+    pigz = shutil.which('pigz')
+    if (not outfile.endswith('.gz')) or pigz is None or len(cpus) < min_cpus:
+        io.write_spectra(outfile, spectra)
+        return
+
+    #- temporary names so that an interrupted write doesn't leave a partial
+    #- file with the final name (with or without .gz)
+    plainfile = get_tempfilename(outfile[:-3])
+    tmpfile = get_tempfilename(outfile)
+    t0 = time.time()
+    io.write_spectra(plainfile, spectra)
+
+    try:
+        #- pigz inherits the CPU affinity of this process
+        with cpu_affinity(cpus), open(tmpfile, 'wb') as fx:
+            subprocess.run([pigz, '-p', str(len(cpus)), '-c', plainfile],
+                           stdout=fx, check=True)
+    except Exception as err:
+        log.warning(f'pigz of {plainfile} failed ({err}); falling back to write_spectra')
+        if os.path.exists(tmpfile):
+            os.remove(tmpfile)
+        io.write_spectra(outfile, spectra)
+    else:
+        os.rename(tmpfile, outfile)
+        log.info(f'Wrote {outfile} with pigz on {len(cpus)} CPUs in {time.time()-t0:.1f} sec')
+    finally:
+        if os.path.exists(plainfile):
+            os.remove(plainfile)
+
+
 def main(args=None, comm=None):
 
     t0 = time.time()
@@ -105,9 +171,14 @@ def main(args=None, comm=None):
 
         rank = comm.rank
         size = comm.size
+        #- CPUs of all ranks in comm on the same node as this rank; used by
+        #- rank 0 to compress the output with pigz using the CPUs of the
+        #- other, otherwise idle, ranks
+        cpus = gather_cpu_affinity(comm)
     else:
         rank = 0
         size = 1
+        cpus = []
 
     #- logger for all ranks
     log = get_logger()
@@ -188,14 +259,25 @@ def main(args=None, comm=None):
     read_args = [(framefiles[i], args.nside, args.healpix, i) for i in range(len(framefiles))]
     log0.info(f'Reading {len(framefiles)} framefiles at {time.asctime()}')
     frames = list()
+    error = None
     if comm is not None:
         from mpi4py.futures import MPICommExecutor
         with MPICommExecutor(comm, root=0) as pool:
-            frames = list(pool.starmap(_read_framefile, read_args))
+            #- pool is None on the other ranks, which read frames for the root
+            if pool is not None:
+                try:
+                    frames = list(pool.starmap(_read_framefile, read_args))
+                except Exception as err:
+                    error = err
     else:
         frames = list()
         for rdargs in read_args:
             frames.append(_read_framefile(*rdargs))
+
+    if _root_failed(error, comm):
+        if rank == 0:
+            raise error
+        return 1
 
     nframes = len(frames)
     if comm is not None:
@@ -207,57 +289,65 @@ def main(args=None, comm=None):
 
     #- Output is handled by rank 0
     if rank == 0:
-        #- convert to dict for frames2spectra
-        framesdict = dict()
-        for frame in frames:
-            if frame is not None:
-                night = frame.meta['NIGHT']
-                expid = frame.meta['EXPID']
-                camera = frame.meta['CAMERA']
-                framesdict[(night, expid, camera)] = frame
+        try:
+            #- convert to dict for frames2spectra
+            framesdict = dict()
+            for frame in frames:
+                if frame is not None:
+                    night = frame.meta['NIGHT']
+                    expid = frame.meta['EXPID']
+                    camera = frame.meta['CAMERA']
+                    framesdict[(night, expid, camera)] = frame
 
-        log0.info(f'Combining into spectra at {time.asctime()}')
-        spectra = frames2spectra(framesdict, pix=args.healpix, nside=args.nside,
-                                 onetile=args.onetile)
+            log0.info(f'Combining into spectra at {time.asctime()}')
+            spectra = frames2spectra(framesdict, pix=args.healpix, nside=args.nside,
+                                     onetile=args.onetile)
 
-        #- Record input files
-        if spectra.meta is None:
-            spectra.meta = dict()
+            #- Record input files
+            if spectra.meta is None:
+                spectra.meta = dict()
 
-        max_header_names = 1000
-        # we can't write the keywords for more files
-        nframefiles = len(framefiles)
-        for i, filename in enumerate(framefiles[:max_header_names]):
-            spectra.meta[f'INFIL{i:03d}'] = shorten_filename(filename)
-        if nframefiles > max_header_names:
-            log0.warning(f'There were more than {max_header_names} input files. Only {max_header_names} filenames were written into the header')
-            spectra.meta['INFILNUM'] = nframefiles
+            max_header_names = 1000
+            # we can't write the keywords for more files
+            nframefiles = len(framefiles)
+            for i, filename in enumerate(framefiles[:max_header_names]):
+                spectra.meta[f'INFIL{i:03d}'] = shorten_filename(filename)
+            if nframefiles > max_header_names:
+                log0.warning(f'There were more than {max_header_names} input files. Only {max_header_names} filenames were written into the header')
+                spectra.meta['INFILNUM'] = nframefiles
         
-        #- Add healpix provenance keywords
-        if args.uniqpix is not None:
-            spectra.meta['SPGRP'] = 'uniqpix'
-            spectra.meta['SPGRPVAL'] = args.uniqpix
-            spectra.meta['UNIQPIX'] = args.uniqpix
-            spectra.meta['HPXPIXEL'] = args.healpix
-            spectra.meta['HPXNSIDE'] = args.nside
-            spectra.meta['HPXNEST'] = True
+            #- Add healpix provenance keywords
+            if args.uniqpix is not None:
+                spectra.meta['SPGRP'] = 'uniqpix'
+                spectra.meta['SPGRPVAL'] = args.uniqpix
+                spectra.meta['UNIQPIX'] = args.uniqpix
+                spectra.meta['HPXPIXEL'] = args.healpix
+                spectra.meta['HPXNSIDE'] = args.nside
+                spectra.meta['HPXNEST'] = True
 
-        #- Add optional header keywords if requested
-        if args.header is not None:
-            for keyval in args.header:
-                key, value = parse_keyval(keyval)
-                spectra.meta[key] = value
+            #- Add optional header keywords if requested
+            if args.header is not None:
+                for keyval in args.header:
+                    key, value = parse_keyval(keyval)
+                    spectra.meta[key] = value
 
-        if args.outfile is not None:
-            log.info('Writing {}'.format(args.outfile))
-            io.write_spectra(args.outfile, spectra)
+            if args.outfile is not None:
+                log.info('Writing {}'.format(args.outfile))
+                _write_spectra_pigz(args.outfile, spectra, cpus)
 
-        if args.coaddfile is not None:
-            log.info('Coadding spectra')
-            #- in-place coadd updates spectra object
-            coadd(spectra, onetile=args.onetile)
-            log.info('Writing {}'.format(args.coaddfile))
-            io.write_spectra(args.coaddfile, spectra)
+            if args.coaddfile is not None:
+                log.info('Coadding spectra')
+                #- in-place coadd updates spectra object
+                coadd(spectra, onetile=args.onetile)
+                log.info('Writing {}'.format(args.coaddfile))
+                io.write_spectra(args.coaddfile, spectra)
+        except Exception as err:
+            error = err
+
+    if _root_failed(error, comm):
+        if rank == 0:
+            raise error
+        return 1
 
     if comm is not None:
         comm.barrier()

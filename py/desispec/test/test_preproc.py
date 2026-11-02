@@ -525,6 +525,104 @@ class TestPreProc(unittest.TestCase):
             image = preproc(self.rawimage, self.header, primary_header=self.primary_header,
                             dark=False, bias=False, mask=True)
 
+    def _meta(self, image, key):
+        '''Return header value from image.meta, which may store (value, comment) tuples'''
+        value = image.meta[key]
+        return value[0] if isinstance(value, tuple) else value
+
+    def _add_overscan_step(self, rawimage, amp, step, row0):
+        '''Add a step of `step` ADU to rows >= row0 of the data and overscan columns of `amp`'''
+        for sec in ('DATASEC', 'BIASSEC'):
+            yy, xx = parse_sec_keyword(self.header[sec+amp])
+            rawimage[yy.start+row0:yy.stop, xx] += step
+
+    def _step_residual(self, image, amp, row0):
+        '''Mean of preprocessed pixels above minus below row0 of `amp`, in ADU'''
+        pix = image.pix[self.quad[amp]] / self.gain[amp]
+        return np.mean(pix[row0:]) - np.mean(pix[:row0])
+
+    def test_overscan_per_row(self):
+        '''OSTEP>=2 triggers per-row overscan subtraction, independent of use_overscan_row'''
+        from desispec.maskbits import ccdmask
+        row0 = self.ny // 2
+        rawimage = self.rawimage.copy()
+        self._add_overscan_step(rawimage, 'A', 10, row0)  # above BADREADNOISE threshold
+        self._add_overscan_step(rawimage, 'B', 3, row0)   # between per-row and BADREADNOISE thresholds
+        image = preproc(rawimage, self.header, primary_header=self.primary_header,
+                        mask=False, dark=False, bias=False, use_overscan_row=False)
+
+        self.assertGreater(self._meta(image, 'OSTEPA'), 5)
+        self.assertTrue(2 <= self._meta(image, 'OSTEPB') <= 5)
+        for amp in ('C', 'D'):
+            self.assertLess(self._meta(image, 'OSTEP'+amp), 2)
+
+        self.assertEqual(self._meta(image, 'OMETHA'), 'PER_ROW')
+        self.assertEqual(self._meta(image, 'OMETHB'), 'PER_ROW')
+        self.assertEqual(self._meta(image, 'OMETHC'), 'AVERAGE')
+        self.assertEqual(self._meta(image, 'OMETHD'), 'AVERAGE')
+
+        #- step removed from the data
+        for amp in ('A', 'B'):
+            self.assertAlmostEqual(self._step_residual(image, amp, row0), 0.0, delta=0.5)
+            self.assertAlmostEqual(np.mean(image.pix[self.quad[amp]]), 0.0, delta=1)
+
+        #- only the OSTEP>5 amp is flagged with BADREADNOISE
+        self.assertTrue(np.all(image.mask[self.quad['A']] & ccdmask.BADREADNOISE))
+        for amp in ('B', 'C', 'D'):
+            self.assertFalse(np.any(image.mask[self.quad[amp]] & ccdmask.BADREADNOISE))
+
+    def test_no_overscan_per_row(self):
+        '''no_overscan_per_row=True forces average overscan subtraction'''
+        from desispec.maskbits import ccdmask
+        row0 = self.ny // 2
+        rawimage = self.rawimage.copy()
+        self._add_overscan_step(rawimage, 'A', 10, row0)
+        image = preproc(rawimage, self.header, primary_header=self.primary_header,
+                        mask=False, dark=False, bias=False, no_overscan_per_row=True)
+        self.assertGreater(self._meta(image, 'OSTEPA'), 5)
+        for amp in ('A', 'B', 'C', 'D'):
+            self.assertEqual(self._meta(image, 'OMETH'+amp), 'AVERAGE')
+        #- step remains in the data, without BADREADNOISE
+        self.assertAlmostEqual(self._step_residual(image, 'A', row0), 10, delta=0.5)
+        self.assertFalse(np.any(image.mask & ccdmask.BADREADNOISE))
+
+    def test_overscan_goodbiassec(self):
+        '''GOODBIASSEC amp uses average overscan while its neighbor can use per-row'''
+        #- shortened overscan for amp A, rows 1:300 of 500
+        yamlfile = os.path.join(self.calibdir, 'spec/sp0/b0.yaml')
+        with open(yamlfile, 'a') as fx:
+            fx.write("      GOODBIASSECA: '[401:450,1:300]'\n")
+
+        row0 = 150  # within the GOODBIASSEC rows
+        rawimage = self.rawimage.copy()
+        self._add_overscan_step(rawimage, 'A', 10, row0)
+        self._add_overscan_step(rawimage, 'B', 10, row0)
+        image = preproc(rawimage, self.header, primary_header=self.primary_header,
+                        mask=False, dark=False, bias=False)
+
+        self.assertGreater(self._meta(image, 'OSTEPA'), 2)
+        self.assertEqual(self._meta(image, 'OMETHA'), 'AVERAGE')
+        self.assertEqual(self._meta(image, 'OMETHB'), 'PER_ROW')
+        self.assertAlmostEqual(self._step_residual(image, 'B', row0), 0.0, delta=0.5)
+        #- readnoise defined over the full amp, including rows outside GOODBIASSEC
+        #- (amp A readnoise is inflated by the step, since it uses the average overscan)
+        for amp in ('A', 'B'):
+            self.assertTrue(np.all(image.readnoise[self.quad[amp]] > 0))
+        self.assertAlmostEqual(np.median(image.readnoise[self.quad['B']]), self.rdnoise['B'], delta=0.2)
+
+    def test_overscan_cosmic_trail(self):
+        '''Overscan rows with a cosmic trail are interpolated over before measuring OSTEP'''
+        rows = np.s_[200:208]
+        rawimage = self.rawimage.copy()
+        #- bright cosmic in active region next to the overscan, plus its trail in the overscan
+        yy, xx = parse_sec_keyword(self.header['BIASSECA'])
+        rawimage[rows, xx.start-10] = 40000
+        rawimage[rows, xx] += 20
+        image = preproc(rawimage, self.header, primary_header=self.primary_header,
+                        mask=False, dark=False, bias=False)
+        self.assertLess(self._meta(image, 'OSTEPA'), 2)
+        self.assertEqual(self._meta(image, 'OMETHA'), 'AVERAGE')
+
     # #- Not implemented yet, but flag these as expectedFailures instead of
     # #- successful tests of raising NotImplementedError
     # def test_default_bias(self):

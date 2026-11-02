@@ -5,10 +5,46 @@
 import os
 import unittest
 from unittest.mock import patch, call
-from ..tilecompleteness import read_gfa_data
+from ..tilecompleteness import (read_gfa_data, compute_tile_completeness_table,
+                                merge_tile_completeness_table, find_previous_tile_file)
 
 
 class TestTileCompleteness(unittest.TestCase):
+
+    def test_find_previous_tile_file(self):
+        """The .fits version is preferred, with a warning if it is not the file given."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv = os.path.join(tmpdir, 'tiles-test.csv')
+            fits_file = os.path.join(tmpdir, 'tiles-test.fits')
+            with patch('desispec.tilecompleteness.get_logger') as mock_log:
+                self.assertIsNone(find_previous_tile_file(csv))
+                open(csv, 'w').close()
+                self.assertEqual(find_previous_tile_file(csv), csv)
+                mock_log.return_value.warning.assert_not_called()
+                open(fits_file, 'w').close()
+                self.assertEqual(find_previous_tile_file(csv), fits_file)
+                mock_log.return_value.warning.assert_called_once()
+                mock_log.return_value.warning.reset_mock()
+                self.assertEqual(find_previous_tile_file(fits_file), fits_file)
+                mock_log.return_value.warning.assert_not_called()
+                # other extensions are used as given, since only that file is written
+                ecsv = os.path.join(tmpdir, 'tiles-test.ecsv')
+                self.assertIsNone(find_previous_tile_file(ecsv))
+                open(ecsv, 'w').close()
+                self.assertEqual(find_previous_tile_file(ecsv), ecsv)
+                mock_log.return_value.warning.assert_not_called()
+
+    def test_extname_is_tiles(self):
+        """Fresh and merged tile tables have the same EXTNAME."""
+        import tempfile
+        from ..scripts.tsnr_afterburner import _empty_tables
+        exposures = _empty_tables()[1]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fresh = compute_tile_completeness_table(exposures, tmpdir, None)
+        self.assertEqual(fresh.meta['EXTNAME'], 'TILES')
+        self.assertEqual(merge_tile_completeness_table(fresh.copy(), fresh).meta['EXTNAME'], 'TILES')
+
     """Test desispec.tilecompleteness.
     """
 

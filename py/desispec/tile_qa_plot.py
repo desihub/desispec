@@ -13,12 +13,15 @@ import yaml
 from glob import glob
 from datetime import datetime
 import tempfile
+import multiprocessing
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from desitarget.targetmask import desi_mask, bgs_mask
 from desitarget.geomask import hp_in_cap
 from desispec.maskbits import fibermask
 from desispec.io import read_fibermap, findfile
 from desispec.io.util import checkgzip
 from desispec.tsnr import tsnr2_to_efftime
+from desispec.tile_qa_spectra import read_spectra_tsnr2
 from desimodel.focalplane.geometry import get_tile_radius_deg
 from desiutil.log import get_logger
 from desiutil.dust import ebv as dust_ebv
@@ -274,7 +277,7 @@ def get_viewer_cutout(
     tmpoutdir=tempfile.mkdtemp(),
     width_deg=4,
     pixscale=10,
-    dr="dr11-early-v2",
+    dr="dr11",
     timeout=15,
 ):
     """
@@ -287,7 +290,7 @@ def get_viewer_cutout(
         tmpoutdir (optional, defaults to a temporary directory): temporary directory where
         width_deg (optional, defaults to 4): width of the cutout in degrees (float)
         pixscale (optional, defaults to 10): pixel scale of the cutout
-        dr (optional, default do "dr11-early-v2"): imaging data release
+        dr (optional, default do "dr11"): imaging data release
         timeout (optional, defaults to 15): time (in seconds) after which we quit the wget call (int)
 
     Returns:
@@ -306,11 +309,17 @@ def get_viewer_cutout(
     )
     try:
         subprocess.check_call(tmpstr, stderr=subprocess.DEVNULL, shell=True)
-    except subprocess.CalledProcessError:
-        log.info("no cutout from viewer after {}s, stopping the wget call".format(timeout))
+    except subprocess.CalledProcessError as err:
+        # AR timeout returns 124 if the wget call timed out
+        if err.returncode == 124:
+            log.warning("no {} cutout from viewer after {}s, stopping the wget call".format(layer, timeout))
+        else:
+            log.warning("wget of {} cutout from viewer failed with exit code {}".format(layer, err.returncode))
     try:
         img = mpimg.imread(tmpfn)
     except:
+        # AR e.g. the viewer returns "No such layer" text for an unknown layer
+        log.warning("could not read {} cutout from viewer as an image".format(layer))
         img = np.zeros((size, size, 3))
     # AR check img is a np array with the correct shape
     # AR not sure why as mpimg.imread should return the correct shape,
@@ -369,9 +378,9 @@ def deg2pix(dras, ddecs, width_deg, width_pix):
     return dxs, dys
 
 
-def plot_cutout(ax, tileid, tilera, tiledec, width_deg, petal_c="w", ebv_c="orange"):
+def plot_cutout(ax, tileid, tilera, tiledec, width_deg, petal_c="w", ebv_c="orange", img=None):
     """
-    Plots a ls-dr11-early-v2 cutout, with overlaying the petals and the EBV contours.
+    Plots a ls-dr11 cutout, with overlaying the petals and the EBV contours.
 
     Args:
         ax: pyplot object
@@ -381,14 +390,17 @@ def plot_cutout(ax, tileid, tilera, tiledec, width_deg, petal_c="w", ebv_c="oran
         width_deg: width of the cutout in degrees (np.array of floats)
         petal_c (optional, defaults to "w"): color used to display petals (string)
         ebv_c (optional, default to "y"): color used to display the EBV contours (string)
+        img (optional): already downloaded cutout, as returned by get_viewer_cutout();
+            if None, the cutout is downloaded here
 
     Notes:
         Different than fiberassign.fba_launch_io.plot_cutout().
     """
     # AR get the cutout
-    img = get_viewer_cutout(
-        tileid, tilera, tiledec, width_deg=width_deg, pixscale=10, dr="dr11-early-v2", timeout=15,
-    )
+    if img is None:
+        img = get_viewer_cutout(
+            tileid, tilera, tiledec, width_deg=width_deg, pixscale=10, dr="dr11", timeout=15,
+        )
 
     # AR display cutout
     width_pix = img.shape[0]
@@ -863,13 +875,18 @@ def plot_mw_skymap(fig, ax, tileid, tilera, tiledec, survey, program, org=120):
     )
 
 
-def get_expids_efftimes(tileqafits, prod):
+def get_expids_efftimes(tileqafits, prod, nworkers=1):
     """
     Get the EFFTIME and EFFTIMEQA for the EXPIDs from the coadd.
 
     Args:
         tileqafits: path to the tile-qa-TILEID-NIGHT.fits file
         prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
+        nworkers (optional, defaults to 1): if >1, read the spectra files in
+            parallel with up to that many processes (decompressing the
+            gzipped spectra files dominates the cost); the processes are
+            started with forkserver (or spawn), not fork, and inherit the
+            CPU affinity of this process
 
     Returns:
         structured array: An array with the following keys::
@@ -928,25 +945,21 @@ def get_expids_efftimes(tileqafits, prod):
                 spectra_fns = sorted(glob(tmpstr))
     # AR store the TSNR2 values + (EXPID, NIGHT)
     if len(spectra_fns) > 0:
-        myds = []
-        for spectra_fn in spectra_fns:
-            f = fitsio.FITS(spectra_fn)
-            myd = Table()
-            myd["TARGETID"] = f["FIBERMAP"].read_column("TARGETID")
-            myd["EXPID"] = f["FIBERMAP"].read_column("EXPID")
-            myd["NIGHT"] = f["FIBERMAP"].read_column("NIGHT")
-            myd["PETAL_LOC"] = f["FIBERMAP"].read_column("PETAL_LOC")
-            scores_keys = f["SCORES"].get_colnames()
-            for camera in ["B", "R", "Z"]:
-                key = "{}_{}".format(tsnr2_key, camera)
-                if key in scores_keys:
-                    myd["TSNR2_{}".format(camera)] = f["SCORES"].read_column(key)
-                else:
-                    myd["TSNR2_{}".format(camera)] = 0
-                    log.warning(f"no {key} column in {spectra_fn} -> set TSNR2_{camera}=0")
-            f.close()
+        if nworkers > 1 and len(spectra_fns) > 1:
+            nproc = min(nworkers, len(spectra_fns))
+            # AR do not fork: this may run inside an MPI rank (desi_zproc) that has
+            # AR used the GPU and has other threads running (e.g. the cutout download);
+            # AR forkserver starts workers from a fresh interpreter (default in python>=3.14)
+            if "forkserver" in multiprocessing.get_all_start_methods():
+                mp_context = multiprocessing.get_context("forkserver")
+            else:
+                mp_context = multiprocessing.get_context("spawn")
+            with ProcessPoolExecutor(nproc, mp_context=mp_context) as pool:
+                myds = list(pool.map(read_spectra_tsnr2, spectra_fns, [tsnr2_key] * len(spectra_fns)))
+        else:
+            myds = [read_spectra_tsnr2(spectra_fn, tsnr2_key) for spectra_fn in spectra_fns]
+        for spectra_fn, myd in zip(spectra_fns, myds):
             log.info(f"read {len(myd)} rows from {spectra_fn}")
-            myds.append(myd)
         myd = vstack(myds)
         # AR unique list of (EXPID, NIGHT)
         expids, ii = np.unique(myd["EXPID"], return_index=True)
@@ -995,7 +1008,15 @@ def get_expids_efftimes(tileqafits, prod):
     return d
 
 
-def get_expid_vccdsec(expid, night, prod):
+def _read_frame_vccdsec(fn):
+    """
+    Return ({camera}{petal}, VCCDSEC or None) from the primary header of a frame file.
+    """
+    hdr = fits.getheader(fn, 0)
+    return hdr["CAMERA"], hdr["VCCDSEC"] if "VCCDSEC" in hdr else None
+
+
+def get_expid_vccdsec(expid, night, prod, nworkers=1):
     """
     Get the VCCDSEC header keyword for an exposure for each frame file.
 
@@ -1004,7 +1025,8 @@ def get_expid_vccdsec(expid, night, prod):
         expid: exposure id (int)
         night: night (int)
         prod: full path to input reduction, e.g. /global/cfs/cdirs/desi/spectro/redux/daily (string)
-
+        nworkers (optional, defaults to 1): if >1, read the frame headers with
+            that many threads (the reads are latency bound)
 
     Returns:
         vccdsec: dictionary with VCCDSEC value for each frame file (dict. of floats)
@@ -1030,11 +1052,15 @@ def get_expid_vccdsec(expid, night, prod):
     if len(fns) == 0:
         log.warning("no frame file found in {}".format(expdir))
     else:
-        for fn in fns:
-            hdr = fits.getheader(fn, 0)
-            campet = hdr["CAMERA"] # AR actually is {camera}{petal}
-            if "VCCDSEC" in hdr:
-                vccdsec[campet] = hdr["VCCDSEC"]
+        if nworkers > 1 and len(fns) > 1:
+            with ThreadPoolExecutor(min(nworkers, len(fns))) as pool:
+                results = list(pool.map(_read_frame_vccdsec, fns))
+        else:
+            results = [_read_frame_vccdsec(fn) for fn in fns]
+        for fn, (campet, val) in zip(fns, results):
+            # AR campet actually is {camera}{petal}
+            if val is not None:
+                vccdsec[campet] = val
             else:
                 vccdsec[campet] = -99.
                 log.warning("no VCCDSEC keyword in {}; set VCCDSEC=-99.".format(fn))
@@ -1306,6 +1332,7 @@ def make_tile_qa_plot(
     dchi2_min=None,
     tsnr2_key=None,
     refdir = resources.files("desispec").joinpath("data/qa"),
+    nworkers = 1,
 ):
     """
     Generate the tile QA png file.
@@ -1318,6 +1345,8 @@ def make_tile_qa_plot(
         dchi2_min (optional, defaults to value in qa-params.yaml): minimum DELTACHI2 for a valid zspec (float)
         tsnr2_key (optional, defaults to value in qa-params.yaml): TSNR2 key used for plot (string)
         refdir (optional, defaults to "desispec","data/qa"): path to folder with reference measurements for the n(z) and the TSNR2 (string)
+        nworkers (optional, defaults to 1): if >1, overlap the slow I/O: download the sky cutout
+            in the background, and read the spectra files (processes) and frame headers (threads) in parallel
 
     Note:
         * If hdr["SURVEY"] is not "main", will not plot the n(z).
@@ -1366,8 +1395,21 @@ def make_tile_qa_plot(
     fig = plt.figure(figsize=(22, 15))
     gs = gridspec.GridSpec(6, 4, wspace=0.25, hspace=0.2, width_ratios=[1.0, 1.3, 1.0, 1.0])
 
+    # AR start the (slow, network bound) cutout download in the background
+    cutout_pool, cutout_future = None, None
+    if nworkers > 1:
+        try:
+            cutout_pool = ThreadPoolExecutor(1)
+            cutout_future = cutout_pool.submit(
+                get_viewer_cutout, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"],
+                width_deg=4, pixscale=10, dr="dr11", timeout=15,
+            )
+        except Exception as err:
+            log.warning(f"could not start cutout download in the background: {err!r}")
+            cutout_future = None
+
     # AR exposures from that TILEID
-    exps = get_expids_efftimes(tileqafits, prod)
+    exps = get_expids_efftimes(tileqafits, prod, nworkers=nworkers)
     nexp = len(exps)
 
     # AR VCCDSEC: for each exposure, a dictionary
@@ -1377,7 +1419,7 @@ def make_tile_qa_plot(
     exps["VCCDSEC_PBCAMPETS"] = np.zeros(nexp, dtype=object)
     exps["VCCDSEC_MIN"] = np.zeros(nexp, dtype=float)
     for i, (expid, night) in enumerate(zip(exps["EXPID"], exps["NIGHT"])):
-        vccdsec, pb_campets = get_expid_vccdsec(expid, night, prod)
+        vccdsec, pb_campets = get_expid_vccdsec(expid, night, prod, nworkers=nworkers)
         exps["VCCDSEC"][i] = vccdsec
         exps["VCCDSEC_PBCAMPETS"][i] = pb_campets
         exps["VCCDSEC_MIN"][i] = np.min([vccdsec[campet] for campet in vccdsec])
@@ -1434,13 +1476,16 @@ def make_tile_qa_plot(
     # AR cutout
     ax = plt.subplot(gs[2:4, 1])
     try:
-        plot_cutout(ax, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"], 4)
+        img = cutout_future.result() if cutout_future is not None else None
+        plot_cutout(ax, hdr["TILEID"], hdr["TILERA"], hdr["TILEDEC"], 4, img=img)
     except Exception as err:
         import traceback
         lines = traceback.format_exception(*sys.exc_info())
         log.error("plot_cutout raised an exception:")
         print("\n".join(lines))
         log.warning("continuing plotting without image cutout")
+    if cutout_pool is not None:
+        cutout_pool.shutdown(wait=False)
 
     # AR n(z)
     # AR n(z): plotting only if main survey

@@ -238,6 +238,125 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
+    def test_regroup_inframes_mpi(self):
+        """Test grouping from an input list of frames with --mpi on a one-rank communicator"""
+        try:
+            from mpi4py import MPI
+        except ImportError:
+            self.skipTest('mpi4py not available')
+
+        cmd = 'desi_group_spectra -o {}'.format(self.specfile)
+        cmd += ' --inframes ' + ' '.join(self.framefiles)
+
+        group_spectra.main(group_spectra.parse(cmd.split()[1:]))
+        serial = read_spectra(self.specfile)
+        os.remove(self.specfile)
+
+        args = group_spectra.parse((cmd + ' --mpi').split()[1:])
+        group_spectra.main(args, comm=MPI.COMM_WORLD)
+        parallel = read_spectra(self.specfile)
+
+        self.assertEqual(len(serial.fibermap), len(parallel.fibermap))
+        nt.assert_array_equal(serial.fibermap['TARGETID'], parallel.fibermap['TARGETID'])
+        for band in serial.bands:
+            nt.assert_array_equal(serial.flux[band], parallel.flux[band])
+            nt.assert_array_equal(serial.ivar[band], parallel.ivar[band])
+            nt.assert_array_equal(serial.mask[band], parallel.mask[band])
+
+    def _run_mpi_with_fake_comm(self, rank, bcast_values=None, error=None):
+        """
+        Run group_spectra.main with --mpi on a fake 2-rank comm as ``rank``
+
+        On rank 0, frames2spectra raises ``error`` if not None.
+        On other ranks, bcast returns ``bcast_values`` in order, as if from rank 0.
+
+        Returns (result or exception, fake comm)
+        """
+        import itertools
+        from contextlib import contextmanager
+        from unittest import mock
+
+        class FakeComm:
+            def __init__(self, rank, bcast_values):
+                self.rank, self.size = rank, 2
+                self.bcast_values = list(bcast_values or [])
+                self.bcast_args = list()
+                self.nbarrier = 0
+            def allgather(self, obj):
+                return [obj, obj]
+            def bcast(self, obj, root=0):
+                self.bcast_args.append(obj)
+                return obj if self.rank == root else self.bcast_values.pop(0)
+            def barrier(self):
+                self.nbarrier += 1
+
+        class FakePool:
+            def starmap(self, func, args):
+                return itertools.starmap(func, args)
+
+        @contextmanager
+        def fake_executor(comm, root=0):
+            yield FakePool() if comm.rank == root else None
+
+        comm = FakeComm(rank, bcast_values)
+        cmd = 'desi_group_spectra --mpi -o {}'.format(self.specfile)
+        cmd += ' --inframes ' + ' '.join(self.framefiles)
+        args = group_spectra.parse(cmd.split()[1:])
+        with mock.patch('mpi4py.futures.MPICommExecutor', fake_executor), \
+             mock.patch('desispec.scripts.group_spectra.frames2spectra', side_effect=error):
+            try:
+                result = group_spectra.main(args, comm=comm)
+            except Exception as err:
+                result = err
+
+        return result, comm
+
+    def test_regroup_mpi_root_error(self):
+        """An exception on rank 0 is sent to the other ranks before being raised"""
+        try:
+            import mpi4py.futures
+        except ImportError:
+            self.skipTest('mpi4py not available')
+
+        #- rank 0 raises the original error after telling the other ranks
+        error = RuntimeError('fake frames2spectra failure')
+        result, comm = self._run_mpi_with_fake_comm(rank=0, error=error)
+        self.assertIs(result, error)
+        self.assertIs(comm.bcast_args[-1], True)
+        self.assertEqual(comm.nbarrier, 0)
+
+        #- other ranks return an error code instead of waiting at the barrier;
+        #- bcast values: no read error, nframes, rank 0 failed
+        result, comm = self._run_mpi_with_fake_comm(rank=1, bcast_values=[False, 1, True])
+        self.assertEqual(result, 1)
+        self.assertEqual(comm.nbarrier, 0)
+
+        #- if rank 0 succeeds, the other ranks continue to the barrier
+        result, comm = self._run_mpi_with_fake_comm(rank=1, bcast_values=[False, 1, False])
+        self.assertEqual(result, 0)
+        self.assertEqual(comm.nbarrier, 1)
+
+    def test_regroup_mpi_read_error(self):
+        """An exception reading frames on rank 0 is sent to the other ranks"""
+        try:
+            import mpi4py.futures
+        except ImportError:
+            self.skipTest('mpi4py not available')
+
+        from unittest import mock
+        error = OSError('fake read failure')
+        with mock.patch('desispec.scripts.group_spectra._read_framefile', side_effect=error):
+            result, comm = self._run_mpi_with_fake_comm(rank=0)
+
+        self.assertIs(result, error)
+        self.assertEqual(comm.bcast_args, [True])
+        self.assertEqual(comm.nbarrier, 0)
+
+        #- other ranks return before the nframes bcast
+        result, comm = self._run_mpi_with_fake_comm(rank=1, bcast_values=[True])
+        self.assertEqual(result, 1)
+        self.assertEqual(len(comm.bcast_args), 1)
+
     def test_regroup_inframes(self):
         """Test grouping from an input list of frames"""
         cmd = 'desi_group_spectra -o {}'.format(self.specfile)
