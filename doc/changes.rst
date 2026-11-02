@@ -17,7 +17,7 @@ desispec Change Log
     single tile. Keep multi-tile parallelism when processing multiple tiles.
   - Optionally use pigz for parallel gzip compression of spectra files.
   - Cache camera overlap calculation for faster coaddition.
-  - Use ``ls-dr11` sky cutout (ls-dr11-early-v2 no longer works).
+  - Use ``ls-dr11`` sky cutout (ls-dr11-early-v2 no longer works).
   - Fix timing log messages MPI barrier logic.
 
 .. _`#2901`: https://github.com/desihub/desispec/pull/2901
