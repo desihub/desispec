@@ -10,9 +10,19 @@ desispec Change Log
 * Rewrite ``desi_tsnr_afterburner`` as ``desispec.scripts.tsnr_afterburner``,
   reading TSNR2 and sky magnitudes from exposure QA files when available and
   falling back to cframes otherwise (PR `#2911`_). 
+* ``desi_zproc`` updates for speed and minor bug fixes (PR `#2907`_)
+
+  - Run tileqa in parallel with afterburners
+  - Add I/O parallelism to group_spectra and tileqa when running on a
+    single tile. Keep multi-tile parallelism when processing multiple tiles.
+  - Optionally use pigz for parallel gzip compression of spectra files.
+  - Cache camera overlap calculation for faster coaddition.
+  - Use ``ls-dr11`` sky cutout (ls-dr11-early-v2 no longer works).
+  - Fix timing log messages MPI barrier logic.
 
 .. _`#2901`: https://github.com/desihub/desispec/pull/2901
 .. _`#2905`: https://github.com/desihub/desispec/pull/2905
+.. _`#2907`: https://github.com/desihub/desispec/pull/2907
 .. _`#2911`: https://github.com/desihub/desispec/pull/2911
 
 0.73.3 (2026-10-14)

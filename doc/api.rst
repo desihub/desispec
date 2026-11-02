@@ -494,6 +494,9 @@ desispec API
 .. automodule:: desispec.tile_qa_plot
     :members:
 
+.. automodule:: desispec.tile_qa_spectra
+    :members:
+
 .. automodule:: desispec.tilecompleteness
     :members:
 
