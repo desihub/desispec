@@ -5,36 +5,15 @@ desispec Change Log
 0.73.4 (unreleased)
 -------------------
 
-* Reduce ``desi_zproc`` tile QA wall time by overlapping slow I/O
-  (branch ``ztile-overlap``):
+* ``desi_zproc`` updates for speed and minor bug fixes
 
-  * ``desi_tile_qa --nproc N`` with a single tile now parallelizes within
-    the tile: it reads the gzipped ``spectra`` files in parallel (processes),
-    reads frame headers in parallel (threads), and downloads the sky cutout
-    in the background. With multiple tiles it still parallelizes across
-    tiles, now pooling tiles from all nights together rather than per night.
-    Default ``N=1`` is unchanged.
-  * ``desi_zproc --tileqa-nproc N`` passes this through.
-  * ``desi_zproc`` runs tile QA on rank 0 while the other ranks run the
-    afterburners, instead of one after another; use ``--no-overlap-tileqa``
-    for sequential tile QA then afterburners. zmtl now runs after both,
-    since it reads the tile-qa file.
-
-* Tile QA plot: request the ``ls-dr11`` sky cutout from the Legacy Surveys
-  viewer, which no longer serves ``ls-dr11-early-v2`` (EBV panel was blank),
-  and log why a cutout download failed.
-
-* Speed up ``coadd`` by about 15 s per 500-target petal: compute the
-  camera-overlap flags and merged wavelength grid in
-  ``per_exposure_normalization`` once instead of for every target, and
-  vectorize the overlap test. Results are unchanged.
-
-* ``desi_zproc`` now runs ``desi_group_spectra --mpi`` on all ranks of each
-  petal's block instead of leaving all but one rank idle, so frames are read
-  in parallel. ``desi_group_spectra`` compresses ``.gz`` output with ``pigz``
-  on the CPUs of the other ranks when ``pigz`` is available, which cuts the
-  group spectra stage from about 80 s to about 25 s for a tile. Table data
-  in the outputs is unchanged.
+  - Run tileqa in parallel with afterburners
+  - Add I/O parallelism to group_spectra and tileqa when running on a
+    single tile. Keep multi-tile parallelism when processing multiple tiles.
+  - Optionally use pigz for parallel gzip compression of spectra files.
+  - Cache camera overlap calculation for faster coaddition.
+  - Use ``ls-dr11` sky cutout (ls-dr11-early-v2 no longer works).
+  - Fix timing log messages MPI barrier logic.
 
 0.73.3 (2026-10-14)
 -------------------
