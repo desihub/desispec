@@ -809,6 +809,51 @@ class TestIO(unittest.TestCase):
         for key in meta:
             self.assertEqual(meta[key], img3.meta[key], 'meta[{}] not propagated'.format(key))
 
+    def test_image_write_gzip(self):
+        """Test write_image to .gz with and without multithreaded pigz.
+        """
+        import shutil
+        from ..image import Image
+        from ..io.image import read_image, write_image
+        shape = (50, 40)
+        pix = np.random.uniform(size=shape)
+        ivar = np.random.uniform(size=shape)
+        mask = np.random.randint(0, 3, size=shape)
+        img1 = Image(pix, ivar, mask, readnoise=1.0, camera='b0')
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            #- default single-core path
+            gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+            write_image(gzfile, img1)
+            with open(gzfile, 'rb') as fx:
+                self.assertEqual(fx.read(2), b'\x1f\x8b')  #- gzip magic number
+            img2 = read_image(gzfile)
+            self.assertTrue(np.all(img1.pix.astype(np.float32) == img2.pix))
+            self.assertTrue(np.all(img1.mask == img2.mask))
+
+            #- ncpu>1 falls back to the single-core path if pigz is missing
+            gzfile = os.path.join(tmpdir, 'nopigz-b0.fits.gz')
+            with patch('shutil.which', return_value=None):
+                write_image(gzfile, img1, ncpu=2)
+            img3 = read_image(gzfile)
+            self.assertTrue(np.all(img2.pix == img3.pix))
+            self.assertTrue(np.all(img2.mask == img3.mask))
+
+            #- ncpu>1 with pigz, if available
+            if shutil.which('pigz') is not None:
+                gzfile = os.path.join(tmpdir, 'pigz-b0.fits.gz')
+                write_image(gzfile, img1, ncpu=2)
+                img4 = read_image(gzfile)
+                self.assertTrue(np.all(img2.pix == img4.pix))
+                self.assertTrue(np.all(img2.ivar == img4.ivar))
+                self.assertTrue(np.all(img2.mask == img4.mask))
+
+            #- no leftover temporary files
+            self.assertEqual(len(os.listdir(tmpdir)), 3)
+        finally:
+            rmtree(tmpdir)
+
     def test_native_endian(self):
         """Test desiutil.io.util.native_endian.
         """
