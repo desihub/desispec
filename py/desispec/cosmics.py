@@ -110,7 +110,7 @@ def reject_cosmic_rays_1d(frame,nsig=3,psferr=0.05) :
                         log.info("fiber {} wave={} S/N={} add cosmic mask of {} pix".format(fiber,int(frame.wave[i]),int(snr),nmasked))
     log.info("done")
 
-@numba.jit(nopython=True)
+@numba.jit(nopython=True, cache=True)
 def dilate_numba(input_boolean_array,include_input=False) :
     output_boolean_array = np.zeros(input_boolean_array.shape, input_boolean_array.dtype)
     if include_input :
@@ -130,7 +130,7 @@ def dilate_numba(input_boolean_array,include_input=False) :
 
 
 
-@numba.jit(nopython=True)
+@numba.jit(nopython=True, cache=True)
 def _reject_cosmic_rays_ala_sdss_single_numba(pix,ivar,selection,psf_gradients,nsig,cfudge,c2fudge) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)

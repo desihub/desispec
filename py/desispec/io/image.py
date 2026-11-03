@@ -6,6 +6,9 @@ I/O routines for Image objects
 """
 
 import os
+import gzip
+import shutil
+import subprocess
 import time
 import warnings
 import numpy as np
@@ -20,7 +23,7 @@ from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
 from astropy.table import Table
 
-def write_image(outfile, image, meta=None):
+def write_image(outfile, image, meta=None, ncpu=1):
     """Writes image object to outfile
 
     Args:
@@ -30,6 +33,8 @@ def write_image(outfile, image, meta=None):
 
     Optional:
         meta : dict-like object with metadata key/values (e.g. FITS header)
+        ncpu : number of threads for gzip compression of .gz files; if >1
+            and the `pigz` executable is available, use it (parallel gzip)
     """
 
     log = get_logger()
@@ -79,7 +84,20 @@ def write_image(outfile, image, meta=None):
 
     t0 = time.time()
     tmpfile = get_tempfilename(outfile)
-    hx.writeto(tmpfile, overwrite=True, checksum=True)
+    if tmpfile.endswith('.gz') and ncpu > 1 and shutil.which('pigz') is not None:
+        #- write uncompressed, then compress with multiple threads
+        rawfile = tmpfile[:-3]
+        hx.writeto(rawfile, overwrite=True, checksum=True)
+        with open(tmpfile, 'wb') as fx:
+            subprocess.run(['pigz', '-c', '-p', str(ncpu), rawfile], stdout=fx, check=True)
+        os.remove(rawfile)
+    elif tmpfile.endswith('.gz'):
+        #- astropy gzips at zlib level 9, which is ~2x slower than level 1
+        #- for <1% larger files of noisy float32 data
+        with gzip.GzipFile(tmpfile, 'wb', compresslevel=1) as fx:
+            hx.writeto(fx, overwrite=True, checksum=True)
+    else:
+        hx.writeto(tmpfile, overwrite=True, checksum=True)
     os.rename(tmpfile, outfile)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
