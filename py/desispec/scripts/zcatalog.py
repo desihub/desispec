@@ -827,7 +827,7 @@ def main(args=None):
     # Some entries have invalid (zero-filled) EBV values and zero-filled fluxes; zero fill their MW_TRANSMISSION_* values
     invalid_ebv = (zcat['EBV']==0) & (zcat['FLUX_G']==0) & (zcat['FLUX_R']==0) & (zcat['FLUX_Z']==0)
     for band, coeff in ext_coeffs.items():
-        zcat['MW_TRANSMISSION_'+band] = np.zeros(len(cat), dtype=np.float32)
+        zcat['MW_TRANSMISSION_'+band] = np.zeros(len(zcat), dtype=np.float32)
         zcat['MW_TRANSMISSION_'+band][~invalid_ebv] = (10.**(-coeff * zcat['EBV'][~invalid_ebv] / 2.5)).astype(np.float32)
 
     # Remove main-survey target bits for CMX and SVn surveys (they are not the actual main-survey target bits)
