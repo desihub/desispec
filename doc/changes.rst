@@ -2,8 +2,15 @@
 desispec Change Log
 ===================
 
-0.73.4 (unreleased)
+0.73.5 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.73.4 (2026-11-03)
+-------------------
+
+Used for cleanup passes in Nevis.
 
 * Fix bug preventing row-by-row overscan subtraction (PR `#2901`_).
 * Add ``desi_run_scripts`` wrapper (PR `#2905`_).
