@@ -6,6 +6,7 @@ desispec.workflow.proc_dashboard_funcs
 import multiprocessing
 import os,glob
 import json
+import hashlib
 import re
 import time,datetime
 import numpy as np
@@ -369,10 +370,10 @@ def return_color_profile():
 
 def year_page_pathname(outfile, year):
     """
-    Pathname of the page holding a single year, derived from the master page.
+    Pathname of the page holding a single year, derived from the main page.
 
     Args:
-        outfile (str): pathname of the master page, e.g. '.../dashboard.html'.
+        outfile (str): pathname of the main page, e.g. '.../dashboard.html'.
         year (str or int): the year the page covers.
 
     Returns:
@@ -382,10 +383,60 @@ def year_page_pathname(outfile, year):
     return f'{stem}-{year}{ext}'
 
 
+## Stand-ins for the update time and version of a year page while it is built,
+## replaced when the page is written
+_TIMESTAMP_PLACEHOLDER = '@@DASHBOARD_TIMESTAMP@@'
+_VERSION_PLACEHOLDER = '@@DASHBOARD_VERSION@@'
+
+
+def _current_timestamp():
+    """
+    Return the current local time, as shown in a dashboard header.
+    """
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+
+def _page_version(html_page):
+    """
+    Short hash of a page's contents, which changes whenever the contents do.
+
+    Args:
+        html_page (str): the page, with placeholders in place of anything that
+            changes from run to run without changing what the page shows.
+
+    Returns:
+        str: 12 hexadecimal characters.
+    """
+    return hashlib.sha256(html_page.encode('utf-8')).hexdigest()[:12]
+
+
+def _read_page_version(pathname):
+    """
+    Read the version recorded in a page written by make_html_page.
+
+    Args:
+        pathname (str): pathname of the page.
+
+    Returns:
+        str: the version, or None if the page doesn't exist or has none.
+    """
+    try:
+        with open(pathname) as fx:
+            ## the version is in the first lines of the head
+            head = fx.read(1024)
+    except OSError:
+        return None
+    match = re.search(r'<meta name="dashboard-version" content="([0-9a-f]+)">',
+                      head)
+    if match is None:
+        return None
+    return match.group(1)
+
+
 def make_html_page(monthly_tables, outfile, titlefill='Processing',
                    show_null=False, color_profile=None):
     """
-    Write the dashboard as one page per year plus a master page that frames them.
+    Write the dashboard as one page per year plus a main page that frames them.
 
     A production spans years and its single page grew to megabytes, all of which
     every visitor downloaded and cached to look at one night. Each year is
@@ -393,10 +444,15 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
     outfile keeps the name people have bookmarked, holding only the header and
     the year links that swap the framed year.
 
+    A year page is only rewritten when what it shows has changed, and the
+    main page links to it with a version that changes along with it. Browsers
+    therefore fetch a year again exactly when it has changed, and otherwise
+    reuse their cached copy.
+
     Args:
         monthly_tables (dict): keyed by 'YYYYMM', each a dict of night to the
             per-night info dict. In reverse chronological order.
-        outfile (str): pathname of the master page.
+        outfile (str): pathname of the main page.
         titlefill (str): describes the dashboard in the page title.
         show_null (bool): whether to include rows with nothing to report.
         color_profile (dict, optional): row colors, defaults to
@@ -413,10 +469,15 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
             continue
         months_by_year.setdefault(month[:4], OrderedDict())[month] = nightly_tables
 
-    ## The status of each year, for coloring its link on the master page
-    year_statuses = dict()
+    ## The status of each year, for coloring its link on the main page, and
+    ## the version of its page, for the main page to link to
+    year_statuses, year_versions = dict(), dict()
     for year, months in months_by_year.items():
-        html_page = _initialize_page(color_profile, titlefill=titlefill)
+        ## Built with placeholders for the update time and the version, so the
+        ## version depends only on what the page shows and not on when it ran
+        html_page = _initialize_page(color_profile, titlefill=titlefill,
+                                     timestamp=_TIMESTAMP_PLACEHOLDER,
+                                     version=_VERSION_PLACEHOLDER)
         month_statuses = list()
         for month, nightly_tables in months.items():
             print("Month: {}, nights: {}".format(month,
@@ -440,16 +501,27 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
         # html_page += js_import_str(os.environ['DESI_DASHBOARD'])
         html_page += js_str()
         html_page += _closing_str()
+        version = _page_version(html_page)
+        year_versions[year] = version
         yearfile = year_page_pathname(outfile, year)
-        with open(yearfile, 'w') as hs:
-            hs.write(html_page)
-            print(f"Write to {yearfile} complete.")
+        ## Leaving an unchanged page untouched keeps its modification time and
+        ## ETag, so a browser checking its cached copy is told it's still good
+        if _read_page_version(yearfile) == version:
+            print(f"{yearfile} is unchanged, not rewriting it.")
+        else:
+            html_page = html_page.replace(_VERSION_PLACEHOLDER, version, 1)
+            html_page = html_page.replace(_TIMESTAMP_PLACEHOLDER,
+                                          _current_timestamp(), 1)
+            with open(yearfile, 'w') as hs:
+                hs.write(html_page)
+                print(f"Write to {yearfile} complete.")
 
     _remove_stale_year_pages(outfile, months_by_year.keys())
 
     with open(outfile, 'w') as hs:
-        hs.write(_master_page(color_profile, titlefill, months_by_year.keys(),
-                              outfile, year_statuses=year_statuses))
+        hs.write(_main_page(color_profile, titlefill, months_by_year.keys(),
+                              outfile, year_statuses=year_statuses,
+                              year_versions=year_versions))
         print(f"Write to {outfile} complete.")
 
     if 'NERSC_HOST' in os.environ and outfile.startswith(
@@ -464,7 +536,7 @@ def _remove_stale_year_pages(outfile, years):
     Delete year pages left behind by an earlier run that covered more years.
 
     Args:
-        outfile (str): pathname of the master page.
+        outfile (str): pathname of the main page.
         years (iterable of str): the years this run wrote.
     """
     keep = set(year_page_pathname(outfile, year) for year in years)
@@ -475,18 +547,22 @@ def _remove_stale_year_pages(outfile, years):
             print(f"Removed {pathname}, which this run has no data for.")
 
 
-def _master_page(color_profile, titlefill, years, outfile, year_statuses=None):
+def _main_page(color_profile, titlefill, years, outfile, year_statuses=None,
+                 year_versions=None):
     """
-    Build the master page: the header, the year links, and the framed year.
+    Build the main page: the header, the year links, and the framed year.
 
     Args:
         color_profile (dict): row colors, for the legend.
         titlefill (str): describes the dashboard in the page title.
         years (iterable of str): the years that have a page, newest first.
-        outfile (str): pathname of the master page, used to name the year pages.
+        outfile (str): pathname of the main page, used to name the year pages.
         year_statuses (dict, optional): year to the status its link is colored
             by, combined from its months the same way a month banner combines
             its nights. Years not in it are colored as DEFAULT.
+        year_versions (dict, optional): year to the version of its page, added
+            to the page's URL so that browsers fetch it again when it changes.
+            Years not in it are linked without a version.
 
     Returns:
         str: the complete html page.
@@ -494,6 +570,8 @@ def _master_page(color_profile, titlefill, years, outfile, year_statuses=None):
     years = list(years)
     if year_statuses is None:
         year_statuses = dict()
+    if year_versions is None:
+        year_versions = dict()
     html_page = _page_head(color_profile)
     html_page += _page_title(titlefill=titlefill, color_profile=color_profile)
 
@@ -506,9 +584,18 @@ def _master_page(color_profile, titlefill, years, outfile, year_statuses=None):
     html_page += '</nav>\n'
 
     ## Each year is its own page so that only the year being looked at is ever
-    ## downloaded, which is the point of splitting them up
-    yearfiles = {year: os.path.basename(year_page_pathname(outfile, year))
-                 for year in years}
+    ## downloaded, which is the point of splitting them up.
+    ## The webserver sends no Cache-Control header, so browsers guess how long
+    ## a page stays fresh, and Safari will keep showing a cached year in the
+    ## frame even after the main page is reloaded. The version in the query
+    ## string changes only when the year's content does, so a changed year gets
+    ## a URL no browser has cached yet, while an unchanged one keeps its URL
+    ## and is served from the browser's cache.
+    yearfiles = dict()
+    for year in years:
+        yearfiles[year] = os.path.basename(year_page_pathname(outfile, year))
+        if year in year_versions:
+            yearfiles[year] += f'?v={year_versions[year]}'
     ## Framing the newest year here rather than leaving it to showYear() means
     ## the page still shows a year without javascript. data-year is set to match
     ## so that showYear() doesn't fetch the same file a second time on load.
@@ -516,14 +603,14 @@ def _master_page(color_profile, titlefill, years, outfile, year_statuses=None):
     html_page += (f'<iframe id="yearframe" data-year="{newest}"'
                   + f' src="{yearfiles[newest]}"'
                   + ' title="Dashboard for one year"></iframe>\n')
-    html_page += f'<script >\n{_master_js(years, yearfiles)}\n</script>\n'
+    html_page += f'<script >\n{_main_js(years, yearfiles)}\n</script>\n'
     html_page += _closing_str()
     return html_page
 
 
-def _master_js(years, yearfiles):
+def _main_js(years, yearfiles):
     """
-    Return the master page's javascript, which swaps the framed year.
+    Return the main page's javascript, which swaps the framed year.
 
     Args:
         years (list of str): the years that have a page, newest first.
@@ -752,16 +839,27 @@ def write_json(output_data, filename_json):
                   + "not saving that information.")
 
 
-def _page_head(color_profile):
+def _page_head(color_profile, version=None):
     """
     Open an html page with the shared CSS, up to the first element of the body.
-    Used by both the per-year pages and the master page that frames them.
+    Used by both the per-year pages and the main page that frames them.
+
+    Args:
+        color_profile (dict): row colors.
+        version (str, optional): version of the page, recorded in the head so
+            that a later run can tell whether the page has changed.
+
+    Returns:
+        str: the html up to and including the opening body tag.
     """
     # strTable="<html><style> table {font-family: arial, sans-serif;border-collapse: collapse;width: 100%;}"
     # strTable=strTable+"td, th {border: 1px solid #dddddd;text-align: left;padding: 8px;}"
     # strTable=strTable+"tr:nth-child(even) {background-color: #dddddd;}</style>"
-    html_page = """<html><head>
-<meta http-equiv="content-type" content="text/html; charset=UTF-8"><style>
+    html_page = '<html><head>\n'
+    if version is not None:
+        ## first in the head, so _read_page_version need only read the start
+        html_page += f'<meta name="dashboard-version" content="{version}">\n'
+    html_page += """<meta http-equiv="content-type" content="text/html; charset=UTF-8"><style>
     h1 {font-family: 'sans-serif';font-size:50px;color:#4CAF50}
     #c {font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}
     #c td, #c th {border: 1px solid #ddd;padding: 8px;}
@@ -844,7 +942,7 @@ def _page_head(color_profile):
           border: 1px solid #ddd;
           margin-bottom: 12px;
     }
-    /* the master page already shows these above the frame */
+    /* the main page already shows these above the frame */
     .framed #pageheader {display: none;}
     .yearnav {font-size: 20px; margin-bottom: 12px;}
     .yearnav a {color: #34495e; padding: 6px 14px; margin-right: 4px;
@@ -886,7 +984,7 @@ def _page_head(color_profile):
 
     html_page += '</style>\n'
     ## Set before the body renders, so a framed year page never flashes the
-    ## title and legend that the master page is already showing above it
+    ## title and legend that the main page is already showing above it
     html_page += ('<script >if (window.self !== window.top)'
                   + " { document.documentElement.className = 'framed'; }</script>\n\n")
     html_page += '</head><body>'
@@ -894,7 +992,8 @@ def _page_head(color_profile):
     return html_page
 
 
-def _page_title(titlefill='Processing', color_profile=None):
+def _page_title(titlefill='Processing', color_profile=None, timestamp=None,
+                timelabel='Run at'):
     """
     Return the page heading and the line below it, which says when the
     dashboard was built and, if given colors, explains them.
@@ -903,13 +1002,16 @@ def _page_title(titlefill='Processing', color_profile=None):
         titlefill (str): describes the dashboard in the page title.
         color_profile (dict, optional): row colors, to show a legend of on the
             same line as the build time. No legend if None.
+        timestamp (str, optional): the time to show, defaults to now.
+        timelabel (str): what the time is, e.g. 'Run at'.
 
     Returns:
         str: the html for the heading and the line below it.
     """
     title = f"<h1>DESI '{os.environ['SPECPROD']}' {titlefill} Status Monitor</h1>\n"
 
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    if timestamp is None:
+        timestamp = _current_timestamp()
     # running='No'
     # if check_running(proc_name='desi_dailyproc',suppress_outputs=True):
     #     running='Yes'
@@ -917,7 +1019,7 @@ def _page_title(titlefill='Processing', color_profile=None):
     ## One line, wrapping onto a second only when the window is too narrow.
     ## The build time comes first since it is what changes from run to run.
     title += '<div class="pageinfo">\n'
-    title += f'<span class="runtime">Run at: {timestamp}</span>\n'
+    title += f'<span class="runtime">{timelabel}: {timestamp}</span>\n'
     if color_profile is not None:
         title += _color_legend(color_profile)
     title += '</div>\n'
@@ -938,15 +1040,29 @@ def _color_legend(color_profile):
     return legend
 
 
-def _initialize_page(color_profile, titlefill='Processing'):
+def _initialize_page(color_profile, titlefill='Processing', timestamp=None,
+                     version=None):
     """
     Initialize the html file for showing the statistics, giving all the headers and CSS setups.
+
+    Args:
+        color_profile (dict): row colors.
+        titlefill (str): describes the dashboard in the page title.
+        timestamp (str, optional): when the page was last updated, defaults
+            to now.
+        version (str, optional): version of the page, recorded in its head.
+
+    Returns:
+        str: the html of the page up to its first table.
     """
-    ## The master page shows all of this above the frame, so it is hidden when
-    ## this page is framed and kept for when it is opened on its own
-    html_page = _page_head(color_profile)
+    ## The main page shows all of this above the frame, so it is hidden when
+    ## this page is framed and kept for when it is opened on its own.
+    ## A year page is only rewritten when it changes, so its time is when it
+    ## was last updated rather than when the dashboard last ran.
+    html_page = _page_head(color_profile, version=version)
     html_page += '<div id="pageheader">\n'
-    html_page += _page_title(titlefill=titlefill, color_profile=color_profile)
+    html_page += _page_title(titlefill=titlefill, color_profile=color_profile,
+                             timestamp=timestamp, timelabel='Updated at')
     html_page += '</div>\n'
 
     html_page += '\n\n'

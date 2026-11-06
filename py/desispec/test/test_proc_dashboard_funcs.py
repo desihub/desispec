@@ -3,16 +3,25 @@
 """Test desispec.workflow.proc_dashboard_funcs page building
 """
 
+import copy
 import os
+import re
 import shutil
 import tempfile
+import time
 import unittest
+from unittest import mock
 from collections import OrderedDict
 
 from desispec.workflow.queue import get_non_final_states
 from desispec.workflow.proc_dashboard_funcs import make_html_page, \
     year_page_pathname, generate_nightly_table_html, \
     generate_monthly_table_html, _combine_banner_statuses
+
+
+## two runs of the dashboard, fifteen minutes apart
+RUN1 = time.struct_time((2026, 11, 6, 10, 2, 5, 4, 310, 0))
+RUN2 = time.struct_time((2026, 11, 6, 10, 17, 9, 4, 310, 0))
 
 
 def _night_info(expid):
@@ -22,7 +31,7 @@ def _night_info(expid):
 
 
 class TestDashboardPages(unittest.TestCase):
-    """The dashboard is split into one page per year plus a master page"""
+    """The dashboard is split into one page per year plus a main page"""
 
     def setUp(self):
         self.outdir = tempfile.mkdtemp()
@@ -43,46 +52,110 @@ class TestDashboardPages(unittest.TestCase):
         else:
             os.environ['SPECPROD'] = self.origspecprod
 
-    def test_one_page_per_year_plus_a_master(self):
-        """Each year gets its own page and the master keeps the old name"""
+    def test_one_page_per_year_plus_a_main_page(self):
+        """Each year gets its own page and the main page keeps the old name"""
         make_html_page(self.monthly_tables, self.outfile, show_null=True)
 
         pages = sorted(os.listdir(self.outdir))
         self.assertEqual(pages, ['dashboard-2025.html', 'dashboard-2026.html',
                                  'dashboard.html'])
 
-        ## every month is on exactly one year page, and none on the master
-        master = open(self.outfile).read()
+        ## every month is on exactly one year page, and none on the main page
+        main_page = open(self.outfile).read()
         for month, year in [('202601', '2026'), ('202512', '2025'),
                             ('202511', '2025')]:
             marker = f'<!--Begin {month}-->'
             page = open(year_page_pathname(self.outfile, year)).read()
             self.assertIn(marker, page)
-            self.assertNotIn(marker, master)
+            self.assertNotIn(marker, main_page)
             other = '2025' if year == '2026' else '2026'
             self.assertNotIn(marker,
                              open(year_page_pathname(self.outfile, other)).read())
 
-    def test_master_frames_the_years_newest_first(self):
-        """The master is small and offers a link per year, newest first"""
+    def test_main_page_frames_the_years_newest_first(self):
+        """The main page is small and offers a link per year, newest first"""
         make_html_page(self.monthly_tables, self.outfile, show_null=True)
-        master = open(self.outfile).read()
+        main_page = open(self.outfile).read()
 
-        self.assertIn('<iframe id="yearframe"', master)
-        self.assertIn('var years = ["2026", "2025"]', master)
+        self.assertIn('<iframe id="yearframe"', main_page)
+        self.assertIn('var years = ["2026", "2025"]', main_page)
         ## the newest year is framed in the markup, so the page shows something
         ## without javascript, and data-year matches so showYear() doesn't
         ## refetch the same file on load
-        self.assertIn('data-year="2026" src="dashboard-2026.html"', master)
+        self.assertIn('data-year="2026" src="dashboard-2026.html?v=', main_page)
         for year in ['2025', '2026']:
             self.assertIn(f'<a href="#{year}" id="yearlink-{year}" class="GOOD">',
-                          master)
+                          main_page)
             ## relative, so the pages move together
-            self.assertIn(f'"dashboard-{year}.html"', master)
-            self.assertNotIn(self.outdir, master)
+            self.assertIn(f'"dashboard-{year}.html?v=', main_page)
+            self.assertNotIn(self.outdir, main_page)
 
-        ## the point of the split is that the master is cheap to load
-        self.assertLess(len(master), 20000)
+        ## the point of the split is that the main page is cheap to load
+        self.assertLess(len(main_page), 20000)
+
+    def _run(self, tables, when):
+        """Build the dashboard as if run at time.struct_time when"""
+        ## a copy, since building a row consumes its COLOR entry
+        with mock.patch('time.localtime', return_value=when):
+            make_html_page(copy.deepcopy(tables), self.outfile, show_null=True)
+        main_page = open(self.outfile).read()
+        return dict(re.findall(r'"dashboard-(\d{4})\.html\?v=([0-9a-f]+)"',
+                               main_page))
+
+    def test_year_urls_are_versioned(self):
+        """The main page links each year page with the version recorded in it"""
+        versions = self._run(self.monthly_tables, RUN1)
+        self.assertEqual(sorted(versions), ['2025', '2026'])
+        self.assertNotEqual(versions['2025'], versions['2026'])
+        main_page = open(self.outfile).read()
+        for year, version in versions.items():
+            page = open(year_page_pathname(self.outfile, year)).read()
+            self.assertIn(f'<meta name="dashboard-version" content="{version}">',
+                          page)
+            ## nothing is left of the placeholders
+            self.assertNotIn('@@', page)
+        self.assertIn(f'src="dashboard-2026.html?v={versions["2026"]}"', main_page)
+
+    def test_unchanged_years_are_not_rewritten(self):
+        """A rerun with the same rows keeps each year's version and file"""
+        first = self._run(self.monthly_tables, RUN1)
+        pages = {year: open(year_page_pathname(self.outfile, year)).read()
+                 for year in first}
+        second = self._run(self.monthly_tables, RUN2)
+
+        self.assertEqual(first, second)
+        for year, page in pages.items():
+            ## including the update time, which is still the first run's
+            self.assertEqual(open(year_page_pathname(self.outfile, year)).read(),
+                             page)
+            self.assertIn('Updated at: 2026-11-06 10:02:05', page)
+        ## the main page itself is rewritten every run
+        self.assertIn('Run at: 2026-11-06 10:17:09', open(self.outfile).read())
+
+    def test_changed_year_gets_a_new_version(self):
+        """Only the year whose rows changed is rewritten with a new version"""
+        first = self._run(self.monthly_tables, RUN1)
+        page2025 = open(year_page_pathname(self.outfile, '2025')).read()
+
+        tables = copy.deepcopy(self.monthly_tables)
+        tables['202601'][20260116] = _night_info(3002)
+        second = self._run(tables, RUN2)
+
+        self.assertNotEqual(first['2026'], second['2026'])
+        page2026 = open(year_page_pathname(self.outfile, '2026')).read()
+        self.assertIn('Updated at: 2026-11-06 10:17:09', page2026)
+        self.assertIn('20260116', page2026)
+        self.assertEqual(first['2025'], second['2025'])
+        self.assertEqual(open(year_page_pathname(self.outfile, '2025')).read(),
+                         page2025)
+
+    def test_page_without_a_version_is_rewritten(self):
+        """A year page from before versioning, or a damaged one, is replaced"""
+        yearfile = year_page_pathname(self.outfile, '2026')
+        with open(yearfile, 'w') as fx:
+            fx.write('<html><head></head><body>old</body></html>')
+        versions = self._run(self.monthly_tables, RUN1)
+        self.assertIn(f'content="{versions["2026"]}"', open(yearfile).read())
 
     def test_year_pages_stand_alone(self):
         """A year page is a complete dashboard, openable on its own"""
@@ -98,7 +171,7 @@ class TestDashboardPages(unittest.TestCase):
         ## without a guard the whole script would throw on load
         self.assertIn('if (b1)', page)
 
-    def test_year_pages_hide_what_the_master_already_shows(self):
+    def test_year_pages_hide_what_the_main_page_already_shows(self):
         """Framed, a year page would otherwise repeat the title and legend"""
         make_html_page(self.monthly_tables, self.outfile, show_null=True)
         page = open(year_page_pathname(self.outfile, '2025')).read()
@@ -111,11 +184,11 @@ class TestDashboardPages(unittest.TestCase):
         self.assertLess(page.index('window.self !== window.top'),
                         page.index('<body>'))
 
-        ## the master shows them unconditionally, it is never framed itself
-        master = open(self.outfile).read()
-        self.assertIn('Status Monitor</h1>', master)
-        self.assertIn('Color Legend', master)
-        self.assertNotIn('<div id="pageheader">', master)
+        ## the main page shows them unconditionally, it is never framed itself
+        main_page = open(self.outfile).read()
+        self.assertIn('Status Monitor</h1>', main_page)
+        self.assertIn('Color Legend', main_page)
+        self.assertNotIn('<div id="pageheader">', main_page)
 
     def test_years_no_longer_covered_are_removed(self):
         """A rerun over fewer nights shouldn't leave pages behind"""
@@ -156,34 +229,37 @@ class TestDashboardPages(unittest.TestCase):
             ('202412', {20241210: night(501, 'GOOD', 'COMPLETED')}),
             ])
         make_html_page(tables, self.outfile, show_null=True)
-        master = open(self.outfile).read()
+        main_page = open(self.outfile).read()
 
         for year, status in [('2026', 'BAD'), ('2025', 'PENDING'),
                              ('2024', 'GOOD')]:
             with self.subTest(year=year):
-                self.assertIn(f'id="yearlink-{year}" class="{status}">', master)
+                self.assertIn(f'id="yearlink-{year}" class="{status}">', main_page)
         ## every status a link can take has a color
         for status in ['BAD', 'PENDING', 'GOOD', 'DEFAULT']:
-            self.assertIn(f'.yearnav a.{status} {{', master)
+            self.assertIn(f'.yearnav a.{status} {{', main_page)
 
     def test_selecting_a_year_keeps_its_color(self):
         """Marking the active year must not replace the class that colors it"""
         make_html_page(self.monthly_tables, self.outfile, show_null=True)
-        master = open(self.outfile).read()
-        self.assertIn("classList.toggle('active'", master)
-        self.assertNotIn('link.className =', master)
+        main_page = open(self.outfile).read()
+        self.assertIn("classList.toggle('active'", main_page)
+        self.assertNotIn('link.className =', main_page)
 
     def test_header_is_compact(self):
         """The run time and the legend share a single line"""
         make_html_page(self.monthly_tables, self.outfile, show_null=True)
-        for page in [open(self.outfile).read(),
-                     open(year_page_pathname(self.outfile, '2026')).read()]:
+        ## a year page is only rewritten when it changes, so it says when
+        ## it was last updated rather than when the dashboard last ran
+        for page, label in [(open(self.outfile).read(), 'Run at:'),
+                            (open(year_page_pathname(self.outfile, '2026')).read(),
+                             'Updated at:')]:
             self.assertNotIn('running at:', page)
             ## both inside the one row, the run time first
             row = page.split('<div class="pageinfo">', 1)[1].split('</div>', 1)[0]
-            self.assertIn('<span class="runtime">Run at: ', row)
+            self.assertIn(f'<span class="runtime">{label} ', row)
             self.assertIn('<span class="legend">Color Legend:', row)
-            self.assertLess(row.index('Run at:'), row.index('Color Legend:'))
+            self.assertLess(row.index(label), row.index('Color Legend:'))
             self.assertIn(' <span id="GOOD">GOOD</span>', row)
             self.assertIn('.pageinfo {display: flex; flex-wrap: wrap;', page)
             self.assertEqual(page.count('Color Legend:'), 1)
@@ -191,11 +267,11 @@ class TestDashboardPages(unittest.TestCase):
     def test_year_links_sit_above_the_frame(self):
         """The year links come after the header, directly above the year"""
         make_html_page(self.monthly_tables, self.outfile, show_null=True)
-        master = open(self.outfile).read()
-        self.assertLess(master.index('<div class="pageinfo">'),
-                        master.index('<nav class="yearnav">'))
-        self.assertLess(master.index('</nav>'),
-                        master.index('<iframe id="yearframe"'))
+        main_page = open(self.outfile).read()
+        self.assertLess(main_page.index('<div class="pageinfo">'),
+                        main_page.index('<nav class="yearnav">'))
+        self.assertLess(main_page.index('</nav>'),
+                        main_page.index('<iframe id="yearframe"'))
 
     def test_empty_months_do_not_make_a_year(self):
         """A month with no nights shouldn't put an empty year in the nav"""
