@@ -835,7 +835,8 @@ class TestIO(unittest.TestCase):
                 self.assertTrue(np.all(img2.mask == img4.mask))
 
             #- no leftover temporary files
-            self.assertEqual(len(os.listdir(tmpdir)), 3)
+            expected_files = 3 if shutil.which('pigz') is not None else 2
+            self.assertEqual(len(os.listdir(tmpdir)), expected_files)
         finally:
             rmtree(tmpdir)
 
