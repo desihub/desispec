@@ -28,13 +28,14 @@ def write_image(outfile, image, meta=None, ncpu=1):
 
     Args:
         outfile : output file string
-        image : desispec.image.Image object
-            (or any object with 2D array attributes image, ivar, mask)
+        image : desispec.image.Image (or any object with 2D array attributes image, ivar, mask)
 
     Optional:
         meta : dict-like object with metadata key/values (e.g. FITS header)
-        ncpu : number of threads for gzip compression of .gz files; if >1
-            and the `pigz` executable is available, use it (parallel gzip)
+        ncpu : number of threads for paralllel gzip compression
+
+    Notes:
+        parallel compression only if ncpu>1, `pigz` is installed, and outfile ends with .gz
     """
 
     log = get_logger()
