@@ -32,7 +32,7 @@ def write_image(outfile, image, meta=None, ncpu=1):
 
     Optional:
         meta : dict-like object with metadata key/values (e.g. FITS header)
-        ncpu : number of threads for paralllel gzip compression
+        ncpu : number of threads for parallel gzip compression
 
     Notes:
         parallel compression only if ncpu>1, `pigz` is installed, and outfile ends with .gz
