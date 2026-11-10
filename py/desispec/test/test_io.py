@@ -840,6 +840,51 @@ class TestIO(unittest.TestCase):
         finally:
             rmtree(tmpdir)
 
+    def test_image_write_pigz_failure(self):
+        """Test that a failed pigz write raises and leaves no files behind.
+        """
+        import subprocess
+        from ..image import Image
+        from ..io.image import write_image
+        #- large enough to exceed the pipe buffer so early pigz exit causes BrokenPipeError
+        shape = (500, 500)
+        img = Image(np.random.uniform(size=shape), np.random.uniform(size=shape),
+                    np.zeros(shape, dtype=np.int16), readnoise=1.0, camera='b0')
+
+        real_popen = subprocess.Popen
+        def fake_pigz(script):
+            """Return a Popen replacement that runs a shell script instead of pigz"""
+            def _popen(cmd, **kwargs):
+                return real_popen(['sh', '-c', script], **kwargs)
+            return _popen
+
+        #- pigz fails after reading all input; pigz exits before reading input
+        for script in ('cat > /dev/null; exit 1', 'exit 3'):
+            with self.subTest(script=script):
+                tmpdir = tempfile.mkdtemp()
+                try:
+                    gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+                    with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                         patch('subprocess.Popen', side_effect=fake_pigz(script)):
+                        with self.assertRaises(RuntimeError):
+                            write_image(gzfile, img, ncpu=2)
+                    self.assertEqual(os.listdir(tmpdir), [])
+                finally:
+                    rmtree(tmpdir)
+
+        #- error while astropy is writing to the pipe
+        tmpdir = tempfile.mkdtemp()
+        try:
+            gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null')), \
+                 patch('astropy.io.fits.HDUList.writeto', side_effect=OSError('simulated write error')):
+                with self.assertRaises(OSError):
+                    write_image(gzfile, img, ncpu=2)
+            self.assertEqual(os.listdir(tmpdir), [])
+        finally:
+            rmtree(tmpdir)
+
     def test_native_endian(self):
         """Test desiutil.io.util.native_endian.
         """

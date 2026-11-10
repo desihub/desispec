@@ -86,12 +86,36 @@ def write_image(outfile, image, meta=None, ncpu=1):
     t0 = time.time()
     tmpfile = get_tempfilename(outfile)
     if tmpfile.endswith('.gz') and ncpu > 1 and shutil.which('pigz') is not None:
-        #- write uncompressed, then compress with multiple threads
-        rawfile = tmpfile[:-3]
-        hx.writeto(rawfile, overwrite=True, checksum=True)
-        with open(tmpfile, 'wb') as fx:
-            subprocess.run(['pigz', '-c', '-p', str(ncpu), rawfile], stdout=fx, check=True)
-        os.remove(rawfile)
+        #- stream FITS directly into multithreaded pigz without an uncompressed
+        #- intermediate file; use level 1 to match the single-core gzip path below
+        cmd = ['pigz', '-1', '-c', '-p', str(ncpu)]
+        try:
+            with open(tmpfile, 'wb') as fx:
+                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=fx)
+                write_error = None
+                try:
+                    hx.writeto(proc.stdin, checksum=True)
+                except BaseException as err:
+                    #- if pigz exited early, astropy may report the broken pipe
+                    #- as a different exception type, so check pigz exit code below
+                    write_error = err
+                try:
+                    proc.stdin.close()
+                except BrokenPipeError:
+                    pass
+                returncode = proc.wait()
+
+            if returncode != 0:
+                msg = f'{" ".join(cmd)} failed with exit code {returncode} writing {tmpfile}'
+                log.error(msg)
+                raise RuntimeError(msg) from write_error
+            elif write_error is not None:
+                raise write_error
+        except BaseException:
+            #- don't leave a partial file behind
+            if os.path.exists(tmpfile):
+                os.remove(tmpfile)
+            raise
     elif tmpfile.endswith('.gz'):
         #- astropy gzips at zlib level 9, which is ~2x slower than level 1
         #- for <1% larger files of noisy float32 data
