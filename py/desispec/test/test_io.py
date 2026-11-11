@@ -885,6 +885,76 @@ class TestIO(unittest.TestCase):
         finally:
             rmtree(tmpdir)
 
+    def test_image_write_pigz_edge_cases(self):
+        """Test pigz thread cap, interrupt propagation, and stdin close errors.
+        """
+        import subprocess
+        from ..image import Image
+        from ..io import image as image_io
+        shape = (500, 500)
+        img = Image(np.random.uniform(size=shape), np.random.uniform(size=shape),
+                    np.zeros(shape, dtype=np.int16), readnoise=1.0, camera='b0')
+
+        real_popen = subprocess.Popen
+        procs = list()
+        def fake_pigz(script, fail_close=False):
+            """Return a Popen replacement that runs a shell script instead of pigz;
+            records each cmd and proc; optionally make stdin.close() raise OSError"""
+            def _popen(cmd, **kwargs):
+                proc = real_popen(['sh', '-c', script], **kwargs)
+                procs.append((cmd, proc))
+                if fail_close:
+                    real_close = proc.stdin.close
+                    def _bad_close():
+                        real_close()
+                        raise OSError('simulated close error')
+                    proc.stdin.close = _bad_close
+                return proc
+            return _popen
+
+        #- number of pigz threads is capped at MAX_PIGZ_THREADS
+        for ncpu in (2, image_io.MAX_PIGZ_THREADS, 4*image_io.MAX_PIGZ_THREADS):
+            with self.subTest(ncpu=ncpu):
+                procs.clear()
+                tmpdir = tempfile.mkdtemp()
+                try:
+                    gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+                    with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                         patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null')):
+                        image_io.write_image(gzfile, img, ncpu=ncpu)
+                    cmd = procs[0][0]
+                    nthreads = int(cmd[cmd.index('-p')+1])
+                    self.assertEqual(nthreads, min(ncpu, image_io.MAX_PIGZ_THREADS))
+                finally:
+                    rmtree(tmpdir)
+
+        #- KeyboardInterrupt propagates even if pigz also fails
+        tmpdir = tempfile.mkdtemp()
+        try:
+            gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null; exit 1')), \
+                 patch('astropy.io.fits.HDUList.writeto', side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    image_io.write_image(gzfile, img, ncpu=2)
+            self.assertEqual(os.listdir(tmpdir), [])
+        finally:
+            rmtree(tmpdir)
+
+        #- non-BrokenPipeError when closing stdin still waits for pigz
+        procs.clear()
+        tmpdir = tempfile.mkdtemp()
+        try:
+            gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null', fail_close=True)):
+                with self.assertRaises(OSError):
+                    image_io.write_image(gzfile, img, ncpu=2)
+            self.assertIsNotNone(procs[0][1].returncode)
+            self.assertEqual(os.listdir(tmpdir), [])
+        finally:
+            rmtree(tmpdir)
+
     def test_native_endian(self):
         """Test desiutil.io.util.native_endian.
         """
