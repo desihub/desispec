@@ -864,8 +864,12 @@ def mean_psf(inputs, output):
 
         for bundle, selected in bundle_inputs.items() :
             fibers = fibers_in_bundle[bundle]
-            output_coeff[fibers] = np.mean(coeff[np.ix_(selected,fibers)],
-                axis=0)
+            if PARAM=='STATUS' :
+                output_coeff[fibers] = np.max(coeff[np.ix_(selected,fibers)],
+                    axis=0)
+            else :
+                output_coeff[fibers] = np.mean(coeff[np.ix_(selected,fibers)],
+                    axis=0)
 
         # now copy this in output table
         hdulist["PSF"].data["COEFF"][entry]=output_coeff
