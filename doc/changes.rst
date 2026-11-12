@@ -26,11 +26,14 @@ Used for cleanup passes in Nevis.
   - Cache camera overlap calculation for faster coaddition.
   - Use ``ls-dr11`` sky cutout (ls-dr11-early-v2 no longer works).
   - Fix timing log messages MPI barrier logic.
+* Add back ``MW_TRANSMISSION_{G,R,Z,W1,W2}`` columns to zcatalogs, computed
+  from ``EBV`` (PR `#2913`_).
 
 .. _`#2901`: https://github.com/desihub/desispec/pull/2901
 .. _`#2905`: https://github.com/desihub/desispec/pull/2905
 .. _`#2907`: https://github.com/desihub/desispec/pull/2907
 .. _`#2911`: https://github.com/desihub/desispec/pull/2911
+.. _`#2913`: https://github.com/desihub/desispec/pull/2913
 
 0.73.3 (2026-10-14)
 -------------------
