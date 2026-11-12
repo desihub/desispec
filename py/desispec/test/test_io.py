@@ -809,6 +809,167 @@ class TestIO(unittest.TestCase):
         for key in meta:
             self.assertEqual(meta[key], img3.meta[key], 'meta[{}] not propagated'.format(key))
 
+    def test_image_write_gzip(self):
+        """Test write_image to .gz with and without multithreaded pigz.
+        """
+        import shutil
+        from ..image import Image
+        from ..io.image import read_image, write_image
+        shape = (50, 40)
+        pix = np.random.uniform(size=shape)
+        ivar = np.random.uniform(size=shape)
+        mask = np.random.randint(0, 3, size=shape)
+        img1 = Image(pix, ivar, mask, readnoise=1.0, camera='b0')
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            #- default single-core path
+            gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+            write_image(gzfile, img1)
+            with open(gzfile, 'rb') as fx:
+                self.assertEqual(fx.read(2), b'\x1f\x8b')  #- gzip magic number
+            img2 = read_image(gzfile)
+            self.assertTrue(np.all(img1.pix.astype(np.float32) == img2.pix))
+            self.assertTrue(np.all(img1.mask == img2.mask))
+
+            #- ncpu>1 falls back to the single-core path if pigz is missing
+            gzfile = os.path.join(tmpdir, 'nopigz-b0.fits.gz')
+            with patch('shutil.which', return_value=None):
+                write_image(gzfile, img1, ncpu=2)
+            img3 = read_image(gzfile)
+            self.assertTrue(np.all(img2.pix == img3.pix))
+            self.assertTrue(np.all(img2.mask == img3.mask))
+
+            #- ncpu>1 with pigz, if available
+            if shutil.which('pigz') is not None:
+                gzfile = os.path.join(tmpdir, 'pigz-b0.fits.gz')
+                write_image(gzfile, img1, ncpu=2)
+                img4 = read_image(gzfile)
+                self.assertTrue(np.all(img2.pix == img4.pix))
+                self.assertTrue(np.all(img2.ivar == img4.ivar))
+                self.assertTrue(np.all(img2.mask == img4.mask))
+
+            #- no leftover temporary files
+            expected_files = 3 if shutil.which('pigz') is not None else 2
+            self.assertEqual(len(os.listdir(tmpdir)), expected_files)
+        finally:
+            rmtree(tmpdir)
+
+    def test_image_write_pigz_failure(self):
+        """Test that a failed pigz write raises and leaves no files behind.
+        """
+        import subprocess
+        from ..image import Image
+        from ..io.image import write_image
+        #- large enough to exceed the pipe buffer so early pigz exit causes BrokenPipeError
+        shape = (500, 500)
+        img = Image(np.random.uniform(size=shape), np.random.uniform(size=shape),
+                    np.zeros(shape, dtype=np.int16), readnoise=1.0, camera='b0')
+
+        real_popen = subprocess.Popen
+        def fake_pigz(script):
+            """Return a Popen replacement that runs a shell script instead of pigz"""
+            def _popen(cmd, **kwargs):
+                return real_popen(['sh', '-c', script], **kwargs)
+            return _popen
+
+        #- pigz fails after reading all input; pigz exits before reading input
+        for script in ('cat > /dev/null; exit 1', 'exit 3'):
+            with self.subTest(script=script):
+                tmpdir = tempfile.mkdtemp()
+                try:
+                    gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+                    with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                         patch('subprocess.Popen', side_effect=fake_pigz(script)):
+                        with self.assertRaises(RuntimeError):
+                            write_image(gzfile, img, ncpu=2)
+                    self.assertEqual(os.listdir(tmpdir), [])
+                finally:
+                    rmtree(tmpdir)
+
+        #- error while astropy is writing to the pipe
+        tmpdir = tempfile.mkdtemp()
+        try:
+            gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null')), \
+                 patch('astropy.io.fits.HDUList.writeto', side_effect=OSError('simulated write error')):
+                with self.assertRaises(OSError):
+                    write_image(gzfile, img, ncpu=2)
+            self.assertEqual(os.listdir(tmpdir), [])
+        finally:
+            rmtree(tmpdir)
+
+    def test_image_write_pigz_edge_cases(self):
+        """Test pigz thread cap, interrupt propagation, and stdin close errors.
+        """
+        import subprocess
+        from ..image import Image
+        from ..io import image as image_io
+        shape = (500, 500)
+        img = Image(np.random.uniform(size=shape), np.random.uniform(size=shape),
+                    np.zeros(shape, dtype=np.int16), readnoise=1.0, camera='b0')
+
+        real_popen = subprocess.Popen
+        procs = list()
+        def fake_pigz(script, fail_close=False):
+            """Return a Popen replacement that runs a shell script instead of pigz;
+            records each cmd and proc; optionally make stdin.close() raise OSError"""
+            def _popen(cmd, **kwargs):
+                proc = real_popen(['sh', '-c', script], **kwargs)
+                procs.append((cmd, proc))
+                if fail_close:
+                    real_close = proc.stdin.close
+                    def _bad_close():
+                        real_close()
+                        raise OSError('simulated close error')
+                    proc.stdin.close = _bad_close
+                return proc
+            return _popen
+
+        #- number of pigz threads is capped at MAX_PIGZ_THREADS
+        for ncpu in (2, image_io.MAX_PIGZ_THREADS, 4*image_io.MAX_PIGZ_THREADS):
+            with self.subTest(ncpu=ncpu):
+                procs.clear()
+                tmpdir = tempfile.mkdtemp()
+                try:
+                    gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+                    with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                         patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null')):
+                        image_io.write_image(gzfile, img, ncpu=ncpu)
+                    cmd = procs[0][0]
+                    nthreads = int(cmd[cmd.index('-p')+1])
+                    self.assertEqual(nthreads, min(ncpu, image_io.MAX_PIGZ_THREADS))
+                finally:
+                    rmtree(tmpdir)
+
+        #- KeyboardInterrupt propagates even if pigz also fails
+        tmpdir = tempfile.mkdtemp()
+        try:
+            gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null; exit 1')), \
+                 patch('astropy.io.fits.HDUList.writeto', side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    image_io.write_image(gzfile, img, ncpu=2)
+            self.assertEqual(os.listdir(tmpdir), [])
+        finally:
+            rmtree(tmpdir)
+
+        #- non-BrokenPipeError when closing stdin still waits for pigz
+        procs.clear()
+        tmpdir = tempfile.mkdtemp()
+        try:
+            gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null', fail_close=True)):
+                with self.assertRaises(OSError):
+                    image_io.write_image(gzfile, img, ncpu=2)
+            self.assertIsNotNone(procs[0][1].returncode)
+            self.assertEqual(os.listdir(tmpdir), [])
+        finally:
+            rmtree(tmpdir)
+
     def test_native_endian(self):
         """Test desiutil.io.util.native_endian.
         """

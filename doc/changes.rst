@@ -2,8 +2,21 @@
 desispec Change Log
 ===================
 
-0.73.4 (unreleased)
+0.73.5 (unreleased)
 -------------------
+
+* Add back ``MW_TRANSMISSION_{G,R,Z,W1,W2}`` columns to zcatalogs, computed
+  from ``EBV`` (PR `#2913`_).
+* Speed up desi_preproc with parallel compression (pigz), gzip level 1, and
+  optional numba caching (PR `#2914`_).
+
+.. _`#2913`: https://github.com/desihub/desispec/pull/2913
+.. _`#2914`: https://github.com/desihub/desispec/pull/2914
+
+0.73.4 (2026-11-03)
+-------------------
+
+Used for cleanup passes in Nevis.
 
 * Fix bug preventing row-by-row overscan subtraction (PR `#2901`_).
 * Add ``desi_run_scripts`` wrapper (PR `#2905`_).

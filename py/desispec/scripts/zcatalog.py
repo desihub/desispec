@@ -28,6 +28,7 @@ import astropy.constants
 
 from desiutil.log import get_logger, DEBUG
 from desiutil.annotate import load_csv_units
+from desiutil.dust import mwdust_transmission
 from desiutil.names import radec_to_desiname
 import desiutil.depend
 import desiutil.healpix
@@ -818,8 +819,18 @@ def main(args=None):
     columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z_BEST', 'Z_CONF', 'ZERR_BEST', 'ZWARN_BEST', 'SPECTYPE_BEST', 'SUBTYPE_BEST', 'CHI2_BEST', 'DELTACHI2_BEST', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET', 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'GOOD_SPEC', 'EFFTIME_SPEC', 'ZCAT_NSPEC', 'ZCAT_PRIMARY']
     if args.group == 'uniqpix':
         columns_basic = ['UNIQPIX' if col == 'HEALPIX' else col for col in columns_basic]
-    columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
+    columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'MW_TRANSMISSION_G', 'MW_TRANSMISSION_R', 'MW_TRANSMISSION_Z', 'MW_TRANSMISSION_W1', 'MW_TRANSMISSION_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_imaging))==0
+
+    # Add back the MW_TRANSMISSION columns
+    # With match_legacy_surveys=True, the extinction coefficients are the ones used for MW_TRANSMISSION_*
+    # in Legacy Surveys DR9, which are the same for photsys N and S
+    # Some entries have invalid (zero-filled) EBV values and zero-filled fluxes; zero fill their MW_TRANSMISSION_* values
+    invalid_ebv = (zcat['EBV']==0) & (zcat['FLUX_G']==0) & (zcat['FLUX_R']==0) & (zcat['FLUX_Z']==0)
+    for band in ['G', 'R', 'Z', 'W1', 'W2']:
+        zcat['MW_TRANSMISSION_'+band] = np.zeros(len(zcat), dtype=np.float32)
+        zcat['MW_TRANSMISSION_'+band][~invalid_ebv] = mwdust_transmission(
+            zcat['EBV'][~invalid_ebv], band, 'S', match_legacy_surveys=True).astype(np.float32)
 
     # Remove main-survey target bits for CMX and SVn surveys (they are not the actual main-survey target bits)
     if survey in ('cmx', 'sv1', 'sv2', 'sv3'):
