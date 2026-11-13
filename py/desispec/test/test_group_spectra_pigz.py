@@ -1,5 +1,6 @@
 """
-tests desispec.scripts.group_spectra output compression with pigz
+tests desispec.io.write_spectra output compression with pigz, as used by
+desispec.scripts.group_spectra
 """
 
 import os
@@ -10,10 +11,11 @@ import unittest
 from unittest import mock
 
 import numpy as np
+from astropy.io.fits.hdu.base import _ValidHDU
 
 from desispec.spectra import Spectra
 from desispec.io import empty_fibermap, read_spectra, write_spectra
-from desispec.scripts import group_spectra
+import desispec.io.util
 from desispec.parallel import get_cpu_affinity
 
 
@@ -64,11 +66,27 @@ class TestWriteSpectraPigz(unittest.TestCase):
 
     def test_pigz_output(self):
         """pigz output is a valid gzip file with the same content as write_spectra"""
-        reference = os.path.join(self.testdir, 'ref', 'spectra.fits.gz')
-        write_spectra(reference, self.spectra)
-
+        #- The byte-identical comparison below requires both writes to produce
+        #- identical headers, but astropy puts the current time (to the second)
+        #- in the CHECKSUM/DATASUM comments ("HDU checksum updated <timestamp>"),
+        #- and CHECKSUM covers the header including that comment.  If the two
+        #- writes straddle a second boundary, every CHECKSUM differs and the test
+        #- fails intermittently.  Freeze the timestamp for both writes.
+        #- This patches the private astropy method _ValidHDU._get_timestamp
+        #- (astropy 8.x); if a future astropy renames it, mock.patch.object will
+        #- raise AttributeError.  In that case, an alternative is to compare the
+        #- decompressed file to the plain one with
+        #- fits.FITSDiff(..., ignore_keywords=['CHECKSUM'], ignore_comments=['DATASUM'])
+        #- instead of byte-for-byte, at the cost of a weaker check.
+        plain = os.path.join(self.testdir, 'plain', 'spectra.fits')
         outfile = os.path.join(self.testdir, 'out', 'spectra.fits.gz')
-        group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
+        with mock.patch.object(_ValidHDU, '_get_timestamp', return_value='2026-01-01T00:00:00'):
+            write_spectra(plain, self.spectra)
+
+            with mock.patch.object(desispec.io.util.subprocess, 'Popen',
+                                   wraps=subprocess.Popen) as popen:
+                write_spectra(outfile, self.spectra, cpus=self.cpus*2)
+                popen.assert_called_once()
         self._assert_only_output(outfile)
         self._assert_same_spectra(outfile)
 
@@ -76,67 +94,60 @@ class TestWriteSpectraPigz(unittest.TestCase):
         with open(outfile, 'rb') as fx:
             self.assertEqual(fx.read(2), b'\x1f\x8b')
 
-        #- decompressed bytes are the same size as the uncompressed write
-        plain = os.path.join(self.testdir, 'plain', 'spectra.fits')
-        write_spectra(plain, self.spectra)
+        #- decompressed bytes are identical to the uncompressed write
         proc = subprocess.run(['gzip', '-dc', outfile], capture_output=True, check=True)
-        self.assertEqual(len(proc.stdout), os.path.getsize(plain))
+        with open(plain, 'rb') as fx:
+            self.assertEqual(proc.stdout, fx.read())
 
-        #- same content as the standard writer
-        a = read_spectra(reference)
-        b = read_spectra(outfile)
-        for band in a.bands:
-            np.testing.assert_array_equal(a.flux[band], b.flux[band])
-            np.testing.assert_array_equal(a.ivar[band], b.ivar[band])
+    def test_ncpu(self):
+        """ncpu>1 uses pigz without cpus; ncpu=1 doesn't"""
+        outfile = os.path.join(self.testdir, 'spectra.fits.gz')
+        with mock.patch.object(desispec.io.util.subprocess, 'Popen',
+                               wraps=subprocess.Popen) as popen:
+            write_spectra(outfile, self.spectra, ncpu=2)
+            popen.assert_called_once()
+        self._assert_same_spectra(outfile)
+
+        with mock.patch.object(desispec.io.util.subprocess, 'Popen') as popen:
+            write_spectra(outfile, self.spectra)
+            write_spectra(outfile, self.spectra, ncpu=1)
+            write_spectra(outfile, self.spectra, cpus=[])
+            popen.assert_not_called()
+        self._assert_only_output(outfile)
+        self._assert_same_spectra(outfile)
 
     def test_affinity_restored(self):
         """CPU affinity of the calling process is restored"""
         outfile = os.path.join(self.testdir, 'spectra.fits.gz')
-        group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
+        write_spectra(outfile, self.spectra, cpus=self.cpus*2)
         self.assertEqual(get_cpu_affinity(), self.original_cpus)
-
-    def test_temp_plainfile(self):
-        """The uncompressed file is written to a temporary name, not outfile[:-3]"""
-        outfile = os.path.join(self.testdir, 'spectra.fits.gz')
-        with mock.patch.object(group_spectra.io, 'write_spectra',
-                               side_effect=write_spectra) as ws:
-            group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
-        plainfile = ws.call_args[0][0]
-        self.assertNotIn(plainfile, (outfile, outfile[:-3]))
-        self.assertEqual(os.path.dirname(plainfile), self.testdir)
-        self._assert_only_output(outfile)
-        self._assert_same_spectra(outfile)
 
     def test_not_gz(self):
         """Files not ending in .gz are written directly"""
         outfile = os.path.join(self.testdir, 'spectra.fits')
-        group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
-        self._assert_only_output(outfile)
-        self._assert_same_spectra(outfile)
-
-    def test_few_cpus(self):
-        """Falls back to write_spectra if fewer than min_cpus CPUs are available"""
-        outfile = os.path.join(self.testdir, 'spectra.fits.gz')
-        with mock.patch.object(group_spectra.subprocess, 'run') as run:
-            group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus[:1], min_cpus=2)
-            run.assert_not_called()
+        with mock.patch.object(desispec.io.util.subprocess, 'Popen') as popen:
+            write_spectra(outfile, self.spectra, cpus=self.cpus*2)
+            popen.assert_not_called()
         self._assert_only_output(outfile)
         self._assert_same_spectra(outfile)
 
     def test_no_pigz(self):
-        """Falls back to write_spectra if pigz isn't installed"""
+        """Falls back to single-threaded gzip if pigz isn't installed"""
         outfile = os.path.join(self.testdir, 'spectra.fits.gz')
-        with mock.patch.object(group_spectra.shutil, 'which', return_value=None):
-            group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
+        with mock.patch.object(desispec.io.util.shutil, 'which', return_value=None):
+            write_spectra(outfile, self.spectra, cpus=self.cpus*2)
         self._assert_only_output(outfile)
         self._assert_same_spectra(outfile)
 
     def test_pigz_failure(self):
-        """Falls back to write_spectra and cleans up if pigz fails"""
+        """Falls back to single-threaded gzip and cleans up if pigz fails"""
         outfile = os.path.join(self.testdir, 'spectra.fits.gz')
-        err = subprocess.CalledProcessError(1, 'pigz')
-        with mock.patch.object(group_spectra.subprocess, 'run', side_effect=err):
-            group_spectra._write_spectra_pigz(outfile, self.spectra, self.cpus, min_cpus=1)
+        real_popen = subprocess.Popen
+        def failing_pigz(cmd, **kwargs):
+            return real_popen(['sh', '-c', 'cat > /dev/null; exit 1'], **kwargs)
+        with mock.patch.object(desispec.io.util.subprocess, 'Popen',
+                               side_effect=failing_pigz):
+            write_spectra(outfile, self.spectra, cpus=self.cpus*2)
         self._assert_only_output(outfile)
         self._assert_same_spectra(outfile)
         self.assertEqual(get_cpu_affinity(), self.original_cpus)

@@ -6,9 +6,6 @@ I/O routines for Image objects
 """
 
 import os
-import gzip
-import shutil
-import subprocess
 import time
 import warnings
 import numpy as np
@@ -16,31 +13,32 @@ import numpy as np
 from desispec.image import Image
 from desispec.io.util import fitsheader, native_endian, makepath
 from . import iotime
-from .util import checkgzip, get_tempfilename
+from .util import checkgzip, get_tempfilename, write_hdulist
 from .fibermap import annotate_fibermap
 from astropy.io import fits
 from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
 from astropy.table import Table
 
-#- maximum number of pigz threads; compression gains saturate well before this,
-#- and it limits oversubscription if many processes on a node get large ncpu values
-MAX_PIGZ_THREADS = 32
-
-def write_image(outfile, image, meta=None, ncpu=1):
+def write_image(outfile, image, meta=None, ncpu=1, cpus=None):
     """Writes image object to outfile
 
     Args:
-        outfile : output file string
-        image : desispec.image.Image (or any object with 2D array attributes image, ivar, mask)
-
-    Optional:
-        meta : dict-like object with metadata key/values (e.g. FITS header)
-        ncpu : number of threads for parallel gzip compression
+        outfile (str): output file string
+        image (desispec.image.Image): image to write, or any object with 2D
+            array attributes image, ivar, mask
+        meta (dict-like, optional): metadata key/values (e.g. FITS header)
+        ncpu (int, optional): number of threads for parallel gzip compression
+        cpus (list, optional): CPU ids for parallel gzip compression, overriding
+            ncpu, e.g. CPUs of idle MPI ranks from
+            ``desispec.parallel.gather_cpu_affinity(comm)``
 
     Notes:
-        parallel compression only if ncpu>1, `pigz` is installed, and outfile ends with .gz;
-        the number of pigz threads is capped at MAX_PIGZ_THREADS
+        parallel compression only if ncpu>1 (or len(cpus)>1), ``pigz`` is installed,
+        and outfile ends with .gz; the number of pigz threads is capped at
+        desispec.io.util.MAX_PIGZ_THREADS.
+        If pigz fails, an error is logged and the file is written with single-threaded gzip.
+        See :func:`desispec.io.util.write_hdulist` for details.
     """
 
     log = get_logger()
@@ -89,53 +87,7 @@ def write_image(outfile, image, meta=None, ncpu=1):
         hx.append(fmhdu)
 
     t0 = time.time()
-    tmpfile = get_tempfilename(outfile)
-    if tmpfile.endswith('.gz') and ncpu > 1 and shutil.which('pigz') is not None:
-        #- stream FITS directly into multithreaded pigz without an uncompressed
-        #- intermediate file; use level 1 to match the single-core gzip path below
-        nthreads = min(ncpu, MAX_PIGZ_THREADS)
-        cmd = ['pigz', '-1', '-c', '-p', str(nthreads)]
-        try:
-            with open(tmpfile, 'wb') as fx:
-                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=fx)
-                write_error = None
-                try:
-                    hx.writeto(proc.stdin, checksum=True)
-                except BaseException as err:
-                    #- if pigz exited early, astropy may report the broken pipe
-                    #- as a different exception type, so check pigz exit code below
-                    write_error = err
-                try:
-                    proc.stdin.close()
-                except BrokenPipeError:
-                    pass
-                finally:
-                    #- always wait for pigz, even if closing stdin raised another error
-                    returncode = proc.wait()
-
-            if write_error is not None and not isinstance(write_error, Exception):
-                #- KeyboardInterrupt or SystemExit; pigz likely also got the
-                #- signal, so propagate the original rather than a pigz failure
-                raise write_error
-            elif returncode != 0:
-                msg = f'{" ".join(cmd)} failed with exit code {returncode} writing {tmpfile}'
-                log.error(msg)
-                raise RuntimeError(msg) from write_error
-            elif write_error is not None:
-                raise write_error
-        except BaseException:
-            #- don't leave a partial file behind
-            if os.path.exists(tmpfile):
-                os.remove(tmpfile)
-            raise
-    elif tmpfile.endswith('.gz'):
-        #- astropy gzips at zlib level 9, which is ~2x slower than level 1
-        #- for <1% larger files of noisy float32 data
-        with gzip.GzipFile(tmpfile, 'wb', compresslevel=1) as fx:
-            hx.writeto(fx, overwrite=True, checksum=True)
-    else:
-        hx.writeto(tmpfile, overwrite=True, checksum=True)
-    os.rename(tmpfile, outfile)
+    write_hdulist(outfile, hx, ncpu=ncpu, cpus=cpus)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 
