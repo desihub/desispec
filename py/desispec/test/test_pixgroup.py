@@ -276,6 +276,10 @@ class TestPixGroup(unittest.TestCase):
         from contextlib import contextmanager
         from unittest import mock
 
+        class FakeRequest:
+            def Test(self):
+                return True
+
         class FakeComm:
             def __init__(self, rank, bcast_values):
                 self.rank, self.size = rank, 2
@@ -289,6 +293,9 @@ class TestPixGroup(unittest.TestCase):
                 return obj if self.rank == root else self.bcast_values.pop(0)
             def barrier(self):
                 self.nbarrier += 1
+            def Ibarrier(self):
+                #- used by desispec.parallel.polling_bcast; completes immediately
+                return FakeRequest()
 
         class FakePool:
             def starmap(self, func, args):

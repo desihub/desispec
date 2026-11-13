@@ -4,6 +4,7 @@ tests desispec.io.photo
 """
 import os
 import unittest
+from unittest import mock
 
 import numpy as np
 from desispec.io.photo import gather_targetphot, gather_tractorphot, gather_targetdirs
@@ -59,9 +60,30 @@ class TestPhoto(unittest.TestCase):
     def tearDownClass(self):
         pass
 
+    def _trunk_surveyops(self):
+        """
+        Return $DESI_ROOT/survey/ops/surveyops/trunk, or skip the test if it
+        doesn't have the ToO files used by these tests.
+
+        The expected values in these tests are for the surveyops trunk, so the
+        tests use that regardless of $DESI_SURVEYOPS, which could point to a
+        tag without the mtl/ directory (e.g. tags/3.0 as of Nov 2026).
+        """
+        if 'DESI_ROOT' not in os.environ:
+            self.skipTest('$DESI_ROOT not set')
+
+        surveyops_dir = os.path.join(os.environ['DESI_ROOT'], 'survey', 'ops', 'surveyops', 'trunk')
+        for survey in ('sv3', 'main'):
+            toofile = os.path.join(surveyops_dir, 'mtl', survey, 'ToO', 'ToO.ecsv')
+            if not os.path.exists(toofile):
+                self.skipTest(f'{toofile} not found')
+
+        return surveyops_dir
+
     @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_targetdirs(self):
         """Test that we get the correct targeting directories given a tile."""
+        trunk_surveyops = self._trunk_surveyops()
         desi_root = get_desi_root_readonly()
         #surveyops_dir = os.environ['DESI_SURVEYOPS']
         surveyops_dir = desi_root+'/survey/ops/surveyops/trunk' # assumes a standard installation / environment
@@ -78,16 +100,19 @@ class TestPhoto(unittest.TestCase):
                               desi_root+'/target/catalogs/dr9/1.1.1/targets/main/secondary/dark/targets-dark-secondary.fits']),                             
                    }
 
-        for tileid in truedirs.keys():
-            targetdirs = gather_targetdirs(int(tileid))
-            print(tileid, targetdirs, truedirs[tileid])
-            self.assertTrue(np.all(targetdirs == truedirs[tileid]))
+        with mock.patch.dict(os.environ, {'DESI_SURVEYOPS': trunk_surveyops}):
+            for tileid in truedirs.keys():
+                targetdirs = gather_targetdirs(int(tileid))
+                print(tileid, targetdirs, truedirs[tileid])
+                self.assertTrue(np.all(targetdirs == truedirs[tileid]))
 
     @unittest.skipUnless('NERSC_HOST' in os.environ, "not at NERSC")
     def test_gather_targetphot(self):
         """Test that we get the correct targeting photometry for an input set of objects."""
 
-        targetphot = gather_targetphot(self.input_cat)
+        trunk_surveyops = self._trunk_surveyops()
+        with mock.patch.dict(os.environ, {'DESI_SURVEYOPS': trunk_surveyops}):
+            targetphot = gather_targetphot(self.input_cat)
         for col in self.targetphot.colnames:
             self.assertTrue(np.all(targetphot[col] == self.targetphot[col]))
 
