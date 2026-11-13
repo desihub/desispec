@@ -169,32 +169,6 @@ def polling_barrier(comm, interval=0.05):
     while not request.Test():
         time.sleep(interval)
 
-def polling_bcast(obj, comm, root=0, interval=0.05):
-    """
-    Broadcast ``obj`` from ``root``, sleeping while waiting instead of busy-polling
-
-    Args:
-        obj: picklable object to broadcast; only the value on ``root`` is used
-        comm (mpi4py.MPI.Comm or None): MPI communicator; None returns ``obj``
-
-    Options:
-        root (int): rank to broadcast from
-        interval (float): seconds to sleep between checks for completion
-
-    Returns:
-        ``obj`` from ``root``
-
-    Use this instead of ``comm.bcast`` when non-root ranks may wait a long
-    time for ``root``; see :func:`polling_barrier`.  This is a collective
-    operation that must be called by all ranks of ``comm``.
-    """
-    if comm is None:
-        return obj
-
-    #- wait for root without spinning; the following bcast is then fast
-    polling_barrier(comm, interval=interval)
-    return comm.bcast(obj, root=root)
-
 # Functions for static distribution
 
 def dist_uniform(nwork, nworkers, id=None):

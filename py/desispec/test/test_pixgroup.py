@@ -308,7 +308,7 @@ class TestPixGroup(unittest.TestCase):
             def barrier(self):
                 self.nbarrier += 1
             def Ibarrier(self):
-                #- used by desispec.parallel.polling_bcast; completes immediately
+                #- used by desispec.parallel.polling_barrier; completes immediately
                 return FakeRequest()
 
         class FakePool:

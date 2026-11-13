@@ -212,11 +212,10 @@ class TestParallel(unittest.TestCase):
         groups = weighted_partition(weights, num_groups-3, groups_per_node=groups_per_node)
         check_weight_distribution(weights, groups, num_nodes, groups_per_node)
 
-    def test_polling_barrier_bcast(self):
-        """test polling_barrier and polling_bcast sleep instead of spinning"""
+    def test_polling_barrier(self):
+        """test polling_barrier sleeps instead of spinning"""
         #- comm=None is a no-op
         self.assertIsNone(polling_barrier(None))
-        self.assertEqual(polling_bcast(3, None), 3)
 
         #- fake comm whose non-blocking barrier completes on the 3rd test
         class FakeRequest:
@@ -229,20 +228,11 @@ class TestParallel(unittest.TestCase):
         comm = MagicMock()
         request = FakeRequest()
         comm.Ibarrier.return_value = request
-        comm.bcast.side_effect = lambda obj, root=0: ('bcast', obj, root)
         with patch('desispec.parallel.time.sleep') as sleep:
             polling_barrier(comm, interval=0.2)
             self.assertEqual(request.ntest, 3)
             self.assertEqual(sleep.call_count, 2)
             sleep.assert_called_with(0.2)
-
-            #- bcast waits on barrier first, then broadcasts from root
-            sleep.reset_mock()
-            comm.Ibarrier.return_value = FakeRequest()
-            result = polling_bcast('x', comm, root=1, interval=0.1)
-            self.assertEqual(result, ('bcast', 'x', 1))
-            self.assertEqual(sleep.call_count, 2)
-            comm.bcast.assert_called_once_with('x', root=1)
 
         #- real MPI communicator, if available
         try:
@@ -252,5 +242,3 @@ class TestParallel(unittest.TestCase):
 
         comm = MPI.COMM_WORLD
         polling_barrier(comm)
-        value = {'rank': comm.rank} if comm.rank == 0 else None
-        self.assertEqual(polling_bcast(value, comm), {'rank': 0})

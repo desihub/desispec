@@ -34,7 +34,7 @@ def write_image(outfile, image, meta=None, ncpu=1, cpus=None):
             means single-threaded gzip), e.g. CPUs of other MPI ranks from
             ``desispec.parallel.gather_cpu_affinity(comm)``.  Those ranks must
             be idle while writing, e.g. in
-            :func:`desispec.parallel.polling_bcast` rather than a blocking
+            :func:`desispec.parallel.polling_barrier` rather than a blocking
             ``comm.barrier()``, which may busy-poll their CPUs.
 
     Notes:

@@ -23,7 +23,7 @@ from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import add_missing_frames, frames2spectra
 from ..coaddition import coadd
 from ..util import parse_keyval
-from ..parallel import gather_cpu_affinity, polling_bcast, default_nproc
+from ..parallel import gather_cpu_affinity, polling_barrier, default_nproc
 
 
 def parse(options=None):
@@ -108,7 +108,11 @@ def _root_failed(error, comm):
     """
     failed = error is not None
     if comm is not None:
-        failed = polling_bcast(failed, comm, root=0)
+        #- wait for rank 0 in a sleeping barrier rather than in a blocking
+        #- bcast, which may busy-poll the CPUs that rank 0 is using for pigz;
+        #- the bcast is then fast.  Don't remove the barrier as "redundant".
+        polling_barrier(comm)
+        failed = comm.bcast(failed, root=0)
 
     return failed
 
