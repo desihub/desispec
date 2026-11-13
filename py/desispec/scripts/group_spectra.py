@@ -23,7 +23,7 @@ from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import add_missing_frames, frames2spectra
 from ..coaddition import coadd
 from ..util import parse_keyval
-from ..parallel import gather_cpu_affinity, polling_bcast
+from ..parallel import gather_cpu_affinity, polling_bcast, default_nproc
 
 
 def parse(options=None):
@@ -129,10 +129,15 @@ def main(args=None, comm=None):
         #- rank 0 to compress the outputs with pigz using the CPUs of the
         #- other, otherwise idle, ranks
         cpus = gather_cpu_affinity(comm)
+        ncpu = 1
     else:
         rank = 0
         size = 1
-        cpus = []
+        #- without MPI, compress the outputs with pigz using default_nproc
+        #- threads ($SLURM_CPUS_PER_TASK if set, e.g. when zproc runs this
+        #- on a single-rank block)
+        cpus = None
+        ncpu = default_nproc
 
     #- logger for all ranks
     log = get_logger()
@@ -287,14 +292,14 @@ def main(args=None, comm=None):
 
             if args.outfile is not None:
                 log.info('Writing {}'.format(args.outfile))
-                io.write_spectra(args.outfile, spectra, cpus=cpus)
+                io.write_spectra(args.outfile, spectra, ncpu=ncpu, cpus=cpus)
 
             if args.coaddfile is not None:
                 log.info('Coadding spectra')
                 #- in-place coadd updates spectra object
                 coadd(spectra, onetile=args.onetile)
                 log.info('Writing {}'.format(args.coaddfile))
-                io.write_spectra(args.coaddfile, spectra, cpus=cpus)
+                io.write_spectra(args.coaddfile, spectra, ncpu=ncpu, cpus=cpus)
         except Exception as err:
             error = err
 

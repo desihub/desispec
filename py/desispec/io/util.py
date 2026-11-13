@@ -1092,7 +1092,8 @@ def write_hdulist(outfile, hdulist, ncpu=1, cpus=None, compresslevel=1, checksum
             otherwise idle MPI ranks on this node from
             ``desispec.parallel.gather_cpu_affinity(comm)``; this is a collective
             call that all ranks of ``comm`` must make before rank 0 calls this
-            function.  Uses ``min(len(cpus), MAX_PIGZ_THREADS)`` pigz threads.
+            function.  Uses one pigz thread per unique CPU id, up to
+            MAX_PIGZ_THREADS.
         compresslevel (int, optional): gzip compression level 1 (fastest) to
             9 (smallest)
         checksum (bool, optional): if True, add CHECKSUM and DATASUM keywords
@@ -1106,15 +1107,17 @@ def write_hdulist(outfile, hdulist, ncpu=1, cpus=None, compresslevel=1, checksum
     intermediate file if more than one thread is requested and pigz is
     installed; the number of threads is capped at MAX_PIGZ_THREADS.
     If only one thread is requested, pigz is not used at all.
-    If pigz fails for any reason, an error is logged and the file is written
-    with single-threaded gzip instead.
+    If pigz itself fails (it can't be started, exits with an error, or the
+    pipe to it can't be closed), an error is logged and the file is written
+    with single-threaded gzip instead.  Other errors, e.g. from astropy
+    while writing the HDUs, are raised without retrying.
     """
     log = get_logger()
     if compresslevel not in range(1, 10):
         raise ValueError(f'compresslevel must be an integer 1-9, not {compresslevel}')
 
-    if cpus:
-        nthreads = min(len(cpus), MAX_PIGZ_THREADS)
+    if cpus is not None and len(cpus) > 0:
+        nthreads = min(len(set(cpus)), MAX_PIGZ_THREADS)
     else:
         cpus = None
         nthreads = min(ncpu, MAX_PIGZ_THREADS)
@@ -1126,7 +1129,7 @@ def write_hdulist(outfile, hdulist, ncpu=1, cpus=None, compresslevel=1, checksum
             try:
                 _write_hdulist_pigz(tmpfile, hdulist, pigz, nthreads, cpus,
                                     compresslevel, checksum)
-            except Exception as err:
+            except _PigzError as err:
                 log.error(f'pigz failed writing {tmpfile} ({err!r}); '
                           'falling back to single-threaded gzip')
             else:
@@ -1135,22 +1138,27 @@ def write_hdulist(outfile, hdulist, ncpu=1, cpus=None, compresslevel=1, checksum
         else:
             log.debug(f'pigz not found; writing {outfile} with single-threaded gzip')
 
-    #- Will get here if pigz is not found, nthreads=1, or pigz failed
-    if tmpfile.endswith('.gz'):
-        #- astropy gzips at zlib level 9, which is ~2x slower than level 1
-        #- for <1% larger files of noisy float32 data
-        try:
+    #- Will get here if pigz is not found, nthreads=1, pigz failed, or not .gz
+    try:
+        if tmpfile.endswith('.gz'):
+            #- astropy gzips at zlib level 9, which is ~2x slower than level 1
+            #- for <1% larger files of noisy float32 data
             with gzip.GzipFile(tmpfile, 'wb', compresslevel=compresslevel) as fx:
                 hdulist.writeto(fx, checksum=checksum)
-        except BaseException:
-            if os.path.exists(tmpfile):
-                os.remove(tmpfile)
-            raise
-    else:
-        hdulist.writeto(tmpfile, overwrite=True, checksum=checksum)
+        else:
+            hdulist.writeto(tmpfile, overwrite=True, checksum=checksum)
+    except BaseException:
+        #- don't leave a partial file behind
+        if os.path.exists(tmpfile):
+            os.remove(tmpfile)
+        raise
 
     os.rename(tmpfile, outfile)
     return outfile
+
+class _PigzError(RuntimeError):
+    """pigz itself failed, as opposed to an error generating the data for it"""
+    pass
 
 def _write_hdulist_pigz(tmpfile, hdulist, pigz, nthreads, cpus, compresslevel, checksum):
     """
@@ -1166,6 +1174,10 @@ def _write_hdulist_pigz(tmpfile, hdulist, pigz, nthreads, cpus, compresslevel, c
         checksum (bool): if True, add CHECKSUM and DATASUM keywords
 
     Raises an exception if anything fails, after removing tmpfile.
+    Failures of pigz itself (it can't be started with the requested CPUs,
+    exits non-zero, or the pipe to it can't be closed) raise ``_PigzError``;
+    other errors, e.g. from ``hdulist.writeto`` while pigz succeeds, are
+    raised unchanged.
     """
     #- import here to avoid circular import of desispec.parallel -> desispec.io.util
     from desispec.parallel import cpu_affinity
@@ -1173,13 +1185,16 @@ def _write_hdulist_pigz(tmpfile, hdulist, pigz, nthreads, cpus, compresslevel, c
     cmd = [pigz, f'-{compresslevel}', '-c', '-p', str(nthreads)]
     try:
         with open(tmpfile, 'wb') as fx:
-            if cpus is not None:
-                #- pigz inherits the CPU affinity of this process; restore
-                #- this process's affinity immediately after starting pigz
-                with cpu_affinity(cpus):
+            try:
+                if cpus is not None:
+                    #- pigz inherits the CPU affinity of this process; restore
+                    #- this process's affinity immediately after starting pigz
+                    with cpu_affinity(cpus):
+                        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=fx)
+                else:
                     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=fx)
-            else:
-                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=fx)
+            except OSError as err:
+                raise _PigzError(f'unable to start {" ".join(cmd)}: {err!r}') from err
 
             write_error = None
             try:
@@ -1188,10 +1203,15 @@ def _write_hdulist_pigz(tmpfile, hdulist, pigz, nthreads, cpus, compresslevel, c
                 #- if pigz exited early, astropy may report the broken pipe
                 #- as a different exception type, so check pigz exit code below
                 write_error = err
+
+            close_error = None
             try:
                 proc.stdin.close()
             except BrokenPipeError:
+                #- pigz exited early; reported by its exit code below
                 pass
+            except Exception as err:
+                close_error = err
             finally:
                 #- always wait for pigz, even if closing stdin raised another error
                 returncode = proc.wait()
@@ -1201,9 +1221,13 @@ def _write_hdulist_pigz(tmpfile, hdulist, pigz, nthreads, cpus, compresslevel, c
             #- signal, so propagate the original rather than a pigz failure
             raise write_error
         elif returncode != 0:
-            raise RuntimeError(f'{" ".join(cmd)} failed with exit code {returncode}') from write_error
+            raise _PigzError(f'{" ".join(cmd)} failed with exit code {returncode}') from write_error
         elif write_error is not None:
+            #- pigz succeeded, so this isn't a pigz problem; don't retry
             raise write_error
+        elif close_error is not None:
+            #- data may not have all reached pigz
+            raise _PigzError(f'error closing pipe to {" ".join(cmd)}: {close_error!r}') from close_error
     except BaseException:
         #- don't leave a partial file behind
         if os.path.exists(tmpfile):

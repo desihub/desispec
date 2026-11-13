@@ -64,6 +64,12 @@ class TestWriteSpectraPigz(unittest.TestCase):
         self.assertEqual(os.listdir(os.path.dirname(filename)),
                          [os.path.basename(filename)])
 
+    def _two_cpus(self):
+        """Return two distinct CPU ids this process can run on, or skip the test"""
+        if len(self.cpus) < 2:
+            self.skipTest('pigz with cpus requires at least 2 CPUs')
+        return self.cpus[0:2]
+
     def test_pigz_output(self):
         """pigz output is a valid gzip file with the same content as write_spectra"""
         #- The byte-identical comparison below requires both writes to produce
@@ -85,7 +91,7 @@ class TestWriteSpectraPigz(unittest.TestCase):
 
             with mock.patch.object(desispec.io.util.subprocess, 'Popen',
                                    wraps=subprocess.Popen) as popen:
-                write_spectra(outfile, self.spectra, cpus=self.cpus*2)
+                write_spectra(outfile, self.spectra, cpus=self._two_cpus())
                 popen.assert_called_once()
         self._assert_only_output(outfile)
         self._assert_same_spectra(outfile)
@@ -119,14 +125,14 @@ class TestWriteSpectraPigz(unittest.TestCase):
     def test_affinity_restored(self):
         """CPU affinity of the calling process is restored"""
         outfile = os.path.join(self.testdir, 'spectra.fits.gz')
-        write_spectra(outfile, self.spectra, cpus=self.cpus*2)
+        write_spectra(outfile, self.spectra, cpus=self._two_cpus())
         self.assertEqual(get_cpu_affinity(), self.original_cpus)
 
     def test_not_gz(self):
         """Files not ending in .gz are written directly"""
         outfile = os.path.join(self.testdir, 'spectra.fits')
         with mock.patch.object(desispec.io.util.subprocess, 'Popen') as popen:
-            write_spectra(outfile, self.spectra, cpus=self.cpus*2)
+            write_spectra(outfile, self.spectra, cpus=self._two_cpus())
             popen.assert_not_called()
         self._assert_only_output(outfile)
         self._assert_same_spectra(outfile)
@@ -135,7 +141,7 @@ class TestWriteSpectraPigz(unittest.TestCase):
         """Falls back to single-threaded gzip if pigz isn't installed"""
         outfile = os.path.join(self.testdir, 'spectra.fits.gz')
         with mock.patch.object(desispec.io.util.shutil, 'which', return_value=None):
-            write_spectra(outfile, self.spectra, cpus=self.cpus*2)
+            write_spectra(outfile, self.spectra, cpus=self._two_cpus())
         self._assert_only_output(outfile)
         self._assert_same_spectra(outfile)
 
@@ -147,7 +153,7 @@ class TestWriteSpectraPigz(unittest.TestCase):
             return real_popen(['sh', '-c', 'cat > /dev/null; exit 1'], **kwargs)
         with mock.patch.object(desispec.io.util.subprocess, 'Popen',
                                side_effect=failing_pigz):
-            write_spectra(outfile, self.spectra, cpus=self.cpus*2)
+            write_spectra(outfile, self.spectra, cpus=self._two_cpus())
         self._assert_only_output(outfile)
         self._assert_same_spectra(outfile)
         self.assertEqual(get_cpu_affinity(), self.original_cpus)

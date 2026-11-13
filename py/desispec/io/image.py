@@ -34,7 +34,7 @@ def write_image(outfile, image, meta=None, ncpu=1, cpus=None):
             ``desispec.parallel.gather_cpu_affinity(comm)``
 
     Notes:
-        parallel compression only if ncpu>1 (or len(cpus)>1), ``pigz`` is installed,
+        parallel compression only if ncpu>1 (or cpus has >1 unique CPU id), ``pigz`` is installed,
         and outfile ends with .gz; the number of pigz threads is capped at
         desispec.io.util.MAX_PIGZ_THREADS.
         If pigz fails, an error is logged and the file is written with single-threaded gzip.

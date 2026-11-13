@@ -902,16 +902,18 @@ class TestIO(unittest.TestCase):
         finally:
             rmtree(tmpdir)
 
-        #- error while astropy is writing, which also fails the fallback,
-        #- so it is raised and no files are left behind
+        #- error while astropy is writing but pigz succeeds isn't a pigz
+        #- failure, so it is raised without retrying with single-threaded gzip,
+        #- and no files are left behind
         tmpdir = tempfile.mkdtemp()
         try:
             gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
             with patch('shutil.which', return_value='/usr/bin/pigz'), \
                  patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null')), \
-                 patch('astropy.io.fits.HDUList.writeto', side_effect=OSError('simulated write error')):
+                 patch('astropy.io.fits.HDUList.writeto', side_effect=OSError('simulated write error')) as writeto:
                 with self.assertRaises(OSError):
                     write_image(gzfile, img, ncpu=2)
+                self.assertEqual(writeto.call_count, 1)
             self.assertEqual(os.listdir(tmpdir), [])
         finally:
             rmtree(tmpdir)
@@ -1023,6 +1025,16 @@ class TestIO(unittest.TestCase):
             self.assertTrue(np.all(fits.getdata(outfile, 'DATA') == data))
             self.assertIn('CHECKSUM', fits.getheader(outfile, 'DATA'))
 
+            #- a failed uncompressed write doesn't leave a partial temp file
+            def partial_write(filename, **kwargs):
+                with open(filename, 'w') as fx:
+                    fx.write('partial')
+                raise OSError('simulated write error')
+            with patch('astropy.io.fits.HDUList.writeto', side_effect=partial_write):
+                with self.assertRaises(OSError):
+                    write_hdulist(os.path.join(tmpdir, 'c.fits'), make_hdulist())
+            self.assertEqual(os.listdir(tmpdir), ['a.fits'])
+
             #- ncpu=1 never uses pigz, even if available; default level 1
             outfile = os.path.join(tmpdir, 'b.fits.gz')
             with patch('subprocess.Popen') as popen:
@@ -1049,18 +1061,41 @@ class TestIO(unittest.TestCase):
             self.assertEqual(cmds[0][1:], ['-5', '-c', '-p', '3'])
             self.assertTrue(np.all(fits.getdata(outfile, 'DATA') == data))
 
-            #- cpus overrides ncpu, sets pigz affinity, and is capped
+            #- cpus overrides ncpu and sets pigz affinity, one thread per unique CPU
             if hasattr(os, 'sched_getaffinity'):
                 original = os.sched_getaffinity(0)
-                cpus = sorted(original)[0:1] * 2   #- 2 entries, but a valid CPU
-                for testcpus, nthreads in ((cpus, 2), (cpus * MAX_PIGZ_THREADS, MAX_PIGZ_THREADS)):
+                if len(original) >= 2:
+                    cpus = sorted(original)[0:2]
                     cmds.clear()
                     with patch('shutil.which', return_value='/usr/bin/pigz'), \
                          patch('subprocess.Popen', side_effect=fake_pigz):
-                        write_hdulist(outfile, make_hdulist(), ncpu=7, cpus=testcpus)
-                    self.assertEqual(cmds[0][-1], str(nthreads))
+                        write_hdulist(outfile, make_hdulist(), ncpu=7, cpus=cpus)
+                    self.assertEqual(cmds[0][-1], '2')
                     self.assertEqual(cmds[1], set(cpus))
                     self.assertEqual(os.sched_getaffinity(0), original)
+
+                #- duplicate CPU ids count once, so one unique CPU doesn't use pigz,
+                #- and a numpy array of CPU ids works
+                with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                     patch('subprocess.Popen') as popen:
+                    onecpu = sorted(original)[0]
+                    write_hdulist(outfile, make_hdulist(), ncpu=7, cpus=[onecpu, onecpu])
+                    write_hdulist(outfile, make_hdulist(), ncpu=7, cpus=np.array([onecpu, onecpu]))
+                    popen.assert_not_called()
+                self.assertTrue(np.all(fits.getdata(outfile, 'DATA') == data))
+
+            #- number of threads is capped; mock setting the affinity since this
+            #- machine may not have that many CPUs
+            from contextlib import nullcontext
+            manycpus = np.arange(4*MAX_PIGZ_THREADS)
+            cmds.clear()
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=fake_pigz), \
+                 patch('desispec.parallel.cpu_affinity', side_effect=lambda cpus: nullcontext()) as affinity:
+                write_hdulist(outfile, make_hdulist(), ncpu=7, cpus=manycpus)
+            self.assertEqual(cmds[0][-1], str(MAX_PIGZ_THREADS))
+            self.assertIs(affinity.call_args.args[0], manycpus)
+            self.assertTrue(np.all(fits.getdata(outfile, 'DATA') == data))
 
             self.assertEqual(sorted(os.listdir(tmpdir)), ['a.fits', 'b.fits.gz'])
         finally:

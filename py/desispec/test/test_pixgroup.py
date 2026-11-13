@@ -238,6 +238,20 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
+    def test_regroup_write_ncpu(self):
+        """Without --mpi, outputs are written with default_nproc pigz threads"""
+        from unittest import mock
+        from desispec.parallel import default_nproc
+        import desispec.io
+        cmd = f'desi_group_spectra -o {self.specfile} --expfile {self.expfile}'
+        args = group_spectra.parse(cmd.split()[1:])
+        with mock.patch('desispec.io.write_spectra', wraps=desispec.io.write_spectra) as write_spectra:
+            group_spectra.main(args)
+
+        write_spectra.assert_called_once()
+        self.assertEqual(write_spectra.call_args.kwargs['ncpu'], default_nproc)
+        self.assertIsNone(write_spectra.call_args.kwargs['cpus'])
+
     def test_regroup_inframes_mpi(self):
         """Test grouping from an input list of frames with --mpi on a one-rank communicator"""
         try:
