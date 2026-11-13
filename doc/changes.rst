@@ -9,6 +9,10 @@ desispec Change Log
   from ``EBV`` (PR `#2913`_).
 * Speed up desi_preproc with parallel compression (pigz), gzip level 1, and
   optional numba caching (PR `#2914`_).
+* ``write_spectra`` use gzip level 1 (~2x faster, ~0.5% larger files).
+  Add ``write_hdulist`` wrapper to standardize gzip-parallelism.
+  Add ``polling_bcast`` and ``polling_barrier`` for MPI without busy-polling
+  unused CPUs (allows them to be used for parallel gzip with pigz).
 
 .. _`#2913`: https://github.com/desihub/desispec/pull/2913
 .. _`#2914`: https://github.com/desihub/desispec/pull/2914
