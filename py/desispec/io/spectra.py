@@ -58,10 +58,13 @@ def write_spectra(outfile, spec, units=None, ncpu=1, cpus=None):
             HDUs for each band.
         ncpu (int): number of threads for parallel gzip compression of
             .gz files with pigz; ncpu=1 uses single-threaded gzip.
-        cpus (list): CPU ids for parallel gzip compression, overriding ncpu,
-            e.g. the CPUs of otherwise idle MPI ranks on this node from
-            ``desispec.parallel.gather_cpu_affinity(comm)``, which is a
-            collective call that all ranks of ``comm`` must make.
+        cpus (list): CPU ids for parallel gzip compression, one thread per
+            unique CPU id, overriding ncpu if non-empty (a single CPU id means
+            single-threaded gzip), e.g. the CPUs of other MPI ranks on this
+            node from ``desispec.parallel.gather_cpu_affinity(comm)``.  Those
+            ranks must be idle while writing, e.g. in
+            :func:`desispec.parallel.polling_bcast` rather than a blocking
+            ``comm.barrier()``, which may busy-poll their CPUs.
 
     Returns:
         The absolute path to the file that was written.

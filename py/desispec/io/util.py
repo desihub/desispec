@@ -1087,13 +1087,18 @@ def write_hdulist(outfile, hdulist, ncpu=1, cpus=None, compresslevel=1, checksum
         outfile (str): output filename; if it ends with .gz, it is gzip compressed
         hdulist (astropy.io.fits.HDUList): HDUs to write
         ncpu (int, optional): number of threads for parallel gzip compression
-            with pigz; ignored if ``cpus`` is set
-        cpus (list, optional): CPU ids for pigz to run on, e.g. the CPUs of
-            otherwise idle MPI ranks on this node from
-            ``desispec.parallel.gather_cpu_affinity(comm)``; this is a collective
-            call that all ranks of ``comm`` must make before rank 0 calls this
-            function.  Uses one pigz thread per unique CPU id, up to
-            MAX_PIGZ_THREADS.
+            with pigz; ignored if ``cpus`` is non-empty
+        cpus (list, optional): CPU ids for pigz to run on, overriding ``ncpu``
+            if non-empty (None or empty uses ``ncpu``).  Uses one pigz thread
+            per unique CPU id, up to MAX_PIGZ_THREADS, so a single CPU id means
+            single-threaded gzip regardless of ``ncpu``.  Typically the CPUs of
+            the other MPI ranks on this node from
+            ``desispec.parallel.gather_cpu_affinity(comm)`` (a collective call).
+            This only helps if those ranks are idle while this process writes,
+            e.g. waiting in :func:`desispec.parallel.polling_bcast` or
+            :func:`desispec.parallel.polling_barrier`; ranks waiting in a
+            blocking ``comm.barrier()`` or ``comm.bcast()`` may busy-poll those
+            CPUs and make pigz slower.
         compresslevel (int, optional): gzip compression level 1 (fastest) to
             9 (smallest)
         checksum (bool, optional): if True, add CHECKSUM and DATASUM keywords

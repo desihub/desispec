@@ -29,9 +29,13 @@ def write_image(outfile, image, meta=None, ncpu=1, cpus=None):
             array attributes image, ivar, mask
         meta (dict-like, optional): metadata key/values (e.g. FITS header)
         ncpu (int, optional): number of threads for parallel gzip compression
-        cpus (list, optional): CPU ids for parallel gzip compression, overriding
-            ncpu, e.g. CPUs of idle MPI ranks from
-            ``desispec.parallel.gather_cpu_affinity(comm)``
+        cpus (list, optional): CPU ids for parallel gzip compression, one thread
+            per unique CPU id, overriding ncpu if non-empty (a single CPU id
+            means single-threaded gzip), e.g. CPUs of other MPI ranks from
+            ``desispec.parallel.gather_cpu_affinity(comm)``.  Those ranks must
+            be idle while writing, e.g. in
+            :func:`desispec.parallel.polling_bcast` rather than a blocking
+            ``comm.barrier()``, which may busy-poll their CPUs.
 
     Notes:
         parallel compression only if ncpu>1 (or cpus has >1 unique CPU id), ``pigz`` is installed,
