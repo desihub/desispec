@@ -1095,7 +1095,7 @@ def write_hdulist(outfile, hdulist, ncpu=1, cpus=None, compresslevel=1, checksum
             the other MPI ranks on this node from
             ``desispec.parallel.gather_cpu_affinity(comm)`` (a collective call).
             This only helps if those ranks are idle while this process writes,
-            e.g. waiting in :func:`desispec.parallel.polling_barrier`; ranks
+            e.g. waiting in :func:`desispec.parallel.sleeping_barrier`; ranks
             waiting in a blocking ``comm.barrier()`` or ``comm.bcast()`` may
             busy-poll those CPUs and make pigz slower.
         compresslevel (int, optional): gzip compression level 1 (fastest) to

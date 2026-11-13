@@ -11,7 +11,7 @@ desispec Change Log
   optional numba caching (PR `#2914`_).
 * ``write_spectra`` use gzip level 1 (~2x faster, ~0.5% larger files).
   Add ``write_hdulist`` wrapper to standardize gzip-parallelism.
-  Add ``polling_barrier`` for MPI without busy-polling
+  Add ``sleeping_barrier`` for MPI without busy-polling
   unused CPUs (allows them to be used for parallel gzip with pigz).
 
 .. _`#2913`: https://github.com/desihub/desispec/pull/2913

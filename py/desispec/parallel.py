@@ -136,7 +136,7 @@ def cpu_affinity(cpus):
 
 # Waiting without busy-polling
 
-def polling_barrier(comm, interval=0.05):
+def sleeping_barrier(comm, interval=0.05):
     """
     Barrier that sleeps while waiting instead of busy-polling the CPU
 
