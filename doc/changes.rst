@@ -2,8 +2,15 @@
 desispec Change Log
 ===================
 
-0.73.5 (unreleased)
+0.73.6 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.73.5 (2026-11-13)
+-------------------
+
+Used to reprocess Nevis backup tiles due to y-traceshift improvements.
 
 * Fix y-traceshifts on backup tiles with targets brighter than sky (PR `#2895`_).
 * Add back ``MW_TRANSMISSION_{G,R,Z,W1,W2}`` columns to zcatalogs, computed
