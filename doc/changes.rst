@@ -5,6 +5,7 @@ desispec Change Log
 0.73.5 (unreleased)
 -------------------
 
+* Fix y-traceshifts on backup tiles with targets brighter than sky (PR `#2895`_).
 * Add back ``MW_TRANSMISSION_{G,R,Z,W1,W2}`` columns to zcatalogs, computed
   from ``EBV`` (PR `#2913`_).
 * Speed up desi_preproc with parallel compression (pigz), gzip level 1, and
@@ -16,6 +17,7 @@ desispec Change Log
   * Add ``sleeping_barrier`` for MPI without busy-polling unused CPUs
     (allows them to be used for parallel gzip with pigz).
 
+.. _`#2895`: https://github.com/desihub/desispec/pull/2895
 .. _`#2913`: https://github.com/desihub/desispec/pull/2913
 .. _`#2914`: https://github.com/desihub/desispec/pull/2914
 .. _`#2915`: https://github.com/desihub/desispec/pull/2915
