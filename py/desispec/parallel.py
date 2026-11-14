@@ -134,6 +134,41 @@ def cpu_affinity(cpus):
     finally:
         os.sched_setaffinity(0, original_cpus)
 
+# Waiting without busy-polling
+
+def sleeping_barrier(comm, interval=0.05):
+    """
+    Barrier that sleeps while waiting instead of busy-polling the CPU
+
+    Args:
+        comm (mpi4py.MPI.Comm or None): MPI communicator; None is a no-op
+
+    Options:
+        interval (float): seconds to sleep between checks for completion
+
+    Blocking MPI collectives like ``comm.barrier()`` and ``comm.bcast()`` may
+    spin at 100% CPU while waiting (e.g. Cray MPICH), which slows down other
+    work on the same cores, such as rank 0 compressing an output file with
+    pigz using the CPUs of the waiting ranks.  This uses a non-blocking
+    barrier and sleeps between tests for completion.  This is a collective
+    operation that must be called by all ranks of ``comm``.
+
+    Latency: without an MPI asynchronous progress thread, the non-blocking
+    barrier only advances when ranks call ``Test()``.  MPICH barriers use
+    ~log2(comm.size) sequential message rounds, and each round may wait up to
+    ``interval`` for a sleeping rank to notice, so the added latency after the
+    last rank arrives can be up to ~log2(comm.size) * ``interval`` seconds
+    (e.g. ~0.35 sec for 128 ranks with the default interval=0.05), not just
+    ``interval``.  Polling every 0.05 sec costs negligible CPU, so prefer a
+    small fixed interval over longer intervals or backoff.
+    """
+    if comm is None:
+        return
+
+    request = comm.Ibarrier()
+    while not request.Test():
+        time.sleep(interval)
+
 # Functions for static distribution
 
 def dist_uniform(nwork, nworkers, id=None):

@@ -6,7 +6,7 @@ Regroup spectra by healpix.
 """
 
 from __future__ import absolute_import, division, print_function
-import os, sys, time, shutil, subprocess
+import os, sys, time
 
 import numpy as np
 import argparse
@@ -18,12 +18,12 @@ from desimodel.footprint import radec2pix
 
 from .. import io
 from ..io.meta import shorten_filename
-from ..io.util import checkgzip, get_tempfilename
+from ..io.util import checkgzip
 from ..pixgroup import FrameLite, SpectraLite
 from ..pixgroup import add_missing_frames, frames2spectra
 from ..coaddition import coadd
 from ..util import parse_keyval
-from ..parallel import cpu_affinity, gather_cpu_affinity
+from ..parallel import gather_cpu_affinity, sleeping_barrier, default_nproc
 
 
 def parse(options=None):
@@ -103,60 +103,18 @@ def _root_failed(error, comm):
 
     This is a collective call. It lets the other ranks return instead of
     waiting forever in a later collective call when rank 0 raises an exception.
+    The other ranks sleep while waiting for rank 0 instead of busy-polling, so
+    that they don't slow down rank 0 compressing the output on their CPUs.
     """
     failed = error is not None
     if comm is not None:
+        #- wait for rank 0 in a sleeping barrier rather than in a blocking
+        #- bcast, which may busy-poll the CPUs that rank 0 is using for pigz;
+        #- the bcast is then fast.  Don't remove the barrier as "redundant".
+        sleeping_barrier(comm)
         failed = comm.bcast(failed, root=0)
 
     return failed
-
-def _write_spectra_pigz(outfile, spectra, cpus, min_cpus=4):
-    """
-    Write spectra to ``outfile``, compressing .gz files with pigz on ``cpus``
-
-    Args:
-        outfile (str): output filename
-        spectra (Spectra): spectra to write
-        cpus (list): CPU ids that pigz may use, e.g. those of idle MPI ranks
-
-    Options:
-        min_cpus (int): only use pigz if at least this many CPUs are available
-
-    The serial gzip used by :func:`desispec.io.write_spectra` for ``.gz`` files
-    takes much longer than the rest of this script. If pigz is available and
-    there are enough CPUs, write the uncompressed file and compress it with
-    pigz using all of ``cpus``; otherwise write with ``write_spectra``.
-    """
-    log = get_logger()
-    pigz = shutil.which('pigz')
-    if (not outfile.endswith('.gz')) or pigz is None or len(cpus) < min_cpus:
-        io.write_spectra(outfile, spectra)
-        return
-
-    #- temporary names so that an interrupted write doesn't leave a partial
-    #- file with the final name (with or without .gz)
-    plainfile = get_tempfilename(outfile[:-3])
-    tmpfile = get_tempfilename(outfile)
-    t0 = time.time()
-    io.write_spectra(plainfile, spectra)
-
-    try:
-        #- pigz inherits the CPU affinity of this process
-        with cpu_affinity(cpus), open(tmpfile, 'wb') as fx:
-            subprocess.run([pigz, '-p', str(len(cpus)), '-c', plainfile],
-                           stdout=fx, check=True)
-    except Exception as err:
-        log.warning(f'pigz of {plainfile} failed ({err}); falling back to write_spectra')
-        if os.path.exists(tmpfile):
-            os.remove(tmpfile)
-        io.write_spectra(outfile, spectra)
-    else:
-        os.rename(tmpfile, outfile)
-        log.info(f'Wrote {outfile} with pigz on {len(cpus)} CPUs in {time.time()-t0:.1f} sec')
-    finally:
-        if os.path.exists(plainfile):
-            os.remove(plainfile)
-
 
 def main(args=None, comm=None):
 
@@ -172,13 +130,18 @@ def main(args=None, comm=None):
         rank = comm.rank
         size = comm.size
         #- CPUs of all ranks in comm on the same node as this rank; used by
-        #- rank 0 to compress the output with pigz using the CPUs of the
+        #- rank 0 to compress the outputs with pigz using the CPUs of the
         #- other, otherwise idle, ranks
         cpus = gather_cpu_affinity(comm)
+        ncpu = 1
     else:
         rank = 0
         size = 1
-        cpus = []
+        #- without MPI, compress the outputs with pigz using default_nproc
+        #- threads ($SLURM_CPUS_PER_TASK if set, e.g. when zproc runs this
+        #- on a single-rank block)
+        cpus = None
+        ncpu = default_nproc
 
     #- logger for all ranks
     log = get_logger()
@@ -333,14 +296,14 @@ def main(args=None, comm=None):
 
             if args.outfile is not None:
                 log.info('Writing {}'.format(args.outfile))
-                _write_spectra_pigz(args.outfile, spectra, cpus)
+                io.write_spectra(args.outfile, spectra, ncpu=ncpu, cpus=cpus)
 
             if args.coaddfile is not None:
                 log.info('Coadding spectra')
                 #- in-place coadd updates spectra object
                 coadd(spectra, onetile=args.onetile)
                 log.info('Writing {}'.format(args.coaddfile))
-                io.write_spectra(args.coaddfile, spectra)
+                io.write_spectra(args.coaddfile, spectra, ncpu=ncpu, cpus=cpus)
         except Exception as err:
             error = err
 

@@ -211,3 +211,34 @@ class TestParallel(unittest.TestCase):
 
         groups = weighted_partition(weights, num_groups-3, groups_per_node=groups_per_node)
         check_weight_distribution(weights, groups, num_nodes, groups_per_node)
+
+    def test_sleeping_barrier(self):
+        """test sleeping_barrier sleeps instead of spinning"""
+        #- comm=None is a no-op
+        self.assertIsNone(sleeping_barrier(None))
+
+        #- fake comm whose non-blocking barrier completes on the 3rd test
+        class FakeRequest:
+            def __init__(self):
+                self.ntest = 0
+            def Test(self):
+                self.ntest += 1
+                return self.ntest >= 3
+
+        comm = MagicMock()
+        request = FakeRequest()
+        comm.Ibarrier.return_value = request
+        with patch('desispec.parallel.time.sleep') as sleep:
+            sleeping_barrier(comm, interval=0.2)
+            self.assertEqual(request.ntest, 3)
+            self.assertEqual(sleep.call_count, 2)
+            sleep.assert_called_with(0.2)
+
+        #- real MPI communicator, if available
+        try:
+            import mpi4py.MPI as MPI
+        except ImportError:
+            return
+
+        comm = MPI.COMM_WORLD
+        sleeping_barrier(comm)

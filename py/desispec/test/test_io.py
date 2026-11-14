@@ -856,11 +856,11 @@ class TestIO(unittest.TestCase):
             rmtree(tmpdir)
 
     def test_image_write_pigz_failure(self):
-        """Test that a failed pigz write raises and leaves no files behind.
+        """Test that a failed pigz write falls back to single-threaded gzip.
         """
         import subprocess
         from ..image import Image
-        from ..io.image import write_image
+        from ..io.image import read_image, write_image
         #- large enough to exceed the pipe buffer so early pigz exit causes BrokenPipeError
         shape = (500, 500)
         img = Image(np.random.uniform(size=shape), np.random.uniform(size=shape),
@@ -873,7 +873,8 @@ class TestIO(unittest.TestCase):
                 return real_popen(['sh', '-c', script], **kwargs)
             return _popen
 
-        #- pigz fails after reading all input; pigz exits before reading input
+        #- pigz fails after reading all input; pigz exits before reading input;
+        #- either way the output is written with single-threaded gzip
         for script in ('cat > /dev/null; exit 1', 'exit 3'):
             with self.subTest(script=script):
                 tmpdir = tempfile.mkdtemp()
@@ -881,21 +882,38 @@ class TestIO(unittest.TestCase):
                     gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
                     with patch('shutil.which', return_value='/usr/bin/pigz'), \
                          patch('subprocess.Popen', side_effect=fake_pigz(script)):
-                        with self.assertRaises(RuntimeError):
-                            write_image(gzfile, img, ncpu=2)
-                    self.assertEqual(os.listdir(tmpdir), [])
+                        write_image(gzfile, img, ncpu=2)
+                    self.assertEqual(os.listdir(tmpdir), [os.path.basename(gzfile)])
+                    img2 = read_image(gzfile)
+                    self.assertTrue(np.all(img.pix.astype(np.float32) == img2.pix))
                 finally:
                     rmtree(tmpdir)
 
-        #- error while astropy is writing to the pipe
+        #- pigz can't be started at all
+        tmpdir = tempfile.mkdtemp()
+        try:
+            gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=OSError('simulated exec failure')):
+                write_image(gzfile, img, ncpu=2)
+            self.assertEqual(os.listdir(tmpdir), [os.path.basename(gzfile)])
+            img2 = read_image(gzfile)
+            self.assertTrue(np.all(img.pix.astype(np.float32) == img2.pix))
+        finally:
+            rmtree(tmpdir)
+
+        #- error while astropy is writing but pigz succeeds isn't a pigz
+        #- failure, so it is raised without retrying with single-threaded gzip,
+        #- and no files are left behind
         tmpdir = tempfile.mkdtemp()
         try:
             gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
             with patch('shutil.which', return_value='/usr/bin/pigz'), \
                  patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null')), \
-                 patch('astropy.io.fits.HDUList.writeto', side_effect=OSError('simulated write error')):
+                 patch('astropy.io.fits.HDUList.writeto', side_effect=OSError('simulated write error')) as writeto:
                 with self.assertRaises(OSError):
                     write_image(gzfile, img, ncpu=2)
+                self.assertEqual(writeto.call_count, 1)
             self.assertEqual(os.listdir(tmpdir), [])
         finally:
             rmtree(tmpdir)
@@ -928,7 +946,8 @@ class TestIO(unittest.TestCase):
             return _popen
 
         #- number of pigz threads is capped at MAX_PIGZ_THREADS
-        for ncpu in (2, image_io.MAX_PIGZ_THREADS, 4*image_io.MAX_PIGZ_THREADS):
+        from ..io.util import MAX_PIGZ_THREADS
+        for ncpu in (2, MAX_PIGZ_THREADS, 4*MAX_PIGZ_THREADS):
             with self.subTest(ncpu=ncpu):
                 procs.clear()
                 tmpdir = tempfile.mkdtemp()
@@ -939,7 +958,7 @@ class TestIO(unittest.TestCase):
                         image_io.write_image(gzfile, img, ncpu=ncpu)
                     cmd = procs[0][0]
                     nthreads = int(cmd[cmd.index('-p')+1])
-                    self.assertEqual(nthreads, min(ncpu, image_io.MAX_PIGZ_THREADS))
+                    self.assertEqual(nthreads, min(ncpu, MAX_PIGZ_THREADS))
                 finally:
                     rmtree(tmpdir)
 
@@ -956,17 +975,129 @@ class TestIO(unittest.TestCase):
         finally:
             rmtree(tmpdir)
 
-        #- non-BrokenPipeError when closing stdin still waits for pigz
+        #- non-BrokenPipeError when closing stdin still waits for pigz,
+        #- then falls back to single-threaded gzip
         procs.clear()
         tmpdir = tempfile.mkdtemp()
         try:
             gzfile = os.path.join(tmpdir, 'preproc-b0.fits.gz')
             with patch('shutil.which', return_value='/usr/bin/pigz'), \
                  patch('subprocess.Popen', side_effect=fake_pigz('cat > /dev/null', fail_close=True)):
-                with self.assertRaises(OSError):
-                    image_io.write_image(gzfile, img, ncpu=2)
+                image_io.write_image(gzfile, img, ncpu=2)
             self.assertIsNotNone(procs[0][1].returncode)
-            self.assertEqual(os.listdir(tmpdir), [])
+            self.assertEqual(os.listdir(tmpdir), [os.path.basename(gzfile)])
+            img2 = image_io.read_image(gzfile)
+            self.assertTrue(np.all(img.pix.astype(np.float32) == img2.pix))
+        finally:
+            rmtree(tmpdir)
+
+    def test_write_hdulist(self):
+        """Test write_hdulist options: serial path, compression level, cpus
+        """
+        import gzip
+        import subprocess
+        from astropy.io import fits
+        from ..io.util import write_hdulist, MAX_PIGZ_THREADS
+        data = np.random.uniform(size=(100, 100)).astype(np.float32)
+        def make_hdulist():
+            return fits.HDUList([fits.PrimaryHDU(), fits.ImageHDU(data, name='DATA')])
+
+        def gzip_level(filename):
+            """XFL byte of gzip header: 4=fastest (level 1), 2=best (level 9), 0=other"""
+            with open(filename, 'rb') as fx:
+                return fx.read(9)[8]
+
+        real_popen = subprocess.Popen
+        cmds = list()
+        def fake_pigz(cmd, **kwargs):
+            """run gzip instead of pigz, recording cmd and CPU affinity of pigz process"""
+            cmds.append(cmd)
+            proc = real_popen(['gzip', '-c', cmd[1]], **kwargs)
+            if hasattr(os, 'sched_getaffinity'):
+                cmds.append(os.sched_getaffinity(proc.pid))
+            return proc
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            #- uncompressed
+            outfile = os.path.join(tmpdir, 'a.fits')
+            self.assertEqual(write_hdulist(outfile, make_hdulist()), outfile)
+            self.assertTrue(np.all(fits.getdata(outfile, 'DATA') == data))
+            self.assertIn('CHECKSUM', fits.getheader(outfile, 'DATA'))
+
+            #- a failed uncompressed write doesn't leave a partial temp file
+            def partial_write(filename, **kwargs):
+                with open(filename, 'w') as fx:
+                    fx.write('partial')
+                raise OSError('simulated write error')
+            with patch('astropy.io.fits.HDUList.writeto', side_effect=partial_write):
+                with self.assertRaises(OSError):
+                    write_hdulist(os.path.join(tmpdir, 'c.fits'), make_hdulist())
+            self.assertEqual(os.listdir(tmpdir), ['a.fits'])
+
+            #- ncpu=1 never uses pigz, even if available; default level 1
+            outfile = os.path.join(tmpdir, 'b.fits.gz')
+            with patch('subprocess.Popen') as popen:
+                write_hdulist(outfile, make_hdulist(), ncpu=1)
+                popen.assert_not_called()
+                #- also single-element cpus
+                write_hdulist(outfile, make_hdulist(), cpus=[0])
+                popen.assert_not_called()
+            self.assertEqual(gzip_level(outfile), 4)
+            self.assertTrue(np.all(fits.getdata(outfile, 'DATA') == data))
+
+            #- non-default compression level
+            write_hdulist(outfile, make_hdulist(), compresslevel=9)
+            self.assertEqual(gzip_level(outfile), 2)
+            for badlevel in (0, 10, 'fast'):
+                with self.assertRaises(ValueError):
+                    write_hdulist(outfile, make_hdulist(), compresslevel=badlevel)
+
+            #- pigz options for compression level and thread count
+            cmds.clear()
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=fake_pigz):
+                write_hdulist(outfile, make_hdulist(), ncpu=3, compresslevel=5)
+            self.assertEqual(cmds[0][1:], ['-5', '-c', '-p', '3'])
+            self.assertTrue(np.all(fits.getdata(outfile, 'DATA') == data))
+
+            #- cpus overrides ncpu and sets pigz affinity, one thread per unique CPU
+            if hasattr(os, 'sched_getaffinity'):
+                original = os.sched_getaffinity(0)
+                if len(original) >= 2:
+                    cpus = sorted(original)[0:2]
+                    cmds.clear()
+                    with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                         patch('subprocess.Popen', side_effect=fake_pigz):
+                        write_hdulist(outfile, make_hdulist(), ncpu=7, cpus=cpus)
+                    self.assertEqual(cmds[0][-1], '2')
+                    self.assertEqual(cmds[1], set(cpus))
+                    self.assertEqual(os.sched_getaffinity(0), original)
+
+                #- duplicate CPU ids count once, so one unique CPU doesn't use pigz,
+                #- and a numpy array of CPU ids works
+                with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                     patch('subprocess.Popen') as popen:
+                    onecpu = sorted(original)[0]
+                    write_hdulist(outfile, make_hdulist(), ncpu=7, cpus=[onecpu, onecpu])
+                    write_hdulist(outfile, make_hdulist(), ncpu=7, cpus=np.array([onecpu, onecpu]))
+                    popen.assert_not_called()
+                self.assertTrue(np.all(fits.getdata(outfile, 'DATA') == data))
+
+            #- number of threads is capped; mock setting the affinity since this
+            #- machine may not have that many CPUs
+            from contextlib import nullcontext
+            manycpus = np.arange(4*MAX_PIGZ_THREADS)
+            cmds.clear()
+            with patch('shutil.which', return_value='/usr/bin/pigz'), \
+                 patch('subprocess.Popen', side_effect=fake_pigz), \
+                 patch('desispec.parallel.cpu_affinity', side_effect=lambda cpus: nullcontext()) as affinity:
+                write_hdulist(outfile, make_hdulist(), ncpu=7, cpus=manycpus)
+            self.assertEqual(cmds[0][-1], str(MAX_PIGZ_THREADS))
+            self.assertIs(affinity.call_args.args[0], manycpus)
+            self.assertTrue(np.all(fits.getdata(outfile, 'DATA') == data))
+
+            self.assertEqual(sorted(os.listdir(tmpdir)), ['a.fits', 'b.fits.gz'])
         finally:
             rmtree(tmpdir)
 

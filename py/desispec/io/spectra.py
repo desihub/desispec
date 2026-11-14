@@ -29,7 +29,7 @@ from desiutil.io import encode_table
 from desiutil.log import get_logger
 
 from .util import fitsheader, native_endian, add_columns, checkgzip
-from .util import get_tempfilename, addkeys, replace_prefix
+from .util import get_tempfilename, addkeys, replace_prefix, write_hdulist
 from . import iotime
 
 from .frame import read_frame
@@ -41,7 +41,7 @@ from .meta import specprod_root, findfile
 from ..util import argmatch
 
 
-def write_spectra(outfile, spec, units=None):
+def write_spectra(outfile, spec, units=None, ncpu=1, cpus=None):
     """
     Write Spectra object to FITS file.
 
@@ -56,9 +56,22 @@ def write_spectra(outfile, spec, units=None):
         spec (Spectra): the object containing the data
         units (str): optional string to use for the BUNIT key of the flux
             HDUs for each band.
+        ncpu (int): number of threads for parallel gzip compression of
+            .gz files with pigz; ncpu=1 uses single-threaded gzip.
+        cpus (list): CPU ids for parallel gzip compression, one thread per
+            unique CPU id, overriding ncpu if non-empty (a single CPU id means
+            single-threaded gzip), e.g. the CPUs of other MPI ranks on this
+            node from ``desispec.parallel.gather_cpu_affinity(comm)``.  Those
+            ranks must be idle while writing, e.g. in
+            :func:`desispec.parallel.sleeping_barrier` rather than a blocking
+            ``comm.barrier()``, which may busy-poll their CPUs.
 
     Returns:
         The absolute path to the file that was written.
+
+    .gz files are compressed at level 1 (fastest). If pigz fails, an error
+    is logged and the file is written with single-threaded gzip.
+    See :func:`desispec.io.util.write_hdulist` for details.
 
     """
     t0 = time.time()
@@ -201,9 +214,7 @@ def write_spectra(outfile, spec, units=None):
         redshifts.meta['EXTNAME'] = 'REDSHIFTS'
         all_hdus.append(fits.convenience.table_to_hdu(redshifts))
 
-    tmpfile = get_tempfilename(outfile)
-    all_hdus.writeto(tmpfile, overwrite=True, checksum=True)
-    os.rename(tmpfile, outfile)
+    write_hdulist(outfile, all_hdus, ncpu=ncpu, cpus=cpus)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 
