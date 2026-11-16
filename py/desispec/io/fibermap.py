@@ -20,6 +20,7 @@ from astropy.io import fits
 
 from desitarget.targetmask import desi_mask
 from desitarget.skybricks import Skybricks
+from desitarget.skyhealpixs import Skyhealpixs
 from desiutil.log import get_logger
 from desiutil.depend import add_dependencies, mergedep
 from desiutil.names import radec_to_desiname
@@ -405,8 +406,12 @@ def compare_fiberassign(fa1, fa2, compare_all=False):
 
     Returns list of columns with mismatches; empty list if all agree
 
-    Note: if both are NaN, it is considered a match
+    Notes:
+
+      * if both are NaN, it is considered a match
+      * tile 83063 special case TARGETID is not compared (see desitarget #892)
     """
+    log = get_logger()
     if compare_all:
         compare_columns = fa1.dtype.names
     else:
@@ -415,22 +420,28 @@ def compare_fiberassign(fa1, fa2, compare_all=False):
                 'PMRA', 'PMDEC', 'REF_EPOCH', 'LAMBDA_REF', 'LOCATION',
                 'PETAL_LOC', 'DEVICE_LOC')
 
-        badcol = list()
-        for col in compare_columns:
+    #- Special case tile 83063 with purposefully changed TARGETID;
+    #- See https://github.com/desihub/desitarget/issues/892
+    if hasattr(fa1, 'meta') and ('TILEID' in fa1.meta) and (fa1.meta['TILEID'] == 83063):
+        log.warning('Tile 83063 special case, not checking TARGETID (See desitarget #892)')
+        compare_columns = [c for c in compare_columns if c != 'TARGETID']
 
-            #- check for mismatches, but allow for NaN
-            match = (fa1[col] == fa2[col])
-            if fa1[col].dtype.kind == 'f':
-                match |= (np.isnan(fa1[col]) & np.isnan(fa2[col]))
+    badcol = list()
+    for col in compare_columns:
 
-            #- negative TARGETID are allowed to mismatch if both are negative
-            if col == 'TARGETID':
-                match |= ((fa1[col]<0) & (fa2[col]<0))
+        #- check for mismatches, but allow for NaN
+        match = (fa1[col] == fa2[col])
+        if fa1[col].dtype.kind == 'f':
+            match |= (np.isnan(fa1[col]) & np.isnan(fa2[col]))
 
-            if np.any(~match):
-                badcol.append(col)
+        #- negative TARGETID are allowed to mismatch if both are negative
+        if col == 'TARGETID':
+            match |= ((fa1[col]<0) & (fa2[col]<0))
 
-        return badcol
+        if np.any(~match):
+            badcol.append(col)
+
+    return badcol
 
 def update_survey_keywords(hdr):
     """
@@ -977,18 +988,45 @@ def assemble_fibermap(night, expid, badamps=None, badfibers_filename=None,
 
         #- for SKY on stuck positioners, recheck if they are on a blank sky
         #- (e.g. they might be "off" target but still ok for sky)
-        log.info('Checking if SKY on stuck positioners are still on SKY locations')
-        tilera = fa.meta['TILERA']
-        tiledec = fa.meta['TILEDEC']
-        tileradius = get_tile_radius_deg()
-        skybricks = Skybricks()
-        ok = skybricks.lookup_tile(tilera, tiledec, tileradius,
-                fibermap['FIBER_RA'][stucksky], fibermap['FIBER_DEC'][stucksky])
-        num_stucksky = len(ok)
-        num_ok = np.sum(ok)
-        log.info(f'Keeping {num_ok}/{num_stucksky} SKY on stuck positioners')
+        num_stucksky = np.count_nonzero(stucksky)
+        if num_stucksky == 0:
+            #- Nothing to check; avoid printing misleading "checking"/"using"/
+            #- "rejecting" messages and avoid needlessly constructing
+            #- Skybricks/Skyhealpixs (which require their env vars to be set)
+            #- when there is nothing for them to look up.
+            log.info('No SKY on stuck positioners to check')
+        elif np.all(fibermap['FIBER_RA'][stucksky] == 0.0) or np.all(fibermap['FIBER_DEC'][stucksky] == 0.0):
+            log.warning(f'All {num_stucksky} SKY on stuck positioners have FIBER_RA/DEC=0.0; skipping check for SKY locations')
+        else:
+            log.info('Checking if SKY on stuck positioners are still on SKY locations')
 
-        fibermap['FIBERSTATUS'][stucksky][~ok] |= fibermask.BADPOSITION
+            #- Use whichever sky-quality lookup fiberassign itself used for this tile
+            #-   ls = Legacy Survey = SkyBricks
+            #-   gaia = Gaia DR2 = SkyHealpix
+            #-   not set = default to Legacy Survey SkyBricks
+            if 'LKSKYSRC' not in fa_header:
+                log.info('LKSKYSRC not set in fiberassign file; defaulting to "ls"')
+            lookup_sky_source = fa_header.get('LKSKYSRC', 'ls')
+            if lookup_sky_source == 'gaia':
+                log.info(f'Using LKSKYSRC={lookup_sky_source} (Skyhealpixs) to recheck stuck-sky positioners')
+                skyhealpixs = Skyhealpixs()
+                ok = skyhealpixs.lookup_position(
+                        fibermap['FIBER_RA'][stucksky], fibermap['FIBER_DEC'][stucksky])
+            else:
+                log.info(f'Using LKSKYSRC={lookup_sky_source} (Legacy Survey Skybricks) to recheck stuck-sky positioners')
+                tilera = fa.meta['TILERA']
+                tiledec = fa.meta['TILEDEC']
+                tileradius = get_tile_radius_deg()
+                skybricks = Skybricks()
+                ok = skybricks.lookup_tile(tilera, tiledec, tileradius,
+                        fibermap['FIBER_RA'][stucksky], fibermap['FIBER_DEC'][stucksky])
+
+            num_ok = np.sum(ok)
+            log.info(f'Keeping {num_ok}/{num_stucksky} SKY on stuck positioners')
+            if num_ok == 0:
+                log.error(f'Rejecting all stuck sky fibers; check LKSKYSRC in fiberassign file')
+
+            fibermap['FIBERSTATUS'][np.nonzero(stucksky)[0][~ok]] |= fibermask.BADPOSITION
 
         fibermap.remove_column('_GOODMATCH')
 

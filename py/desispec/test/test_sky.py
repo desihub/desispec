@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 from astropy.table import Table
-from desispec.sky import compute_sky, subtract_sky, SkyModel, get_sky_fibers
+from desispec.sky import compute_sky, subtract_sky, SkyModel, get_sky_fibers, _model_variance, fftconvolve
 from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.maskbits import fibermask
@@ -90,6 +90,41 @@ class TestSky(unittest.TestCase):
         d=np.inner(delta,delta)
         self.assertAlmostEqual(d,0.)
 
+    def test_compute_sky_adjust_lsf(self):
+        """compute_sky with adjust_lsf=True should run and return finite results"""
+        spectra = self._get_spectra()
+        sky = compute_sky(spectra, add_variance=self.add_variance, adjust_lsf=True)
+        self.assertEqual(sky.flux.shape, spectra.flux.shape)
+        self.assertTrue(np.all(np.isfinite(sky.flux)))
+        self.assertTrue(np.all(np.isfinite(sky.ivar)))
+
+    def test_adjust_lsf_nan_isolation(self):
+        """A NaN in one fiber's sky model shouldn't spread to other fibers
+        when convolving to derive the LSF adjustment (fftconvolve axes=1)"""
+        nfiber, nwave = 5, 60
+        wave = np.linspace(8000, 8100, nwave)
+        x = np.arange(nwave)
+        #- fake per-fiber sky spectra, each with a shifted Gaussian line
+        cskyflux = np.array([np.exp(-(x - 30. - 2*i)**2/20.) for i in range(nfiber)])
+
+        badfiber = 2
+        cskyflux[badfiber, 10] = np.nan
+
+        #- same kernel construction as desispec.sky.compute_sky adjust_lsf branch
+        dwave = np.mean(np.gradient(wave))
+        dsigma_A = 0.3
+        dsigma_bin = dsigma_A/dwave
+        hw = int(4*dsigma_bin)+1
+        xk = np.arange(-hw, hw+1)
+        k = np.exp(-xk**2/dsigma_bin**2/2.)
+        k /= np.sum(k)
+
+        tmp = fftconvolve(cskyflux, k[None,:], mode="same", axes=1)
+
+        goodfibers = np.arange(nfiber) != badfiber
+        self.assertTrue(np.all(np.isfinite(tmp[goodfibers])))
+        self.assertTrue(np.any(~np.isfinite(tmp[badfiber])))
+
     def test_subtract_sky(self):
         spectra = self._get_spectra()
         sky = compute_sky(spectra,add_variance=self.add_variance)
@@ -156,6 +191,26 @@ class TestSky(unittest.TestCase):
         self.assertEqual(sky2.stat_ivar, None)
         self.assertEqual(sky2.throughput_corrections, None)
         self.assertEqual(sky2.nrej, sky1.nrej)
+
+    def test_model_variance_masked_skyfiber(self):
+        """_model_variance should ignore a fully masked sky fiber, not return 2A"""
+        spectra = self._get_spectra()
+        rng = np.random.default_rng(0)
+        cskyflux = spectra.flux.copy()
+        cskyivar = np.ones_like(cskyflux)
+        spectra.flux += rng.normal(size=spectra.flux.shape)/np.sqrt(spectra.ivar)
+        skyfibers = np.where(spectra.fibermap['OBJTYPE'] == 'SKY')[0]
+
+        #- reference: drop the bad sky fiber entirely
+        badfiber = skyfibers[0]
+        ivar_ref = _model_variance(spectra, cskyflux, cskyivar, skyfibers[1:])
+
+        #- mask the bad sky fiber but keep it in the skyfibers list
+        spectra.ivar[badfiber] = 0.0
+        ivar_masked = _model_variance(spectra, cskyflux, cskyivar, skyfibers)
+
+        self.assertTrue(np.all(np.isfinite(ivar_masked)))
+        self.assertTrue(np.allclose(ivar_masked, ivar_ref))
 
     def test_get_sky_fibers(self):
         """Test desispec.sky.get_sky_fibers"""

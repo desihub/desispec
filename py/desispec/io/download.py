@@ -9,12 +9,14 @@ Download files from DESI repository.
 import os
 from calendar import timegm
 from datetime import datetime
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool
 from netrc import netrc
 from requests import get
 from requests.auth import HTTPBasicAuth
 
 from desiutil.log import get_logger
+
+from desispec.parallel import default_nproc
 
 from .meta import specprod_root
 
@@ -80,7 +82,7 @@ def download(filenames, single_thread=False, workers=None,
             downloaded_list.append(foo)
     else:
         if workers is None:
-            workers = cpu_count()
+            workers = default_nproc
         p = Pool(workers)
         downloaded_list = p.map(_map_download,zip(file_list,http_list,[a]*len(file_list)))
     return downloaded_list

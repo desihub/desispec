@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-# This is step 3 of the redshift QA generation procedure
+# This is step 4 of the redshift QA generation procedure
 # Create the redshift QA HTML files
 
-# Usage:
-# export QA_DIR=/global/cfs/cdirs/desicollab/users/rongpu/redshift_qa/new/loa
-# ./desi_per_fiber_qa_html.py --stats per_fiber_qa_stats.fits -o $QA_DIR
+# Example usage:
+# export QA_DIR=/global/cfs/cdirs/desicollab/users/rongpu/redshift_qa/nevis
+# ./desi_per_fiber_qa_html.py --stats $QA_DIR/per_fiber_qa_stats.fits -o $QA_DIR
 
 from __future__ import division, print_function
 import sys, os, glob, time, warnings, gc
@@ -64,7 +64,7 @@ def main():
 
         f.write('<tr>\n')
         f.write('<th></th>\n')
-        for tracer in ['BGS_BRIGHT', 'LRG', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
+        for tracer in ['BGS_BRIGHT', 'LRG', 'LGE', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
             for apply_good_z_cut in [False, True]:
                 if apply_good_z_cut is False:
                     f.write('<th>{} (all)</th>\n'.format(tracer))
@@ -74,7 +74,7 @@ def main():
 
         f.write('<tr>\n')
         f.write('<th>N(z) p-value</th>\n')
-        for tracer in ['BGS_BRIGHT', 'LRG', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
+        for tracer in ['BGS_BRIGHT', 'LRG', 'LGE', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
             for apply_good_z_cut in [False, True]:
                 if apply_good_z_cut is False:
                     pvalue_col = tracer.lower()+'_ks_pvalue_allz'
@@ -96,7 +96,7 @@ def main():
 
         f.write('<tr>\n')
         f.write('<th>fiber failure rate</th>\n')
-        for tracer in ['BGS_BRIGHT', 'LRG', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
+        for tracer in ['BGS_BRIGHT', 'LRG', 'LGE', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
             n_tot = stats[tracer.lower()+'_n_tot'][index]
             n_fail = stats[tracer.lower()+'_n_fail'][index]
             frac_fail = stats[tracer.lower()+'_frac_fail'][index]
@@ -109,7 +109,7 @@ def main():
 
         f.write('<tr>\n')
         f.write('<th>overall failure rate</th>\n')
-        for tracer in ['BGS_BRIGHT', 'LRG', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
+        for tracer in ['BGS_BRIGHT', 'LRG', 'LGE', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
             mask = stats[tracer.lower()+'_n_tot']!=-99
             if np.sum(mask)==0:
                 n_tot = -99
@@ -128,7 +128,7 @@ def main():
         ################################## QA plots ##################################
 
         f.write('<table>\n')
-        for tracer in ['BGS_BRIGHT', 'LRG', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
+        for tracer in ['BGS_BRIGHT', 'LRG', 'LGE', 'ELG_LOP', 'QSO', 'ELG_VLO', 'BGS_FAINT']:
 
             f.write('<th></th>\n')
             f.write('<th>{}</th>\n'.format(tracer))
@@ -149,6 +149,26 @@ def main():
                 f.write('</tr>\n')
 
         f.write('</table>\n')
+        f.close()
+
+    ################################## Summary plot pages ##################################
+
+    summary_plots = [('Focal plane success rate', 'focal_plane_success_rate'), ('Failure rate vs fiber', 'failure_rate_vs_fiber'),
+                     ('N vs fiber', 'n_vs_fiber'),
+                     ('Z vs fiber (all)', 'z_vs_fiber_allz'), ('Z vs fiber (all, normalized)', 'z_vs_fiber_allz_norm'),
+                     ('Z vs fiber (good z)', 'z_vs_fiber_goodz'), ('Z vs fiber (good z, normalized)', 'z_vs_fiber_goodz_norm')]
+
+    for tracer in ['BGS_BRIGHT', 'BGS_FAINT', 'LRG', 'LGE', 'ELG_LOP', 'ELG_VLO', 'QSO']:
+
+        f = open(os.path.join(html_dir, 'summary_{}.html'.format(tracer.lower())), "w")
+        f.write('<meta charset="utf-8">\n')
+        f.write('<html>\n')
+        f.write('<h1>{} summary plots</h1>\n'.format(tracer))
+        f.write('<p><a href="../fiber_directory.html">Fiber directory</a></p>\n')
+        for label, name in summary_plots:
+            image_fn = '../png/summary/{}_{}.png'.format(tracer.lower(), name)
+            f.write('<h2>{}</h2>\n'.format(label))
+            f.write('<a href=\'{}\'><img src=\'{}\' width=\'1200\'></a>\n'.format(image_fn, image_fn))
         f.close()
 
     ################################## Fiber directory ##################################
@@ -179,6 +199,15 @@ def main():
         f.write('</p>\n')
     else:
         f.write('<h2>No fibers with issues (excluding ELG_LOP all-only)</h2>\n')
+
+    # Summary plots
+    f.write('<h2>Summary Plots</h2>\n')
+    f.write('<p>')
+    for i, tracer in enumerate(['BGS_BRIGHT', 'BGS_FAINT', 'LRG', 'LGE', 'ELG_LOP', 'ELG_VLO', 'QSO']):
+        if i > 0:
+            f.write(' &nbsp; ')
+        f.write('<a href=html/summary_{}.html>{}</a>'.format(tracer.lower(), tracer))
+    f.write('</p>\n')
 
     f.write('<h2>All Fibers</h2>\n')
 

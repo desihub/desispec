@@ -8,6 +8,7 @@ and related topics.
 from __future__ import print_function, absolute_import, division
 
 import os
+import socket
 import sys
 import time
 import glob
@@ -45,11 +46,19 @@ except:
 
 # Multiprocessing environment setup
 
+def on_nersc_login_node():
+    """Return True if running on a NERSC login node (NERSC_HOST is set but
+    we are not inside a Slurm job/allocation)."""
+    return ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ)
+
 default_nproc = None
 """Default number of multiprocessing processes. Set globally on first import."""
 
 if "SLURM_CPUS_PER_TASK" in os.environ:
     default_nproc = int(os.environ["SLURM_CPUS_PER_TASK"])
+elif on_nersc_login_node():
+    import multiprocessing as _mp
+    default_nproc = min(8, max(1, _mp.cpu_count() // 2))
 else:
     import multiprocessing as _mp
     default_nproc = max(1, _mp.cpu_count() // 2)
@@ -57,7 +66,7 @@ else:
 # MPI environment availability
 def use_mpi():
     """Return whether we can use MPI."""
-    if ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ):
+    if on_nersc_login_node():
         return False
     else:
         try:
@@ -67,6 +76,98 @@ def use_mpi():
             return False
 
     return False
+
+# CPU affinity
+
+def get_cpu_affinity():
+    """
+    Return the set of CPU ids that this process may run on
+
+    On platforms without CPU affinity support (e.g. macOS), the process
+    may run on any CPU, so this returns all CPU ids.
+    """
+    if hasattr(os, 'sched_getaffinity'):
+        return os.sched_getaffinity(0)
+    else:
+        return set(range(os.cpu_count()))
+
+def gather_cpu_affinity(comm):
+    """
+    Return sorted list of CPU ids that any rank of ``comm`` on the same node
+    as this rank may run on
+
+    Args:
+        comm (mpi4py.MPI.Comm): MPI communicator
+
+    CPU ids are not unique across nodes, so ranks on other nodes are ignored.
+    This is a collective operation that must be called by all ranks of ``comm``.
+    """
+    hostname = socket.gethostname()
+    hostcpus = comm.allgather((hostname, get_cpu_affinity()))
+    cpus = set()
+    for host, rankcpus in hostcpus:
+        if host == hostname:
+            cpus.update(rankcpus)
+
+    return sorted(cpus)
+
+@contextmanager
+def cpu_affinity(cpus):
+    """
+    Context manager to run this process on ``cpus``, restoring the original
+    CPU affinity on exit
+
+    Args:
+        cpus (list or set): CPU ids to run on
+
+    Child processes started within the context inherit the CPU affinity.
+    This is a no-op on platforms without CPU affinity support (e.g. macOS).
+    """
+    if not hasattr(os, 'sched_setaffinity'):
+        yield
+        return
+
+    original_cpus = os.sched_getaffinity(0)
+    os.sched_setaffinity(0, cpus)
+    try:
+        yield
+    finally:
+        os.sched_setaffinity(0, original_cpus)
+
+# Waiting without busy-polling
+
+def sleeping_barrier(comm, interval=0.05):
+    """
+    Barrier that sleeps while waiting instead of busy-polling the CPU
+
+    Args:
+        comm (mpi4py.MPI.Comm or None): MPI communicator; None is a no-op
+
+    Options:
+        interval (float): seconds to sleep between checks for completion
+
+    Blocking MPI collectives like ``comm.barrier()`` and ``comm.bcast()`` may
+    spin at 100% CPU while waiting (e.g. Cray MPICH), which slows down other
+    work on the same cores, such as rank 0 compressing an output file with
+    pigz using the CPUs of the waiting ranks.  This uses a non-blocking
+    barrier and sleeps between tests for completion.  This is a collective
+    operation that must be called by all ranks of ``comm``.
+
+    Latency: without an MPI asynchronous progress thread, the non-blocking
+    barrier only advances when ranks call ``Test()``.  MPICH barriers use
+    ~log2(comm.size) sequential message rounds, and each round may wait up to
+    ``interval`` for a sleeping rank to notice, so the added latency after the
+    last rank arrives can be up to ~log2(comm.size) * ``interval`` seconds
+    (e.g. ~0.35 sec for 128 ranks with the default interval=0.05), not just
+    ``interval``.  Polling every 0.05 sec costs negligible CPU, so prefer a
+    small fixed interval over longer intervals or backoff.
+    """
+    if comm is None:
+        return
+
+    request = comm.Ibarrier()
+    while not request.Test():
+        time.sleep(interval)
 
 # Functions for static distribution
 

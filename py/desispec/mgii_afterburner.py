@@ -273,7 +273,7 @@ def fit_mgii_line(target_id, redshift_redrock, flux, ivar_flux, model_flux, wave
                                        ydata=flux_centered,
                                        sigma=sigma_flux_centered,
                                        p0=[1.0, lambda_width / 2, np.mean(flux_centered), 0.0],
-                                       bounds=([-np.inf, -np.inf, -np.inf, -0.01], [np.inf, np.inf, np.inf, 0.01]))
+                                       bounds=([-np.inf, 0., -np.inf, -0.01], [np.inf, np.inf, np.inf, 0.01]))
             except RuntimeError:
                 print("Fit not converged")
                 popt = np.full((4), 0)
@@ -290,7 +290,8 @@ def fit_mgii_line(target_id, redshift_redrock, flux, ivar_flux, model_flux, wave
                                        xdata=centered_wavelenght[mask_wave],
                                        ydata=flux_centered,
                                        sigma=sigma_flux_centered,
-                                       p0=[1.0, lambda_width / 2, np.mean(flux_centered)])
+                                       p0=[1.0, lambda_width / 2, np.mean(flux_centered)],
+                                       bounds=([-np.inf, 0., -np.inf], [np.inf, np.inf, np.inf]))
             except RuntimeError:
                 print("Fit not converged")
                 popt = np.full((3), 0)
@@ -334,11 +335,11 @@ def create_mask_fit(fit_results, max_sigma=None, min_sigma=None, min_deltachi2=N
     """
     mask = np.full(fit_results.shape[0], True)
     if (max_sigma is not None):
-        mask &= np.abs(fit_results[:, 2]) < max_sigma  # sigma < max_sigma
+        mask &= fit_results[:, 2] < max_sigma  # sigma < max_sigma
     if (min_sigma is not None):
-        mask &= np.abs(fit_results[:, 2]) > min_sigma  # sigma > min_sigma
+        mask &= fit_results[:, 2] > min_sigma  # sigma > min_sigma
     if (min_deltachi2 is not None):
-        mask &= np.abs(fit_results[:, 0]) > min_deltachi2  # deltachi2 > min_deltachi2
+        mask &= fit_results[:, 0] > min_deltachi2  # deltachi2 > min_deltachi2
     if (min_A is not None):
         mask &= fit_results[:, 1] > min_A  # A > min_A
     if (min_signifiance_A is not None):

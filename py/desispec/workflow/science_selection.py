@@ -19,13 +19,14 @@ from desispec.scripts.tile_redshifts import generate_tile_redshift_scripts
 from desispec.workflow.redshifts import get_ztile_script_pathname, \
     get_ztile_relpath, \
     get_ztile_script_suffix
-from desispec.workflow.exptable import read_minimal_science_exptab_cols
+from desispec.workflow.exptable import read_minimal_science_exptab_cols, read_all_exptables
 from desispec.workflow.queue import get_resubmission_states, update_from_queue, queue_info_from_qids
 from desispec.workflow.timing import what_night_is_it
 from desispec.workflow.batch_writer import get_desi_proc_batch_file_path
 from desispec.workflow.utils import pathjoin, sleep_and_report
 from desispec.workflow.tableio import write_table
 from desispec.workflow.proctable import table_row_to_dict
+from desispec.parallel import default_nproc
 from desiutil.log import get_logger
 
 from desispec.io import findfile, specprod_root
@@ -43,22 +44,28 @@ import numpy as np
 from astropy.table import Table, vstack
 
 
-def determine_science_to_proc(etable, tiles, surveys, laststeps,
+def determine_science_to_proc(etable=None, tiles=None, surveys=None, laststeps=None,
                               all_tiles=True,
                               ignore_last_tile=False,
                               complete_tiles_thrunight=None,
-                              specstatus_path=None):
+                              specstatus_path=None,
+                              startnight=20201214,
+                              nproc=default_nproc):
     """
      Selects the science exposures that should be processed from a populated
      exposure table given the details and flags given as inputs.
 
     Args:
-        etable (astropy.table.Table): A DESI exposure_table
+        etable (astropy.table.Table, optional): A DESI exposure_table. If
+            None, all exposure tables from the current production
+            (i.e. $DESI_SPECTRO_REDUX/$SPECPROD) are read and stacked together.
         tiles (array-like, optional): Only submit jobs for these TILEIDs.
+            Default is None, i.e. do not filter by TILEID.
         surveys (array-like, optional): Only submit science jobs for these
-            surveys (lowercase)
+            surveys (lowercase). Default is None, i.e. do not filter by SURVEY.
         laststeps (array-like, optional): Only submit jobs for exposures with
-            LASTSTEP in these science_laststeps (lowercase)
+            LASTSTEP in these science_laststeps (lowercase). Default is None,
+            i.e. do not filter by LASTSTEP.
         all_tiles (bool, optional): Default is True. Set to NOT restrict to
             completed tiles as defined by the table pointed to by specstatus_path.
         ignore_last_tile (bool): Default is False. Whether to ignore the last
@@ -70,6 +77,12 @@ def determine_science_to_proc(etable, tiles, surveys, laststeps,
             if None or all_tiles is True.
         specstatus_path (str, optional): Location of the surveyops specstatus
             table.Default is $DESI_SURVEYOPS/ops/tiles-specstatus.ecsv.
+        startnight (int, optional): Default is 20201214. Exposure table
+            entries for nights before this YYYYMMDD are removed. Use None or 0
+            to not filter by night.
+        nproc (int, optional): Number of multiprocessing processes to use
+            when etable is None and exposure tables need to be read from
+            disk. Default is desispec.parallel.default_nproc.
 
     Returns:
         astropy.table.Table: A DESI exposure_table only containing the science
@@ -78,6 +91,16 @@ def determine_science_to_proc(etable, tiles, surveys, laststeps,
             first appear in the input exposure_table.
      """
     log = get_logger()
+
+    ## If no etable given, read and stack all exposure tables from the
+    ## current production
+    if etable is None:
+        etable = read_all_exptables(nproc=nproc)
+
+    ## Remove any exposure table entries before startnight
+    if startnight is not None:
+        etable = etable[etable['NIGHT'] >= startnight]
+
     ## divide into calibration and science etables
     full_etable = etable.copy()
     sci_etable = etable[etable['OBSTYPE'] == 'science']
@@ -92,8 +115,8 @@ def determine_science_to_proc(etable, tiles, surveys, laststeps,
                     + f" was the last exposure observed and {ignore_last_tile=}")
             sci_etable = sci_etable[sci_etable['TILEID'] != last_tile]
 
-    ## Cut on LASTSTEP
-    if len(sci_etable) > 0:
+    ## Cut on LASTSTEP if requested
+    if laststeps is not None and len(sci_etable) > 0:
         good_exps = np.isin(np.array(sci_etable['LASTSTEP']).astype(str), laststeps)
         sci_etable = sci_etable[good_exps]
 
@@ -110,7 +133,7 @@ def determine_science_to_proc(etable, tiles, surveys, laststeps,
             raise ValueError(f'surveys={surveys} filter requested, but no '
                              + f'SURVEY column in exposure_table')
 
-        keep = np.zero(len(sci_etable), dtype=bool)
+        keep = np.zeros(len(sci_etable), dtype=bool)
         # np.isin doesn't work with bytes vs. str from Tables but direct
         # comparison does, so loop
         for survey in surveys:

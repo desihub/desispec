@@ -759,6 +759,95 @@ def ordered_unique(ar, return_index=False):
     else:
         return unique
 
+def ordered_unique_by_provenance(tbl):
+    """Find the unique TARGETIDs of a tbl, ordered in the original order they appear,
+    but disambiguated based on provenance.
+
+    Like numpy.unique, but preserves original order instead of sorting. This
+    version always returns the indices of the elements, where if a TARGETID
+    appears multiple times in the table the chosen index to keep
+    that TARGETID is picked via the following rules:
+
+    - Prefer targets with no secondary bits set to any with secondary bits
+    - Prefer main survey over special over any other survey
+    - If everything else equal, prefer the first occurence
+
+    This helper function is designed to help disambiguate between multiple
+    TARGETIDs in cases where the TARGET_RA and TARGET_DEC values were changed
+    between survey, program, or primary vs secondary targeting.
+
+    For context, see https://github.com/desihub/desitarget/issues/892
+
+    Args:
+        tbl: Table or ndarray
+        Must have a TARGETID column. May have a SURVEY column and any of
+        SCND_TARGET, SV1_SCND_TARGET, SV2_SCND_TARGET, SV3_SCND_TARGET.
+        Missing columns are ignored or otherwise treated as all equal.
+
+    Returns (tuple)
+        targetids : ndarray
+            Unique TARGETIDs, sorted to match the first appearance order.
+        indices : ndarray
+            For each entry in `targetids`, the index of the row in `tbl` corresponding
+            to that TARGETID, chosen according to the aforementioned rules.
+
+    """
+    # If not in the table, gets set to max(tbl) + 1
+    survey_priorities = {"main": 0, "special" : 1}
+
+    targetids = np.array(tbl["TARGETID"])
+    # We will use priority as lower = better since default sort
+    # functions sort lowest to highest.
+    targ_priorities = np.zeros_like(targetids)
+
+    # Works for astropy tables, pandas DataFrames, or numpy structured arrays.
+    if hasattr(tbl, 'colnames'):
+        colnames = tbl.colnames
+    elif hasattr(tbl, 'columns'):
+        colnames = list(tbl.columns)
+    else:
+        colnames = tbl.dtype.names
+
+    scnd_targs = [c for c in colnames if "SCND_TARGET" in c]
+    # Prefer primary over secondary, so if the target has any secondary
+    # bit set penalize its priority.
+    for scnd_col in scnd_targs:
+        has_scnd_bit = tbl[scnd_col] != 0
+        targ_priorities[has_scnd_bit] += 10
+
+    # This may not be passed to sanity check that it exists first.
+    if 'SURVEY' in colnames:
+        for srvy in survey_priorities.keys():
+            is_this_srvy = tbl['SURVEY'] == srvy
+            targ_priorities[is_this_srvy] += survey_priorities[srvy]
+        not_in_surveys = ~np.isin(tbl['SURVEY'], list(survey_priorities.keys()))
+        targ_priorities[not_in_surveys] += (max(survey_priorities.values()) + 1)
+
+    # Sort by TARGETID, then by priority, then by row number
+    row_num = np.arange(len(targetids))
+    ii = np.lexsort(keys=[row_num, targ_priorities, targetids])
+
+    # jj will return the first instance of each, which in tids[ii_l]
+    # will be the one with the lowest priority, then the lowest row number if
+    # priorities are the same (thanks to the lex sort).
+    unq, jj = np.unique(targetids[ii], return_index=True)
+
+    # We need to build a reverse mapping that reorders the TARGETIDs
+    # to match the original input ordering, but keeping the row
+    # corresponding to the chosen tie breaker. Get the unique/sorted version
+    # of targetids, then argsort the indices to reconstruct the original order.
+    unq_global, when_seen = np.unique(targetids, return_index=True)
+    reverse = np.argsort(when_seen)
+
+    # This reverse mapping only works if these are the same. They should be
+    # but let's sanity check anyway.
+    assert np.all(unq == unq_global), "TARGETIDS disambiguated by priority does not equal the list of unique TARGETIDs!"
+    # ii[jj][reverse] will give the indices of the original
+    # targetids array (any by extension input table)
+    # that reduce that table down to the chosen version of
+    # each targetid in the original order of TARGETIDs.
+    return unq[reverse], ii[jj][reverse]
+
 #- Not yet used, but a snippet of code that might be useful
 #- e.g. for mapping TARGETID to the rows in which they appear
 def itemindices(a):

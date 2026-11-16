@@ -27,7 +27,7 @@ from desispec.resolution import Resolution
 from desispec.fiberbitmasking import get_all_fiberbitmask_with_amp, get_all_nonamp_fiberbitmask_val, get_justamps_fiberbitmask
 from desispec.maskbits import fibermask as fmsk
 from desispec.specscore import compute_coadd_scores
-from desispec.util import ordered_unique
+from desispec.util import ordered_unique, ordered_unique_by_provenance
 
 #- Fibermap columns that come from targeting or MTL files
 fibermap_target_cols = (
@@ -189,7 +189,6 @@ def use_for_coadd(fiberstatus, band):
     good_fiberstatus = ( (fiberstatus & fiberstatus_bits) == 0 )
     return good_fiberstatus
 
-
 def coadd_fibermap(fibermap, onetile=False):
     """
     Coadds fibermap
@@ -199,7 +198,7 @@ def coadd_fibermap(fibermap, onetile=False):
 
     Options:
         onetile (bool): this is a coadd of a single tile, not across tiles
-        
+
     Returns: (coadded_fibermap, exp_fibermap) Tables
 
 
@@ -231,9 +230,11 @@ def coadd_fibermap(fibermap, onetile=False):
     #- NOTE: does not actually delete/modify the original input
     del fibermap
 
-    #- Get TARGETIDs, preserving order in which they first appear
+    #- Get TARGETIDs, preserving order in which they first appear,
+    #- but disambiguating targetid by priority if they appear more than once.
     #- tfmap = "Target Fiber Map", i.e. one row per target instead of one row per exposure
-    targets, ii = ordered_unique(exp_fibermap["TARGETID"], return_index=True)
+    targets, ii = ordered_unique_by_provenance(exp_fibermap)
+
     tfmap = exp_fibermap[ii]
     assert np.all(targets == tfmap['TARGETID'])
     ntarget = targets.size
@@ -242,7 +243,7 @@ def coadd_fibermap(fibermap, onetile=False):
     exp_fibermap['IN_COADD_B'] = np.zeros(len(exp_fibermap), dtype=bool)
     exp_fibermap['IN_COADD_R'] = np.zeros(len(exp_fibermap), dtype=bool)
     exp_fibermap['IN_COADD_Z'] = np.zeros(len(exp_fibermap), dtype=bool)
-    
+
     #- initialize NUMEXP=-1 to check that they all got filled later
     tfmap['COADD_NUMEXP'] = np.zeros(len(tfmap), dtype=np.int16) - 1
     tfmap['COADD_EXPTIME'] = np.zeros(len(tfmap), dtype=np.float32) - 1
@@ -671,6 +672,28 @@ def _resolution_coadd(resolution, pix_weights):
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
 
+
+def coadd_frame_resolution(resolution, pix_weights):
+    """
+    Coadd the resolution matrices of several frames fiber by fiber,
+    weighting each row of the resolution matrix by the weight of the
+    corresponding pixel (see _resolution_coadd and #2372).
+
+    Args:
+        resolution (ndarray): (nframe, nfiber, nres, npix) resolution data
+        pix_weights (ndarray): (nframe, nfiber, npix) weights (e.g. ivar)
+            used for the flux coaddition
+
+    Returns:
+        ndarray (nfiber, nres, npix) of normalized coadded resolution data
+    """
+    nfiber = resolution.shape[1]
+    out = np.zeros(resolution.shape[1:], dtype=resolution.dtype)
+    for j in range(nfiber):
+        res, norm = _resolution_coadd(resolution[:, j], pix_weights[:, j])
+        out[j] = res / (norm + (norm == 0))
+    return out
+
 def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
     """
     Coadd spectra across exposures, returning new Spectra object without changing original.
@@ -704,10 +727,86 @@ def coadd_exposures(spectra, cosmics_nsig=None, onetile=False):
 
     return coadded_spectra
 
-def _build_crude_coadd_arrays(spectra, all_idx, good_idx, bands_to_use, sbands):
+def _wave_near(wave, other, tol=1e-4):
     """
-    Build per-exposure flux and weight arrays on a merged from wavelength bands 
-    in non-overlapping regions, and compute the corresponding inverse-variance 
+    Return boolean array, True where ``wave`` is within ``tol`` of any
+    wavelength in ``other``.
+
+    Args:
+        wave: 1D array of wavelengths to test
+        other: 1D array of wavelengths to compare against
+
+    Options:
+        tol: absolute tolerance in Angstroms
+
+    Returns:
+        boolean array with the same shape as ``wave``
+    """
+    other = np.sort(other)
+    if other.size == 0:
+        return np.zeros(np.shape(wave), dtype=bool)
+
+    i = np.searchsorted(other, wave)
+    lo = other[np.clip(i - 1, 0, other.size - 1)]
+    hi = other[np.clip(i, 0, other.size - 1)]
+    return (np.abs(wave - lo) <= tol) | (np.abs(wave - hi) <= tol)
+
+
+def _crude_coadd_grid(spectra, bands_list, sbands, cache=None):
+    """
+    Return the non-overlapping wavelength grid used for the crude coadd.
+
+    Overlap with adjacent bands is excluded so that cameras are not coadded.
+    The result depends only on the wavelength grids and the list of bands,
+    so it can be cached and reused for every target.
+
+    Args:
+        spectra: desispec.spectra.Spectra object
+        bands_list: ordered list of band names to include
+        sbands: wavelength-sorted array of all band names
+
+    Options:
+        cache: dict to store and reuse results, keyed by ``bands_list``
+
+    Returns:
+        tuple (overlap, coadd_wave) where overlap is a dict of 0/1 int arrays
+        per band flagging pixels that overlap an adjacent band, and
+        coadd_wave is the merged wavelength grid skipping overlaps.
+    """
+    key = tuple(bands_list)
+    if cache is not None and key in cache:
+        return cache[key]
+
+    overlap = {}
+    for j, b in enumerate(bands_list):
+        wave_b = spectra.wave[b]
+        overlap_flag = np.zeros(wave_b.size, dtype=int)
+
+        if j > 0:
+            overlap_flag[_wave_near(wave_b, spectra.wave[bands_list[j - 1]])] = 1
+
+        if j < len(bands_list) - 1:
+            overlap_flag[_wave_near(wave_b, spectra.wave[bands_list[j + 1]])] = 1
+
+        overlap[b] = overlap_flag
+
+    # construct coadd wave grid, skipping overlap regions
+    coadd_wave = None
+    for b in sbands[np.isin(sbands, bands_list)]:
+        wave_b = spectra.wave[b][overlap[b] == 0]
+        coadd_wave = wave_b if coadd_wave is None else np.append(coadd_wave, wave_b)
+
+    if cache is not None:
+        cache[key] = (overlap, coadd_wave)
+
+    return overlap, coadd_wave
+
+
+def _build_crude_coadd_arrays(spectra, all_idx, good_idx, bands_to_use, sbands,
+                              grid_cache=None):
+    """
+    Build per-exposure flux and weight arrays on a merged from wavelength bands
+    in non-overlapping regions, and compute the corresponding inverse-variance
     weighted crude coadd.
 
     Args:
@@ -720,6 +819,11 @@ def _build_crude_coadd_arrays(spectra, all_idx, good_idx, bands_to_use, sbands):
                        the same wavelength ordering as spectra.bands so
                        that adjacent entries share wavelength overlaps
 
+    Options:
+        grid_cache   : dict reused across calls for the same ``spectra`` to
+                       avoid recomputing the band overlaps and wavelength grid
+                       (see :func:`_crude_coadd_grid`)
+
     Returns:
         f_i         ndarray (n_exp, n_wave)  per-exposure flux
         w_i         ndarray (n_exp, n_wave)  per-exposure ivar weights
@@ -729,32 +833,9 @@ def _build_crude_coadd_arrays(spectra, all_idx, good_idx, bands_to_use, sbands):
     """
     bands_list = list(bands_to_use)
 
-    # check for overlap between usable bands, 
-    # exclude these regions to avoid coadding cameras
-    overlap = {}
-    for j, b in enumerate(bands_list):
-        wave_b = spectra.wave[b]
-        overlap_flag = np.zeros(wave_b.size, dtype=int)
-
-        if j > 0:
-            wave_prev = spectra.wave[bands_list[j - 1]]
-            for k, w in enumerate(wave_b):
-                if np.any(np.abs(w - wave_prev) <= 1e-4):
-                    overlap_flag[k] = 1
-
-        if j < len(bands_list) - 1:
-            wave_next = spectra.wave[bands_list[j + 1]]
-            for k, w in enumerate(wave_b):
-                if np.any(np.abs(w - wave_next) <= 1e-4):
-                    overlap_flag[k] = 1
-
-        overlap[b] = overlap_flag
-
-    # construct coadd wave grid, skipping overlap regions
-    coadd_wave = None
-    for b in sbands[np.isin(sbands, bands_list)]:
-        wave_b = spectra.wave[b][overlap[b] == 0]
-        coadd_wave = wave_b if coadd_wave is None else np.append(coadd_wave, wave_b)
+    # overlapping regions between usable bands are excluded to avoid
+    # coadding cameras
+    overlap, coadd_wave = _crude_coadd_grid(spectra, bands_list, sbands, grid_cache)
 
     # fill per-exposure flux and weight arrays
     f_i = np.zeros((all_idx.size, coadd_wave.size))
@@ -828,10 +909,10 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
     bands = spectra.bands
     mwave = [np.mean(spectra.wave[b]) for b in bands]
     sbands = np.array(bands)[np.argsort(mwave)] #wavelength-sorted bands
-    
+
     targets = ordered_unique(spectra.fibermap["TARGETID"])
 
-    # bitmask of fatal fiber‑status flags – exposures with any of these bits set are ignored 
+    # bitmask of fatal fiber‑status flags – exposures with any of these bits set are ignored
     fatal_fiberstatus_bits = get_all_nonamp_fiberbitmask_val()
     good_fiberstatus = ( (spectra.fibermap['FIBERSTATUS'] & fatal_fiberstatus_bits) == 0 )
 
@@ -839,7 +920,10 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
     # initialize default COADD_NORM = 1., SIGMA_COADD_NORM = 0 (no corrections necessary)
     spectra.fibermap['COADD_NORM'] = 1.
     spectra.fibermap['SIGMA_COADD_NORM'] = 0.
-    
+
+    # wavelength grids do not depend on the target; compute once per set of bands
+    grid_cache = dict()
+
     # compute normalization terms per exposure
     for i,tgt in enumerate(targets):
 
@@ -851,12 +935,12 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
 
         # track if BADFIBER fiberstatus was set function
         idx_good_init = np.where((spectra.fibermap['TARGETID'] == tgt) & good_fiberstatus)[0]
-        
+
         while not(is_converged) and (iteration < 5):
             iteration += 1
             idx_good = np.where((spectra.fibermap['TARGETID'] == tgt) & good_fiberstatus)[0]
-        
-            # do not apply to sky spectra or single exposures or all bad exposures 
+
+            # do not apply to sky spectra or single exposures or all bad exposures
             if np.all(spectra.fibermap['OBJTYPE'][idx_good] == 'TGT') & (idx_good.size > 1):
 
                 # check which cameras are in ALL exposures
@@ -867,7 +951,7 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
                     cam_fiberstatus = use_for_coadd(spectra.fibermap['FIBERSTATUS'][idx_good], b)
                     if np.sum(cam_fiberstatus) != idx_good.size:
                         continue
-                
+
                     if spectra.mask is not None:
                         spectra_mask = spectra.mask[b][idx_good]
                     else:
@@ -877,7 +961,7 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
                     wave_b = spectra.wave[b]
                     nwave = wave_b.size
                     num_masked_pixels = np.sum((spectra_mask != 0)|(spectra.ivar[b][idx_good] == 0), 1)
-                
+
                     if np.all(num_masked_pixels < int(0.4*nwave)):
                         # Require that less than 40 % of the pixels are masked
                         usable_bands.append(b)
@@ -890,15 +974,16 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
 
                 # construct flux, weights, and crude coadd from the usable_bands and good indices
                 f_i, w_i, coadd_wave, crude_coadd, w_tot = _build_crude_coadd_arrays(
-                    spectra, idx_good_init, idx_good, usable_bands, sbands
+                    spectra, idx_good_init, idx_good, usable_bands, sbands,
+                    grid_cache=grid_cache
                 )
-                
+
                 # compute unbiased normalization constant by minimizing chi2
                 # chi2 = sum( w*(f_i - b*f_c )^2 )
                 # optimal scalar for f_i is a = 1/b = ( w*f_i*f_c / w*f_c^2 )^-1
                 a = np.ones(idx.size)
                 var_a = np.full(idx.size, np.inf)
-                # loop over all original good indices so new BADFIBER exposures 
+                # loop over all original good indices so new BADFIBER exposures
                 # COADD_NORM is relative to updated crude_coadd
                 for j,k in enumerate(idx_good_init):
                     mask = w_i[j]*w_tot != 0
@@ -909,7 +994,7 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
                         a[np.isin(idx,k)] = np.sum(numerator)/np.sum(denominator)
                         scalar = a[np.isin(idx,k)]
                         # compute error on scalar
-                        var_a[np.isin(idx,k)] = scalar**2 / np.sum(w * crude_coadd[mask]**2)
+                        var_a[np.isin(idx,k)] = scalar**4 / np.sum(w * crude_coadd[mask]**2)
                     else:
                         log.warning(f'coadd*exposure product is not finite for an exposure of {tgt}')
                         good_fiberstatus[k] = False
@@ -917,7 +1002,7 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
                         a[np.isin(idx,k)] = 0
 
                 #  enforce physically plausible scaling factors (positive and not extreme).
-                is_converged = np.all( (a[np.isin(idx,idx_good)]>0.1) & (a[np.isin(idx,idx_good)]<10.) ) 
+                is_converged = np.all( (a[np.isin(idx,idx_good)]>0.1) & (a[np.isin(idx,idx_good)]<10.) )
                 if is_converged:
                     spectra.fibermap['COADD_NORM'][idx_good_init] = a[np.isin(idx,idx_good_init)]
                     spectra.fibermap['SIGMA_COADD_NORM'][idx_good_init] = np.sqrt(var_a[np.isin(idx,idx_good_init)])
@@ -925,17 +1010,17 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
                     # saving "bad a" in case VARIABLE is not set on future iteration
                     bad_a = np.where((a<0.1) | (a>10.))[0]
                     bad_indices = idx[bad_a]
-                    
+
                     # set bad fiberstatus for these exposures
                     good_fiberstatus[bad_indices] = False
                     # also need to update fiberstatus for these exposures
                     spectra.fibermap['FIBERSTATUS'][bad_indices] |= fmsk.BADFIBER
-                        
+
                     # save the bad values for further analyses
                     spectra.fibermap['COADD_NORM'][bad_indices] = a[bad_a]
-                    spectra.fibermap['SIGMA_COADD_NORM'][bad_indices] = np.sqrt(var_a[bad_a])                    
+                    spectra.fibermap['SIGMA_COADD_NORM'][bad_indices] = np.sqrt(var_a[bad_a])
 
-            else: 
+            else:
                 # skip normalization for non‑target objects, single‑exposure targets
                 is_converged = True
 
@@ -946,24 +1031,25 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
             spectra.fibermap['SIGMA_COADD_NORM'][idx] = 0.
 
         # compute crude_coadd and rescaled_crude_coadd over all bands and compare
-        # do not apply to sky spectra or single exposures or all bad exposures 
+        # do not apply to sky spectra or single exposures or all bad exposures
         elif np.all(spectra.fibermap['OBJTYPE'][idx_good] == 'TGT') and (len(idx_good) > 1):
-            
+
             # if all bands were used, no need to recompute crude coadd
             # and can use existing f_i, w_i arrays
             if not np.all(np.isin(bands, usable_bands)):
                 # usable_bands is a strict subset: recompute over all bands for comparison
                 f_i, w_i, coadd_wave, crude_coadd, w_tot = _build_crude_coadd_arrays(
-                    spectra, idx_good_init, idx_good, bands, sbands
+                    spectra, idx_good_init, idx_good, bands, sbands,
+                    grid_cache=grid_cache
                 )
                 # else: f_i, w_i, crude_coadd, w_tot from the normalization loop are still valid
-            
+
             # compute rescaled coadd (was duplicated in both branches before)
             used_in_coadd = good_fiberstatus[idx]
             not_flagged = np.isin(idx_good_init, idx_good)
             scaling = a[used_in_coadd].reshape(np.sum(used_in_coadd), 1)
             new_w_tot = np.sum(w_i[not_flagged] * scaling**-2, axis=0)
-            new_crude_coadd = np.sum(f_i[not_flagged] * w_i[not_flagged] * scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))        
+            new_crude_coadd = np.sum(f_i[not_flagged] * w_i[not_flagged] * scaling**-1, axis=0) / (new_w_tot + (new_w_tot == 0))
 
             # compute chi2dof; dof accounts for missing regions
             chi2 = np.sum( (crude_coadd - new_crude_coadd)**2 * w_tot)
@@ -972,7 +1058,7 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
             if chi2 < norm_chi2_threshold:
                 # if rescaling makes a minimal difference, we coadd as normal
                 spectra.fibermap['COADD_NORM'][idx_good] = 1.
-                spectra.fibermap['SIGMA_COADD_NORM'][idx_good] = 0.     
+                spectra.fibermap['SIGMA_COADD_NORM'][idx_good] = 0.
             else:
                 # suspect for variable calibration owing to positioning offsets,
                 # calib errors, intrinsic variability, etc.
@@ -982,7 +1068,7 @@ def per_exposure_normalization(spectra, norm_chi2_threshold=0.1):
     ii = (spectra.fibermap['FIBERSTATUS'] & fmsk.VARIABLE) != 0
     n_rescaled = len(np.unique(spectra.fibermap['TARGETID'][ii]))
     log.info(f'Rescaling {n_rescaled} variable target(s)')
-    
+
     # downgrade to float 32
     spectra.fibermap['COADD_NORM'] = spectra.fibermap['COADD_NORM'].astype(np.float32)
     spectra.fibermap['SIGMA_COADD_NORM'] = spectra.fibermap['SIGMA_COADD_NORM'].astype(np.float32)
@@ -1068,7 +1154,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False, norm_ch
             # to next target, leaving tflux and tivar=0 for this target
             if len(jj) == 0:
                 continue
-            
+
             if normalize:
                 # reshape normalization term
                 norm_term = spectra.fibermap['COADD_NORM'][jj].reshape(jj.size,1)
@@ -1092,7 +1178,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False, norm_ch
                                             camera=b)
                 ivarjj_masked[cosmic_mask] = 0
                 # We might think to log some info about cosmic mask
-                
+
             # inverse variance weights
             weights = ivarjj_masked * 1
             tivar[i] = np.sum(ivarjj_masked, axis=0)
@@ -1105,7 +1191,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False, norm_ch
             # we now recalculate the tivar, because we just replaced updated the weights
             weights = weights / (tivar[i] + (tivar[i] == 0))
             tflux[i] = np.sum(weights * flux_scaled, axis=0)
-            
+
             if spectra.resolution_data is not None :
                 trdata[i, :, :] = _resolution_coadd(spectra.resolution_data[b][jj],
                                                     weights)[0]
@@ -1132,7 +1218,7 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False, norm_ch
         orig_scores = None
 
     spectra.fibermap, exp_fibermap = coadd_fibermap(spectra.fibermap,
-                                                    onetile=onetile) 
+                                                    onetile=onetile)
     spectra.exp_fibermap = exp_fibermap
     spectra.scores = None
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
@@ -1668,6 +1754,15 @@ def fast_resample_spectra(spectra, wave) :
 
     Returns:
        desispec.spectra.Spectra object, resolution data=Id
+
+    The output flux is the inverse variance weighted mean of the input flux
+    over each output bin, and the output ivar is the sum of the input ivar
+    over that bin, summed over bands. resample_flux conserves flux density,
+    i.e. it returns the *mean* of its input over each output bin, so ivar is
+    resampled as a density (ivar/dwave) and multiplied back by the output bin
+    size, as done in resample_flux itself for its ivar option. Because the
+    neighboring output flux bins are correlated and that covariance is not
+    tracked here, the output ivar is slightly conservative.
     """
 
     log = get_logger()
@@ -1677,23 +1772,26 @@ def fast_resample_spectra(spectra, wave) :
     nwave=wave.size
     b=spectra.bands[0]
     ntarget=spectra.flux[b].shape[0]
-    nres=spectra.resolution_data[b].shape[1]
-    ivar=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
-    flux=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
+    ivar=np.zeros((ntarget,nwave),dtype=spectra.ivar[b].dtype)
+    flux=np.zeros((ntarget,nwave),dtype=spectra.flux[b].dtype)
     if spectra.mask is not None :
         mask = np.zeros((ntarget,nwave),dtype=spectra.mask[b].dtype)
     else :
         mask = None
     rdata=np.ones((ntarget,1,nwave),dtype=spectra.resolution_data[b].dtype) # pointless for this resampling
     bands=""
+    out_dwave=np.gradient(wave)
     for b in spectra.bands :
         if spectra.mask is not None :
             tivar=spectra.ivar[b]*(spectra.mask[b]==0)
         else :
             tivar=spectra.ivar[b]
+        # resample ivar (and the ivar-weighted flux) as densities so that the
+        # output ivar is the sum, not the mean, of the input ivar in each bin
+        in_dwave=np.gradient(spectra.wave[b])
         for i in range(ntarget) :
-            ivar[i]  += resample_flux(wave,spectra.wave[b],tivar[i])
-            flux[i]  += resample_flux(wave,spectra.wave[b],tivar[i]*spectra.flux[b][i])
+            ivar[i]  += resample_flux(wave,spectra.wave[b],tivar[i]/in_dwave)*out_dwave
+            flux[i]  += resample_flux(wave,spectra.wave[b],tivar[i]*spectra.flux[b][i]/in_dwave)*out_dwave
         bands += b
     for i in range(ntarget) :
         ok=(ivar[i]>0)

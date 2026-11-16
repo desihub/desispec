@@ -208,6 +208,15 @@ def main(args=None, comm=None):
         outbundle = "{}_{:02d}".format(outroot, b)
         outbundlefits = "{}.fits".format(outbundle)
 
+        #- A bundle file can survive an earlier attempt, since they are now
+        #- kept when a merge fails so that they can be inspected. Remove any
+        #- stale one now, so that afterwards its existence means that this
+        #- invocation produced it.
+        if os.path.isfile(outbundlefits) :
+            log.info("removing stale {} from a previous attempt".format(
+                outbundlefits))
+            os.remove(outbundlefits)
+
         if skip_this_bundle :
             log.info("rank #{}, do not fit bundle {} {}".format(rank,cam,b))
             retval = 12
@@ -244,6 +253,10 @@ def main(args=None, comm=None):
                           "value {} running {}".format(rank, retval, comstr))
                 failcount += 1
                 failed_bundles.append(b)
+                if os.path.isfile(outbundlefits):
+                    bundles_to_merge.append(b)
+                else:
+                    log.error(f"no output file {outbundlefits} from failed bundle {b}; not merging it")
         else:
             log.info(f"proc {rank} succeeded generating {outbundlefits}")
             bundles_to_merge.append(b)
@@ -276,6 +289,11 @@ def main(args=None, comm=None):
 
             log.info("will merge the following {} bundle files {}".format(cam, bundlefiles))
 
+            #- report this before merging, so that it is still logged if the
+            #- merge below raises
+            if len(failed_bundles) > 0 :
+                log.warning(f"The fit of the following bundles failed: {failed_bundles}")
+
             #- Empirically it appears that files written by one rank sometimes
             #- aren't fully buffer-flushed and closed before getting here,
             #- despite the MPI allreduce barrier.  Pause to let I/O catch up.
@@ -286,26 +304,35 @@ def main(args=None, comm=None):
             try:
                 if args.dont_merge_with_input :
                     log.info("Do not include input PSF when merging bundles")
-                    merge_psf(bundlefiles[0], bundlefiles[1:], outfits)
+                    #- pass bundlefiles[0] as an input as well as the template;
+                    #- merge_psf resets the template's STATUS and B##RCHI2, so
+                    #- otherwise a fit failure in that first bundle is dropped
+                    merge_psf(bundlefiles[0], bundlefiles, outfits)
                 else :
                     merge_psf(inpsffile, bundlefiles, outfits)
             except Exception as e:
+                #- Re-raise rather than carrying on: on a rerun an outfits
+                #- from an earlier attempt can still be on disk, and it must
+                #- not be mistaken for this merge having succeeded. Raising
+                #- here also keeps the per-bundle files below for inspection.
+                #- failcount is deliberately not incremented; it is only
+                #- returned by the --disable-merge path above, which never
+                #- reaches this code.
                 log.error(e)
-                log.error("merging failed for {}".format(outfits))
-                failcount += 1
+                log.critical("merging failed for {}".format(outfits))
+                raise
 
             log.info('done merging')
 
+            #- merge_psf can also return without writing anything, which would
+            #- otherwise be reported as SUCCESS with no merged PSF on disk
+            if not os.path.isfile(outfits) :
+                message = f"merging failed: {outfits} was not written"
+                log.critical(message)
+                raise RuntimeError(message)
+
             for f in bundlefiles :
                 if os.path.isfile(f):
-                    os.remove(f)
-
-        if len(failed_bundles) > 0 :
-            failed_bundles = np.hstack(failed_bundles).astype(int)
-            log.warning(f"The fit of the following bundles failed: {failed_bundles}")
-            for x in failed_bundles :
-                f =  "{}_{:02d}.fits".format(outroot, x)
-                if  os.path.isfile(f):
                     os.remove(f)
 
     return
@@ -457,13 +484,25 @@ def merge_psf(inpsffile, inputs, output):
 
     for input_filename in inputs :
         log.info("merging {} into {}".format(input_filename, inpsffile))
-        other_psf_hdulist=fits.open(input_filename)
+
+        # JB Keep memmap=False to avoid issues with specex qa and memory mapping
+        # See desispec PR 2732 for more details
+        other_psf_hdulist=fits.open(input_filename,memmap=False)
 
         # look at what fibers where actually fit
         i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
         status_of_fibers = \
             other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
         selected_fibers = np.where(status_of_fibers==0)[0]
+        failed_fibers=np.where(status_of_fibers>0)[0]
+
+        if failed_fibers.size > 0 :
+            log.warning("failed fibers in PSF {} = {}".format(input_filename,
+                failed_fibers))
+            i_p=np.where(psf_hdulist["PSF"].data["PARAM"]=='STATUS')[0][0]
+            psf_hdulist["PSF"].data["COEFF"][i_p][failed_fibers] = \
+                                other_psf_hdulist["PSF"].data["COEFF"][i][failed_fibers]
+
         log.info("fitted fibers in PSF {} = {}".format(input_filename,
             selected_fibers))
         if selected_fibers.size == 0 :
@@ -509,6 +548,71 @@ def merge_psf(inpsffile, inputs, output):
     return
 
 
+def _select_bundle_inputs(bundle, bundle_rchi2, rchi2_threshold,
+                          bundle_present, camera, log):
+    """
+    Choose which input PSFs to use for one fiber bundle
+
+    The same selection is applied to the PSF coefficients and to the
+    XTRACE/YTRACE HDUs, so that both describe the same set of exposures.
+    specex fits the traces as free parameters of the same per-bundle fit that
+    produces the rchi2 (see the fit_trace stages of FitEverything in
+    specex/src/specex_psf_fitter.cc), so an input rejected here has a suspect
+    trace solution for this bundle and not only a suspect PSF shape.
+
+    Args:
+        bundle: fiber bundle id
+        bundle_rchi2: 2D array of shape (ninput, nbundle) of per-bundle rchi2,
+            zero where the bundle was not fit
+        rchi2_threshold: reject inputs whose rchi2 is not below this value
+        bundle_present: 1D bool array, True for the inputs that contain this
+            bundle, i.e. where it was not masked out by a bad amp
+        camera: camera name, used in log messages
+        log: logger
+
+    Returns:
+        (selected, rchi2, nvalid) where selected is the array of input indices
+        to average together (always at least one), rchi2 is the value to record
+        for this bundle in the output header, and nvalid is how many inputs
+        passed the rchi2 cut, zero when the fallback below was needed.
+    """
+    ok = np.where((bundle_rchi2[:,bundle]>0)
+                  &(bundle_rchi2[:,bundle]<rchi2_threshold))[0]
+
+    # We finally resorted to use a mean instead of a median here for two reasons.
+    # First, there is already a vetting of PSF bundles with good chi2 above
+    # that protects us from bad fits (we only expect outliers because of bad fits because of cosmic rays,
+    # not a glitch in hardware). Second, some of the PSF parameters have large correlations,
+    # which mean that two pairs of parameter values, like (p_a_i,p_b_i) and (p_a_j,p_b_j) (with a,b param
+    # indexes and i,j exposure indices) may give similar PSFs despite large noise in individual parameters
+    # but a median could decide to select a pair like (p_a_i,p_b_j) that could lead to a PSF inconsistent
+    # with data. Using a mean instead of a median protects us from this situation.
+
+    if ok.size>=2 :
+        log.debug("bundle #{} : use mean".format(bundle))
+        return ok, np.mean(bundle_rchi2[ok,bundle]), ok.size
+
+    if ok.size==1 : # a mean over one input is that input
+        log.debug("bundle #{} : use only one psf ".format(bundle))
+        return ok, bundle_rchi2[ok[0],bundle], ok.size
+
+    # we have a problem here, take the smallest rchi2
+    log.debug("bundle #{} : take smallest non-zero chi2 ".format(bundle))
+    # Only consider inputs that actually contain this bundle; a
+    # missing bundle has rchi2=0 and must never be selected here.
+    col = np.where(bundle_present, bundle_rchi2[:,bundle], 0.)
+    if np.all(col == 0):
+        # nothing usable; fall back to an input that at least has
+        # this bundle rather than blindly taking the first one
+        candidates = np.where(bundle_present)[0]
+        i = int(candidates[0]) if candidates.size > 0 else 0
+        log.warning(f"no usable rchi2 for bundle {bundle} of camera {camera}; falling back to input PSF {i}")
+    else:
+        i = int(np.argmin(np.where(col == 0, np.inf, col)))
+
+    return np.array([i]), bundle_rchi2[i,bundle], 0
+
+
 def mean_psf(inputs, output):
     """
     Average multiple input PSF files into an output PSF file
@@ -535,6 +639,8 @@ def mean_psf(inputs, output):
     nbundles=None
     nfibers_per_bundle=None
     missing_bundles=[]
+    failed_bundles_per_psf=[]
+    fitted_bundles_per_psf=[]
     for input in inputs :
         log.info("Adding {}".format(input))
         if not os.path.isfile(input) :
@@ -560,10 +666,12 @@ def mean_psf(inputs, output):
         wavemins.append(psf["PSF"].header["WAVEMIN"])
         wavemaxs.append(psf["PSF"].header["WAVEMAX"])
 
-        if "XTRACE" in psf :
-            xtrace.append(psf["XTRACE"].data)
-        if "YTRACE" in psf :
-            ytrace.append(psf["YTRACE"].data)
+        # Append None for a missing HDU so that the trace lists stay aligned
+        # with tables, wavemins and bundle_rchi2. The traces are selected per
+        # bundle below using input indices, so a hole in these lists would
+        # otherwise silently shift them onto the wrong exposures.
+        xtrace.append(psf["XTRACE"].data if "XTRACE" in psf else None)
+        ytrace.append(psf["YTRACE"].data if "YTRACE" in psf else None)
 
         rchi2=[]
         b=0
@@ -585,7 +693,20 @@ def mean_psf(inputs, output):
         missing_mask = np.array(
             [np.all(status[bundles == bundle] < 0) for bundle in unique_bundles],
             dtype=bool)
+        # Only works with changes made in desihub/specex#91
+        failed_mask=np.array(
+            [np.any(status[bundles == bundle] > 0) for bundle in unique_bundles],
+            dtype=bool)
+        # A bundle only has traces of its own where at least one of its fibers
+        # was fit: merge_psf copies XTRACE/YTRACE for the STATUS==0 fibers only,
+        # so a bundle that was masked out *or* that failed outright still holds
+        # the input PSF's traces rather than anything measured from this arc.
+        fitted_mask=np.array(
+            [np.any(status[bundles == bundle] == 0) for bundle in unique_bundles],
+            dtype=bool)
         missing_bundles.append(unique_bundles[missing_mask])
+        failed_bundles_per_psf.append(unique_bundles[failed_mask])
+        fitted_bundles_per_psf.append(unique_bundles[fitted_mask])
 
     npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
@@ -600,21 +721,107 @@ def mean_psf(inputs, output):
     FIBERMIN=int(refhead["FIBERMIN"])
     FIBERMAX=int(refhead["FIBERMAX"])
 
-
     fibers_in_bundle={}
     i=np.where(tables[0]["PARAM"]=="BUNDLE")[0][0]
     bundle_of_fibers=tables[0]["COEFF"][i][:,0].astype(int)
     bundles=np.unique(bundle_of_fibers)
 
+    # the CAMERA header value keeps the quotes written by specex, e.g. "'z7      '"
+    camera = str(refhead["CAMERA"]).strip(" '")
+
     # Ignore bundles that were missing due to a bad amp in all of the exposures
     all_missing_bundles =np.unique(np.hstack(missing_bundles))
     for b in all_missing_bundles :
         if all(b in lst for lst in missing_bundles):
-            log.warning(f"Bundle {b} is missing in all input PSFs for camera {refhead['CAMERA']}, likely due to a bad amp. This bundle will be ignored in the merging.")
+            log.warning(f"Bundle {b} is missing in all input PSFs for camera {camera}, likely due to a bad amp. This bundle will be ignored in the merging.")
             bundles = bundles[bundles!=b]
 
     for b in bundles :
         fibers_in_bundle[b]=np.where(bundle_of_fibers==b)[0]
+
+    # For each bundle, record which input PSFs actually contain it and which
+    # ones failed to fit it. A bundle is "missing" when every one of its fibers
+    # has STATUS<0 (masked out, e.g. by a bad amp) and "failed" when any fiber
+    # has STATUS>0; only the latter is a fit failure. Inputs where the bundle is
+    # missing are excluded from the count so that a bad amp in some but not all
+    # of the input exposures is not read as a cluster of fit failures.
+    # This does not depend on the entry (PARAM row) being averaged below, so it
+    # is checked once here, before doing any of the averaging work.
+    bundle_present={}
+    bundle_fitted={}
+    for bundle in fibers_in_bundle.keys() :
+        present = ~np.array([bundle in missing for missing in missing_bundles],
+            dtype=bool)
+        failed = np.array([bundle in f for f in failed_bundles_per_psf],
+            dtype=bool)
+        bundle_present[bundle] = present
+        bundle_fitted[bundle] = np.array(
+            [bundle in f for f in fitted_bundles_per_psf], dtype=bool)
+
+        npresent = int(np.sum(present))
+        if npresent != npsf :
+            log.warning(f"Bundle {bundle} is present in only {npresent} of {npsf} input PSFs for camera {camera}")
+
+        nfailed = int(np.sum(present & ((bundle_rchi2[:,bundle]==0) | failed)))
+        if nfailed > 1 :
+            message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF for camera {camera}."
+            log.critical(message)
+            raise RuntimeError(message)
+        elif nfailed == 1 :
+            log.warning(f"1 fit failure for bundle {bundle} so some fibers may be affected")
+
+    # Choose the input PSFs to merge for each bundle, using rchi2 as selection
+    # score. This does not depend on the entry (PARAM row) being averaged, so
+    # it is done once here and reused for every row and for the XTRACE/YTRACE
+    # HDUs further down. Bundles dropped from fibers_in_bundle above are absent
+    # from these dicts and keep the reference PSF values everywhere.
+    bundle_inputs={}
+    bundle_trace_inputs={}
+    output_rchi2=np.zeros((bundle_rchi2.shape[1]))
+    for bundle in fibers_in_bundle.keys() :
+        selected, rchi2, nvalid = _select_bundle_inputs(bundle, bundle_rchi2,
+            rchi2_threshold, bundle_present[bundle], camera, log)
+        bundle_inputs[bundle] = selected
+        output_rchi2[bundle] = rchi2
+        log.info("for fiber bundle {}, {} valid PSFs".format(bundle, nvalid))
+
+        # The traces normally use the same inputs as the coefficients, but not
+        # in the fallback case above, where the coefficients have to settle for
+        # the least bad input and the traces do not.
+        #
+        # rchi2_threshold is computed once for the whole camera, from the median
+        # of every positive bundle rchi2, so a bundle can fall entirely above it
+        # without any of its inputs being an outlier among the others. When that
+        # happens, averaging keeps the noise averaging that picking one input
+        # would throw away. That is a deliberate policy rather than something
+        # the camera-wide threshold guarantees, so the inputs are compared here
+        # against a threshold built from this bundle alone, which still drops a
+        # genuine outlier (say a lone rchi2 of 100) instead of averaging it in.
+        #
+        # Only inputs that actually fit the bundle can contribute: one that was
+        # masked out or that failed outright still carries the input PSF's
+        # traces, and averaging those back in is the very contamination this is
+        # meant to remove. If nothing fit the bundle, leave it out entirely so
+        # it keeps the reference traces, as a bundle missing everywhere does.
+        if nvalid > 0 :
+            # An input with rchi2>0 necessarily fit the bundle, because
+            # merge_psf zeroes every bundle rchi2 and copies one back only for
+            # a bundle with a STATUS==0 fiber, so these all have real traces.
+            bundle_trace_inputs[bundle] = selected
+        else :
+            usable = np.where(bundle_fitted[bundle])[0]
+            if usable.size == 0 :
+                log.warning(f"no input PSF has a fitted trace for bundle {bundle} of camera {camera};"
+                            +" keeping the reference traces")
+            else :
+                own = bundle_rchi2[usable,bundle]
+                # by the same token these are all positive; a zero would pass
+                # the cut below anyway, having no quality information to fail on
+                own_threshold = np.median(own[own>0])+1. if np.any(own>0) else np.inf
+                keep = usable[own<own_threshold]
+                bundle_trace_inputs[bundle] = keep
+                log.info(f"no input PSF passes the rchi2 cut for bundle {bundle} of camera {camera};"
+                         +f" averaging its traces over {keep.size} of the {usable.size} input(s) that fit it")
 
     for entry in range(tables[0].size) :
         PARAM=tables[0][entry]["PARAM"]
@@ -643,7 +850,6 @@ def mean_psf(inputs, output):
 
         coeff=np.array(coeff)
 
-        output_rchi2=np.zeros((bundle_rchi2.shape[1]))
         # Start from the reference PSF coefficients so bundles removed from
         # fibers_in_bundle keep their original non-STATUS values.
         output_coeff=np.array(tables[0][entry]["COEFF"], copy=True)
@@ -654,66 +860,32 @@ def mean_psf(inputs, output):
                 covered_fibers[np.asarray(fibers, dtype=int)] = True
             output_coeff[~covered_fibers] = -1
 
-        # now merge, using rchi2 as selection score
+        # now merge the inputs selected for each bundle
 
-        for bundle in fibers_in_bundle.keys() :
-
-            ok=np.where((bundle_rchi2[:,bundle]>0)&(bundle_rchi2[:,bundle]<rchi2_threshold))[0]
-
-            if entry==0 :
-                log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
-                    ok.size))
-
-
-            nfailed = np.sum(bundle_rchi2[:,bundle]==0)
-            if nfailed > 1 :
-                message=f"{nfailed} fit failures for bundle {bundle} indicate potential issue with unmasked CCD features or with the input PSF."
-                log.critical(message)
-                raise RuntimeError(message)
-
-            # We finally resorted to use a mean instead of a median here for two reasons.
-            # First, there is already a vetting of PSF bundles with good chi2 above
-            # that protects us from bad fits (we only expect outliers because of bad fits because of cosmic rays,
-            # not a glitch in hardware). Second, some of the PSF parameters have large correlations,
-            # which mean that two pairs of parameter values, like (p_a_i,p_b_i) and (p_a_j,p_b_j) (with a,b param
-            # indexes and i,j exposure indices) may give similar PSFs despite large noise in individual parameters
-            # but a median could decide to select a pair like (p_a_i,p_b_j) that could lead to a PSF inconsistent
-            # with data. Using a mean instead of a median protects us from this situation.
-
-            if ok.size>=2 : # use mean
-                log.debug("bundle #{} : use mean".format(bundle))
-                for f in fibers_in_bundle[bundle]  :
-                    output_coeff[f]=np.mean(coeff[ok,f],axis=0)
-                output_rchi2[bundle]=np.mean(bundle_rchi2[ok,bundle])
-
-            elif ok.size==1 : # copy
-                log.debug("bundle #{} : use only one psf ".format(bundle))
-                for f in fibers_in_bundle[bundle]  :
-                    output_coeff[f]=coeff[ok[0],f]
-                output_rchi2[bundle]=bundle_rchi2[ok[0],bundle]
-
-            else : # we have a problem here, take the smallest rchi2
-                log.debug("bundle #{} : take smallest chi2 ".format(bundle))
-                i=np.argmin(bundle_rchi2[:,bundle])
-                for f in fibers_in_bundle[bundle]  :
-                    output_coeff[f]=coeff[i,f]
-                output_rchi2[bundle]=bundle_rchi2[i,bundle]
+        for bundle, selected in bundle_inputs.items() :
+            fibers = fibers_in_bundle[bundle]
+            output_coeff[fibers] = np.mean(coeff[np.ix_(selected,fibers)],
+                axis=0)
 
         # now copy this in output table
         hdulist["PSF"].data["COEFF"][entry]=output_coeff
-        # change bundle chi2
-        for bundle in range(output_rchi2.size) :
-            hdulist["PSF"].header["B{:02d}RCHI2".format(bundle)] = \
-                output_rchi2[bundle]
 
-        # alter other keys in header
-        hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
+    # change bundle chi2
+    for bundle in range(output_rchi2.size) :
+        hdulist["PSF"].header["B{:02d}RCHI2".format(bundle)] = \
+            output_rchi2[bundle]
 
-    if len(xtrace)>0 :
-        xtrace=np.array(xtrace)
-        ytrace=np.array(ytrace)
-        npar = xtrace.shape[2] # assume all have same npar
-        for p in range(xtrace.shape[0]) :
+    # alter other keys in header
+    hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
+
+    # Inputs that have both trace HDUs, as indices into the input PSF list
+    trace_inputs = np.where([x is not None and y is not None
+                             for x, y in zip(xtrace, ytrace)])[0]
+
+    if trace_inputs.size>0 :
+        from numpy.polynomial.legendre import legval,legfit
+        npar = xtrace[trace_inputs[0]].shape[1] # assume all have same npar
+        for p in trace_inputs :
             if wavemins[p]==WAVEMIN and wavemaxs[p]==WAVEMAX :
                 continue
 
@@ -724,14 +896,47 @@ def mean_psf(inputs, output):
             iwavemax = wavemaxs[p]
             wave = (iu+1.)/2.*(iwavemax-iwavemin)+iwavemin
             ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.
-            for f in range(icoeff.shape[0]):
+            # refit into a copy rather than into the input file's own HDU data,
+            # which is what these arrays are; p=0 is always skipped by the test
+            # above, but its array is the one written to the output
+            xtrace[p] = np.array(xtrace[p], copy=True)
+            ytrace[p] = np.array(ytrace[p], copy=True)
+            for f in range(xtrace[p].shape[0]):
                 val = legval(iu,xtrace[p][f])
                 xtrace[p][f] = legfit(ou,val,deg=npar-1)
                 val = legval(iu,ytrace[p][f])
                 ytrace[p][f] = legfit(ou,val,deg=npar-1)
 
-        hdulist["xtrace"].data = np.mean(xtrace,axis=0)
-        hdulist["ytrace"].data = np.mean(ytrace,axis=0)
+        if trace_inputs.size<npsf :
+            log.warning(f"only {trace_inputs.size} of {npsf} input PSFs for camera {camera} have both"
+                        +" XTRACE and YTRACE; the others are left out of the trace averages")
+
+        # Select the inputs per bundle as the PSF coefficients were selected
+        # above, so that the traces and the coefficients of a bundle come from
+        # the same exposures, except in the fallback case noted where
+        # bundle_trace_inputs is built. Inputs without trace HDUs are dropped
+        # per bundle rather than disabling the selection for the whole camera:
+        # the None placeholders keep these lists indexed by input, so the
+        # remaining bundles are still selected correctly. Copy the reference
+        # PSF first so that a bundle with nothing left to average, like one
+        # missing from every input, keeps its traces.
+        reference = trace_inputs[0]
+        output_xtrace = np.array(xtrace[reference], copy=True)
+        output_ytrace = np.array(ytrace[reference], copy=True)
+        for bundle, selected in bundle_trace_inputs.items() :
+            usable = np.intersect1d(selected, trace_inputs)
+            if usable.size == 0 :
+                log.warning(f"no input PSF with trace HDUs was selected for bundle {bundle}"
+                            +f" of camera {camera}; keeping the reference traces")
+                continue
+            fibers = fibers_in_bundle[bundle]
+            output_xtrace[fibers] = np.mean(
+                [xtrace[p][fibers] for p in usable], axis=0)
+            output_ytrace[fibers] = np.mean(
+                [ytrace[p][fibers] for p in usable], axis=0)
+
+        hdulist["XTRACE"].data = output_xtrace
+        hdulist["YTRACE"].data = output_ytrace
 
     for hdu in ["XTRACE","YTRACE","PSF"] :
         if hdu in hdulist :

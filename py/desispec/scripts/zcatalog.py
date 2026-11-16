@@ -28,6 +28,7 @@ import astropy.constants
 
 from desiutil.log import get_logger, DEBUG
 from desiutil.annotate import load_csv_units
+from desiutil.dust import mwdust_transmission
 from desiutil.names import radec_to_desiname
 import desiutil.depend
 import desiutil.healpix
@@ -99,6 +100,40 @@ def load_sv1_ivar_w12(hpix, targetids):
 def _wrap_read_redrock(optdict):
     """read_redrock wrapper to expand dictionary of named args for multiprocessing"""
     return read_redrock(**optdict)
+
+
+def _match_qa_targets(table, targetids, filename):
+    """Filter and reorder a QA table to match a Redrock TARGETID array."""
+    keep = np.isin(table['TARGETID'], targetids)
+    table = table[keep]
+
+    if len(table) != len(targetids) or not np.all(np.isin(targetids, table['TARGETID'])):
+        msg = f'{filename} does not contain exactly one row for every Redrock TARGETID'
+        raise ValueError(msg)
+
+    if not np.all(table['TARGETID'] == targetids):
+        ii = np.argsort(table['TARGETID'])
+        jj = np.searchsorted(table['TARGETID'][ii], targetids)
+        table = table[ii[jj]]
+
+    assert np.all(table['TARGETID'] == targetids)
+    return table
+
+
+def _read_qafiberstatus(rrfile, targetids):
+    """Read tile-qa QAFIBERSTATUS, matched to Redrock rows."""
+
+    # Map redrock -> tile-qa filepath, dropping petal N
+    # /path/to/redrock-N-TILEID-blat.fits -> /path/to/tile-qa-TILEID-blat.fits
+    dirname, basename = os.path.split(rrfile)
+    tmp = basename.split('-')
+    tileqa_file = os.path.join(dirname, '-'.join(['tile-qa'] + tmp[2:]))
+
+    tileqa = Table(fitsio.read(tileqa_file, 'FIBERQA',
+                              columns=['TARGETID', 'QAFIBERSTATUS']))
+    tileqa = _match_qa_targets(tileqa, targetids, tileqa_file)
+
+    return np.array(tileqa['QAFIBERSTATUS'])
 
 def read_redrock(rrfile, group=None, pertile=False, counter=None):
     """
@@ -211,7 +246,7 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
     fmcols = list(fibermap.dtype.names)
     fmcols.remove('TARGETID')
 
-    emline_cols = ['OII_FLUX', 'OII_FLUX_IVAR']
+    emline_cols = ['OII_FLUX', 'OII_FLUX_IVAR', 'OIII_FLUX', 'OIII_FLUX_IVAR']
     qso_mgii_cols = ['IS_QSO_MGII']
     qso_qn_cols = ['IS_QSO_QN_NEW_RR', 'C_LYA', 'C_CIV', 'C_CIII', 'C_MgII', 'C_Hbeta', 'C_Halpha', 'Z_NEW', 'ZERR_NEW']
 
@@ -225,6 +260,9 @@ def read_redrock(rrfile, group=None, pertile=False, counter=None):
         qso_mgii[qso_mgii_cols],
         qso_qn[qso_qn_cols]
         ], join_type='exact')
+
+    if group == 'cumulative':
+        data['QAFIBERSTATUS'] = _read_qafiberstatus(rrfile, redshifts['TARGETID'])
 
     #
     # These old columns show up in zbest files. They have been replaced with
@@ -462,8 +500,19 @@ def main(args=None):
     survey = args.survey
     program = args.program
 
-    if program not in ['backup', 'bright', 'dark', 'other']:
-        raise ValueError('Invalid program \"{}\"; it must be one of the following: backup, bright, dark, other'.format(program))
+    # Confirm valid survey and program before doing much work
+    # e.g. survey is used to know which target columns to keep
+    valid_programs = ['backup', 'bright', 'dark', 'other']
+    if program not in valid_programs:
+        msg = f'Invalid program={program}; it must be one of {valid_programs}'
+        log.critical(msg)
+        raise ValueError(msg)
+
+    valid_surveys = ['cmx', 'sv1', 'sv2', 'sv3', 'main', 'special']
+    if survey not in valid_surveys:
+        msg = f'Invalid survey={survey}; it must be one of {valid_surveys}'
+        log.critical(msg)
+        raise ValueError(msg)
 
     if args.indir is not None:
         indir = args.indir
@@ -780,14 +829,30 @@ def main(args=None):
     columns_basic = ['TARGETID', 'TILEID', 'HEALPIX', 'LASTNIGHT', 'Z_BEST', 'Z_CONF', 'ZERR_BEST', 'ZWARN_BEST', 'SPECTYPE_BEST', 'SUBTYPE_BEST', 'CHI2_BEST', 'DELTACHI2_BEST', 'PETAL_LOC', 'FIBER', 'COADD_FIBERSTATUS', 'TARGET_RA', 'TARGET_DEC', 'DESINAME', 'OBJTYPE', 'FIBERASSIGN_X', 'FIBERASSIGN_Y', 'PRIORITY', 'DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET', 'CMX_TARGET', 'SV1_DESI_TARGET', 'SV1_BGS_TARGET', 'SV1_MWS_TARGET', 'SV1_SCND_TARGET', 'SV2_DESI_TARGET', 'SV2_BGS_TARGET', 'SV2_MWS_TARGET', 'SV2_SCND_TARGET', 'SV3_DESI_TARGET', 'SV3_BGS_TARGET', 'SV3_MWS_TARGET', 'SV3_SCND_TARGET', 'COADD_NUMEXP', 'COADD_EXPTIME', 'COADD_NUMNIGHT', 'COADD_NUMTILE', 'MIN_MJD', 'MAX_MJD', 'MEAN_MJD', 'GOOD_SPEC', 'EFFTIME_SPEC', 'ZCAT_NSPEC', 'ZCAT_PRIMARY']
     if args.group == 'uniqpix':
         columns_basic = ['UNIQPIX' if col == 'HEALPIX' else col for col in columns_basic]
-    columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
+    columns_imaging = ['PMRA', 'PMDEC', 'REF_EPOCH', 'RELEASE', 'BRICKNAME', 'BRICKID', 'BRICK_OBJID', 'MORPHTYPE', 'EBV', 'FLUX_G', 'FLUX_R', 'FLUX_Z', 'FLUX_W1', 'FLUX_W2', 'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_Z', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'MW_TRANSMISSION_G', 'MW_TRANSMISSION_R', 'MW_TRANSMISSION_Z', 'MW_TRANSMISSION_W1', 'MW_TRANSMISSION_W2', 'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z', 'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'MASKBITS', 'SERSIC', 'SHAPE_R', 'SHAPE_E1', 'SHAPE_E2', 'REF_ID', 'REF_CAT', 'GAIA_PHOT_G_MEAN_MAG', 'GAIA_PHOT_BP_MEAN_MAG', 'GAIA_PHOT_RP_MEAN_MAG', 'PARALLAX', 'PHOTSYS']
     assert len(np.intersect1d(columns_basic, columns_imaging))==0
 
-    # Remove main-survey target bits for non-main surveys (they are not the actual main-survey target bits)
-    if survey!='main':
+    # Add back the MW_TRANSMISSION columns
+    # With match_legacy_surveys=True, the extinction coefficients are the ones used for MW_TRANSMISSION_*
+    # in Legacy Surveys DR9, which are the same for photsys N and S
+    # Some entries have invalid (zero-filled) EBV values and zero-filled fluxes; zero fill their MW_TRANSMISSION_* values
+    invalid_ebv = (zcat['EBV']==0) & (zcat['FLUX_G']==0) & (zcat['FLUX_R']==0) & (zcat['FLUX_Z']==0)
+    for band in ['G', 'R', 'Z', 'W1', 'W2']:
+        zcat['MW_TRANSMISSION_'+band] = np.zeros(len(zcat), dtype=np.float32)
+        zcat['MW_TRANSMISSION_'+band][~invalid_ebv] = mwdust_transmission(
+            zcat['EBV'][~invalid_ebv], band, 'S', match_legacy_surveys=True).astype(np.float32)
+
+    # Remove main-survey target bits for CMX and SVn surveys (they are not the actual main-survey target bits)
+    if survey in ('cmx', 'sv1', 'sv2', 'sv3'):
         for col in ['DESI_TARGET', 'BGS_TARGET', 'MWS_TARGET', 'SCND_TARGET']:
             if col in zcat.colnames:
                 zcat.remove_column(col)
+    elif survey not in ('main', 'special'):
+        # valid survey should already be checked at start, but belt-and-suspenders re-check here
+        # to avoid silently guessing what a new survey should do
+        msg = f'Unknown if SURVEY={survey} has valid DESI_TARGET, BGS_TARGET, MWS_TARGET, SCND_TARGET bits'
+        log.critical(msg)
+        raise ValueError(msg)
 
     # Remove the columns that do not exist
     columns_basic = [col for col in columns_basic if col in zcat.colnames]

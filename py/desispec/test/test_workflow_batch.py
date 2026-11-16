@@ -70,3 +70,29 @@ class TestWorkflowBatch(unittest.TestCase):
         with self.assertRaises(ValueError):
             batch.parse_reservation('blat,foo,bar', 'arc')
 
+    def test_max_nodes_for_jobdesc(self):
+        """PSFNIGHT gets a larger node cap than everything else"""
+        self.assertEqual(batch.max_nodes_for_jobdesc('PSFNIGHT'), 15)
+        self.assertEqual(batch.max_nodes_for_jobdesc('psfnight'), 15)
+        for jobdesc in ('NIGHTLYFLAT', 'CTEFLAT', 'ARC', 'FLAT', 'TILENIGHT'):
+            self.assertEqual(batch.max_nodes_for_jobdesc(jobdesc), 5)
+
+    def test_determine_resources_cteflat(self):
+        """CTEFLAT is a valid jobdesc giving the same resources as FLAT"""
+        os.environ['NERSC_HOST'] = 'perlmutter'
+        flat = batch.determine_resources(30, 'FLAT', system_name='perlmutter-gpu')
+        cteflat = batch.determine_resources(30, 'CTEFLAT', system_name='perlmutter-gpu')
+        self.assertEqual(flat, cteflat)
+
+        # and an unknown jobdesc still raises
+        with self.assertRaises(ValueError):
+            batch.determine_resources(30, 'NOTAJOB', system_name='perlmutter-gpu')
+
+    def test_determine_resources_node_cap(self):
+        """The node cap applied by determine_resources comes from the helper"""
+        os.environ['NERSC_HOST'] = 'perlmutter'
+        for jobdesc in ('ARC', 'FLAT', 'PSFNIGHT', 'NIGHTLYFLAT', 'CTEFLAT'):
+            ncores, nodes, runtime = batch.determine_resources(
+                    30, jobdesc, system_name='perlmutter-cpu')
+            self.assertLessEqual(nodes, batch.max_nodes_for_jobdesc(jobdesc))
+

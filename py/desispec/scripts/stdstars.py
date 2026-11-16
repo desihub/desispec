@@ -27,6 +27,7 @@ from desispec.fiberbitmasking import get_fiberbitmasked_frame
 
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
+from desispec.coaddition import coadd_frame_resolution
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Fit of standard star spectra in frames.")
@@ -238,9 +239,9 @@ def main(args=None, comm=None) :
                 raise ValueError("incompatible fibermap")
 
             if not camera in frames :
-                frames[camera]=[]
+                frames[camera]={}
 
-            frames[camera].append(frame)
+            frames[camera][expid]=frame
 
     # possibly cleanup memory
     del frames_by_expid
@@ -254,9 +255,10 @@ def main(args=None, comm=None) :
         log.info("reading %s"%filename)
         sky=io.read_sky(filename)
         camera=safe_read_key(sky.header,"CAMERA").strip().lower()
+        expid=safe_read_key(sky.header,"EXPID")
         if not camera in skies :
-            skies[camera]=[]
-        skies[camera].append(sky[starfibers%500])
+            skies[camera]={}
+        skies[camera][expid]=sky[starfibers%500]
 
     for filename in args.fiberflats :
         log.info("reading %s"%filename)
@@ -350,9 +352,9 @@ def main(args=None, comm=None) :
 
         flat = flats[cam][keep_stds]
 
-        for i in range(len(frames[cam])):
-            frame = frames[cam][i][keep_stds]
-            sky = skies[cam][i][keep_stds]
+        for expid, frame_data in frames[cam].items():
+            frame = frame_data[keep_stds]
+            sky = skies[cam][expid][keep_stds]
 
             #- don't use masked or ivar=0 data
             frame.ivar *= (frame.mask == 0)
@@ -365,9 +367,10 @@ def main(args=None, comm=None) :
             apply_fiberflat(frame, flat)
             subtract_sky(frame, sky, apply_throughput_correction = args.apply_sky_throughput_correction)
 
-            #- keep newly flat-fielded sky-subtracted frame
-            frames[cam][i] = frame
+            frames[cam][expid] = frame
 
+        #- Convert to list for coadding (expid ordering no longer needed)
+        frames[cam] = list(frames[cam].values())
         nframes=len(frames[cam])
         if nframes>1 :
             # optimal weights for the coaddition = ivar*throughput, not directly ivar,
@@ -388,17 +391,19 @@ def main(args=None, comm=None) :
             log.info("coadding {} exposures in cam {}, w={}".format(nframes,cam,weights))
 
             sw=np.zeros(frames[cam][0].flux.shape)
+            sw2=np.zeros(frames[cam][0].flux.shape)
             swf=np.zeros(frames[cam][0].flux.shape)
-            swr=np.zeros(frames[cam][0].resolution_data.shape)
 
             for i,frame in enumerate(frames[cam]) :
                 sw  += weights[i]*frame.ivar
+                sw2  += weights[i]**2*frame.ivar
                 swf += weights[i]*frame.ivar*frame.flux
-                swr += weights[i]*frame.ivar[:,None,:]*frame.resolution_data
+            rdata = np.array([frame.resolution_data for frame in frames[cam]])
+            pix_weights = np.array([weights[i]*frame.ivar for i,frame in enumerate(frames[cam])])
             coadded_frame = frames[cam][0]
-            coadded_frame.ivar = sw
+            coadded_frame.ivar = sw**2/(sw2+(sw2==0))
             coadded_frame.flux = swf/(sw+(sw==0))
-            coadded_frame.resolution_data = swr/((sw+(sw==0))[:,None,:])
+            coadded_frame.resolution_data = coadd_frame_resolution(rdata, pix_weights)
             frames[cam] = [ coadded_frame ]
 
     # We're done with skies and flats dict; remove them to possibly save memory

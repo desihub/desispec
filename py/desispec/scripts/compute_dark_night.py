@@ -90,12 +90,20 @@ def main(args=None):
                      + f"< required dark exposures ({args.min_dark_exposures}).")
         return 1
     
-    original_bias = args.bias
     error_count = 0
     for camera in requested_cameras[rank::size]:
-        ## define the bias explicitly
-        if original_bias is None:
-            args.bias = findfile("biasnight", night=night, camera=camera, readonly=True)
+        ## The darks span many nights and each one is bias subtracted with the
+        ## biasnight of its own night, which compute_dark_file resolves per
+        ## exposure, so don't define args.bias here. This night's bias is still
+        ## required before building a darknight for this camera, which is what
+        ## the runcmd inputs below check, unless the caller has opted out of
+        ## requiring nightly biases at all (see desispec issue #2741).
+        if args.bias is not None:
+            required_inputs = [args.bias]
+        elif args.allow_default_bias:
+            required_inputs = []
+        else:
+            required_inputs = [findfile("biasnight", night=night, camera=camera, readonly=True)]
 
         ## assign camera to the rest of the arguments and pass them into compute_dark.main
         ## don't explciitly list dark inputs since there are many and aren't yet known
@@ -109,7 +117,7 @@ def main(args=None):
         #result, success = runcmd(compute_dark.main, comm=comm, args=args,
         #                            inputs=[args.bias], outputs=[args.outfile])
         result, success = runcmd(compute_dark.main, args=[args, exptable], expandargs=True,
-                                    inputs=[args.bias], outputs=[args.outfile])
+                                    inputs=required_inputs, outputs=[args.outfile])
         if not success:
             log.error(f'Rank {rank} failed for camera {camera}, outfile: {args.outfile}')
             error_count += 1

@@ -380,6 +380,9 @@ desispec API
 .. automodule:: desispec.scripts.procexp
     :members:
 
+.. automodule:: desispec.scripts.proddag
+    :members:
+
 .. automodule:: desispec.scripts.purge_night
     :members:
 
@@ -440,6 +443,9 @@ desispec API
 .. automodule:: desispec.scripts.trace_shifts
     :members:
 
+.. automodule:: desispec.scripts.tsnr_afterburner
+    :members:
+
 .. automodule:: desispec.scripts.uniqpix_redshifts
     :members:
 
@@ -486,6 +492,9 @@ desispec API
     :members:
 
 .. automodule:: desispec.tile_qa_plot
+    :members:
+
+.. automodule:: desispec.tile_qa_spectra
     :members:
 
 .. automodule:: desispec.tilecompleteness

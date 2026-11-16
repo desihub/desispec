@@ -10,12 +10,15 @@ import os
 import sys
 import argparse
 import time
+import warnings
 import numpy as np
 from numpy.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve
 from scipy.ndimage import median_filter
+from scipy.interpolate import CubicSpline
+from scipy.optimize import minimize
 import numba
 from importlib import resources
 
@@ -242,9 +245,11 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
 
 
 # @numba.jit no real gain
+CROSS_CORRELATION_ERROR_FLOOR = 0.01 # A, added in quadrature to the wavelength shift uncertainty
+
 def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
                                                hw=3., calibrate=False,
-                                               prior_width_dy=None) :
+                                               prior_width_dy=None, return_chi2=False) :
     """
     Measure y offsets from two spectra expected to be on the same wavelength grid.
     refflux is the assumed well calibrated spectrum.
@@ -259,6 +264,7 @@ def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
         ivar   : 1D array of inverse variance of flux
         hw     : half width in Angstrom of the cross-correlation chi2 scan, default=3A corresponding approximatly to 5 pixels for DESI
         prior_width_dy: applied sigma of the Gaussian prior on dy
+        return_chi2: also return the scanned shifts and the chi2 values (data term only, no prior)
 
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
@@ -282,20 +288,22 @@ def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
             refflux *= scale
 
 
-    error_floor=0.01 #A
+    error_floor=CROSS_CORRELATION_ERROR_FLOOR
 
     if ivar is None :
         ivar = np.ones(flux.shape)
     dwave = wave[1] - wave[0]
     ihw = int(hw / dwave)+1
-    chi2 = np.zeros((2 * ihw + 1))
+    shifts = dwave * np.arange(-ihw, ihw + 1)
+    chi2_data = np.zeros((2 * ihw + 1))
     for d in range(-ihw, ihw + 1) :
         b = d + ihw
         e = wave.size + d - ihw
-        chi2[ihw + d] = np.sum(ivar[ihw:-ihw] *
-                               (flux[ihw:-ihw] - refflux[b:e])**2)
-        if prior_width_dy is not None:
-            chi2[ihw + d] += (dwave * d / prior_width_dy)**2
+        chi2_data[ihw + d] = np.sum(ivar[ihw:-ihw] *
+                                    (flux[ihw:-ihw] - refflux[b:e])**2)
+    chi2 = chi2_data.copy()
+    if prior_width_dy is not None:
+        chi2 += (shifts / prior_width_dy)**2
 
 
 
@@ -344,7 +352,63 @@ def compute_dy_from_spectral_cross_correlation(flux, wave, refflux, ivar=None,
         plt.show()
     '''
 
+    if return_chi2 :
+        return delta, sigma, shifts, chi2_data
     return delta,sigma
+
+
+def _fit_shift_polynomial(shifts, chi2_curves, bin_waves, degree, prior_width_dy, error_floor) :
+    """
+    Fit the wavelength shift as a polynomial of wavelength to the chi2(shift) curves of several
+    wavelength bins at once, by minimizing the sum of the curves evaluated at the polynomial.
+    Unlike a fit to the per-bin minima, this keeps the full curves, so a bin whose global
+    minimum is an alias of its true minimum does not pull the solution.
+
+    The model shift of bin b is pol(bin_waves[b] - wave0) + offset[b], where offset[b] is a
+    systematic offset of that bin with a Gaussian prior of width error_floor (the floor that
+    is also added to the uncertainty of the per-bin shifts). The Gaussian prior of width
+    prior_width_dy on the shift is applied at each bin, as in the per-bin fits.
+
+    Args:
+        shifts : 1D array of scanned shifts (in Angstrom), common to all bins
+        chi2_curves : list of 1D arrays, chi2 as a function of shift for each bin (data term only)
+        bin_waves : 1D array of central wavelengths of the bins
+        degree : degree of the polynomial of the shift as a function of wavelength
+        prior_width_dy : sigma of the Gaussian prior on the shift
+        error_floor : sigma of the Gaussian prior on the systematic offset of each bin
+
+    Returns:
+        pol : np.poly1d giving the shift (in Angstrom) as a function of (wavelength - wave0)
+        wave0 : float, reference wavelength of the polynomial
+    """
+    chi2_of_shift = [CubicSpline(shifts, chi2) for chi2 in chi2_curves]
+    nbins = len(chi2_curves)
+    ncoef = degree + 1
+    wave0 = np.mean(bin_waves)
+    max_shift = shifts[-1]
+
+    def total_chi2(params) :
+        coef = params[:ncoef]
+        offsets = params[ncoef:]
+        pol_shift = np.polyval(coef, bin_waves - wave0)
+        bin_shift = pol_shift + offsets
+        if np.any(np.abs(bin_shift) > max_shift) :
+            return np.inf # outside of the scanned range
+        chi2_data = sum(chi2_of_shift[b](bin_shift[b]) for b in range(nbins))
+        chi2_prior_shift = np.sum((pol_shift / prior_width_dy)**2)
+        chi2_prior_offsets = np.sum((offsets / error_floor)**2)
+        return chi2_data + chi2_prior_shift + chi2_prior_offsets
+
+    # start from the best constant shift on the scanned grid
+    params = np.zeros(ncoef + nbins)
+    constant_chi2 = []
+    for shift in shifts :
+        params[ncoef - 1] = shift
+        constant_chi2.append(total_chi2(params))
+    params[ncoef - 1] = shifts[np.argmin(constant_chi2)]
+
+    params = minimize(total_chi2, params, method='BFGS').x
+    return np.poly1d(params[:ncoef]), wave0
 
 
 def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoef, ycoef, wavemin, wavemax, reference_flux , n_wavelength_bins = 4) :
@@ -458,12 +522,18 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
 
     log=get_logger()
 
-    # boxcar extraction
-    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
+    # boxcar extraction of all fibers, then keep the rows of the requested
+    # fibers (qproc_boxcar_extraction indexes the traces by position in
+    # its fibers argument, so it cannot be given a subset directly)
+    qframe_all = qproc_boxcar_extraction(xytraceset, image, width=width)
+
+    # fibers = trace-set rows to use; below, flux, ivar, xcoef, ... have one row per selected fiber
+    if fibers is None:
+        fibers = np.arange(xytraceset.nspec)
 
     # resampling on common finer wavelength grid
     oversampling = 4
-    flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=oversampling)
+    flux, ivar, wave = resample_boxcar_frame(qframe_all.flux[fibers], qframe_all.ivar[fibers], qframe_all.wave[fibers], oversampling=oversampling)
     flux0 = flux * 1 # for debugging
     if continuum_subtract:
         mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win = oversampling * 9)
@@ -476,15 +546,48 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
         mflux=np.median(flux[good_fibers],axis=0)
 
     # measure y shifts
+    # traces of the selected fibers, one row per row of flux
     wavemin = xytraceset.wavemin
     wavemax = xytraceset.wavemax
-    xcoef   = xytraceset.x_vs_wave_traceset._coeff
-    ycoef   = xytraceset.y_vs_wave_traceset._coeff
+    xcoef   = xytraceset.x_vs_wave_traceset._coeff[fibers]
+    ycoef   = xytraceset.y_vs_wave_traceset._coeff[fibers]
 
-    return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
+    x, y, dy, ey, fiber, wave, dwave, dwave_err = compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
+    # convert row indices into fiber indices
+    fiber = fibers[fiber.astype(int)].astype(float)
+    return x, y, dy, ey, fiber, wave, dwave, dwave_err
 
 @numba.jit
-def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
+def numba_cross_profile(image_flux, image_ivar, y, x, wave, hw=3) :
+    """
+    Compute per-row flux-weighted sums of the cross-dispersion profile of a trace.
+
+    For each CCD row j, sums the flux in columns int(x[j]-hw) to int(x[j]+hw)
+    inclusive around the trace position x[j]. The returned sums can be combined
+    over rows and divided by sw to get the flux-weighted mean offset of the
+    profile from the trace (swdx/sw), and the flux-weighted mean y, x and
+    wavelength (swy/sw, swx/sw, swl/sw) of those rows.
+
+    If any pixel in the window of row j has image_ivar==0, swdx[j] and sw[j]
+    are set to 0 so that the row is ignored (and so are swy[j], swx[j], swl[j]).
+
+    Args:
+        image_flux: 2D array [nrows, ncols] of pixel values
+        image_ivar: 2D array [nrows, ncols] of pixel inverse variances
+        y: 1D array [nrows] of the CCD y coordinate of each row of image_flux
+        x: 1D array [nrows] of the trace x coordinate (column) in each row
+        wave: 1D array [nrows] of the trace wavelength in each row
+
+    Optional:
+        hw: half width of the column window, in pixels (default 3)
+
+    Returns:
+        tuple of 1D arrays [nrows] (swdx, sw, svar, swy, swx, swl) where
+        swdx is sum of flux*(column - x), sw is sum of flux, svar is sum of
+        variance, and swy, swx, swl are sw times y, x, and wave respectively.
+
+    Note: no bounds checking is done; the window around x must be within the image.
+    """
     n0=image_flux.shape[0]
     swdx=np.zeros(n0)
     sw=np.zeros(n0)
@@ -493,7 +596,8 @@ def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
     swx=np.zeros(n0)
     swl=np.zeros(n0)
     for j in range(n0) :
-        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
+        cur_x = round(x[j])
+        for i in range(cur_x - hw, cur_x + hw + 1) :
             if image_ivar[j,i]==0 :
                swdx[j]=0
                sw[j]=0
@@ -501,7 +605,7 @@ def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
             swdx[j]    += (i-x[j])*image_flux[j,i]
             sw[j]      += image_flux[j,i]
             svar[j]    += 1./image_ivar[j,i]
-        swy[j] = sw[j]*j
+        swy[j] = sw[j]*y[j]
         swx[j] = sw[j]*x[j]
         swl[j] = sw[j]*wave[j]
 
@@ -557,16 +661,26 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
     # image rebinning to got faster !!!
     if image_rebin>1 :
-        pix=image.pix[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin,n1).sum(1)
-        ivar=image_ivar[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin,n1)
-        hasnozero=(np.sum(ivar==0,axis=1)==0)
-        ivar=ivar.sum(1)*hasnozero
+        pix = image.pix[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin, n1).sum(axis=1)
+        ivar = image_ivar[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin, image_rebin,n1)
+        good = ivar > 0
+        var = good / (ivar + ~good)
+        # 1/ivar where good, 0 where not
+        var_sum = var.sum(axis=1)
+        ivar_ok = good.all(axis=1)
+        ivar = ivar_ok / (var_sum + ~ivar_ok)
         n0   = pix.shape[0]
     else :
         pix  = image.pix
         ivar = image_ivar
 
-    y  = np.arange(n0)+0.5 # this 0.5 is important when rebinning to avoid a bias on y (here y = CCD_rows//rebin + 0.5 )
+    y  = image_rebin * (np.arange(n0) + 0.5) - 0.5
+    # center of each "enlarged" pixel 
+    # Example: if center of pixel 0 is zero, pixel 1 is 1
+    # and we are using image_rebin=2
+    # then the center of the first combined big pixel should
+    # have y = (1.5 + (-0.5))/2 = 0.5
+
     xx = np.tile(np.arange(n1),(n0,1))
     hw = width//2
 
@@ -590,12 +704,12 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         # log.info("computing dx for fiber #%03d"%fiber)
 
         # the following 5 lines take 0.25 sec for all 500 fibers
-        ty = legval(rwave, ycoef[fiber])/image_rebin
+        ty = legval(rwave, ycoef[fiber])
         tx = legval(rwave, xcoef[fiber])
         wave_of_y  = np.interp(y,ty,twave)
         x_of_y     = np.interp(y,ty,tx)
 
-        swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix,ivar,x_of_y,wave_of_y,hw=hw)
+        swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix, ivar, y, x_of_y, wave_of_y, hw=hw)
 
         # rebin
         tn0   = sw.size
@@ -612,7 +726,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         fex            = np.sqrt( (20./snr[ok])**2 + 0.01**2) # uncertainties scale as snr
         fdx            = (swdx/(sw+(sw==0)))[ok]
         fx             = (swx/(sw+(sw==0)))[ok]
-        fy             = (swy/(sw+(sw==0)))[ok]*image_rebin-0.5
+        # swy/sw is the flux-weighted mean row
+        fy             = (swy/(sw+(sw==0)))[ok]
         fl             = (swl/(sw+(sw==0)))[ok]
 
         good_fiber=True
@@ -665,11 +780,13 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
     return ox,oy,odx,oex,of,ol
 
-def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
+def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers, width=7):
     """
     Prepare the reference spectrum to be used for wavelength offset
     determination. Here we convolve it to the right LSF and rescale it
     to match the measured flux.
+    The reference spectrum is convolved with an average PSF across a number
+    of representative fibers.
 
     Arguments:
         ref_wave: np.array of wavelengths
@@ -716,13 +833,20 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
         hw = int(angstrom_hwidth / dwave) + 1
         wave_range = ref_wave[ipos - hw:ipos + hw + 1]
         kernels = []
+        
+        # hw is the half-width in *wavelength bins* along the dispersion axis (y-axis)
+        # hw_x is the half-width in *CCD pixels* across the cross-dispersion axis (x-axis)
+        # We must use the exact boxcar extraction width (default=7, hw_x=3) used on the data 
+        # to ensure the reference LSF has the same barycenter (and thus no systematic wavelength shift).
+        hw_x = width // 2
         for fiber in fiber_list:
             x, y = psf.xy(fiber, wave_range)
 
-            x = x[:,None] + np.linspace(-hw, hw, 2*hw+1)[None,:]
-            # original code below but I don't understand y[-1]-y[0] part
-            # x=np.tile(x[hw]+np.arange(-hw,hw+1)*(y[-1]-y[0])/(2*hw+1),(y.size,1))
-            y = np.tile(y, (2 * hw + 1, 1)).T
+            # Evaluate the 2D PSF over the cross-dispersion integration window [-hw_x, hw_x]
+            # note that the logic here should match the one in qextract
+            x = np.round(x[:, None]) + np.arange(-hw_x, hw_x+1)[None,:]
+
+            y = np.tile(y, (2 * hw_x + 1, 1)).T
 
             kernel2d = psf._value(x, y, fiber, central_wave)
             kernel1d = np.sum(kernel2d, axis=1)
@@ -763,7 +887,28 @@ def _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, nfibers):
     return ref_wave, ref_spectrum
 
 
-def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
+def _weighted_median(flux, weights):
+    """
+    Weighted median along the first axis
+
+    Arguments:
+        flux: (nfibers, npix) np.array
+        weights: (nfibers, npix) np.array of non-negative weights
+
+    Returns:
+        npix np.array of weighted medians (0 where all weights are 0)
+    """
+    order = np.argsort(flux, axis=0)
+    sorted_flux = np.take_along_axis(flux, order, axis=0)
+    cumweights = np.cumsum(np.take_along_axis(weights, order, axis=0), axis=0)
+    total = cumweights[-1]
+    index = np.argmax(cumweights >= 0.5 * total[None, :], axis=0)
+    res = np.take_along_axis(sorted_flux, index[None, :], axis=0)[0]
+    return np.where(total > 0, res, 0.)
+
+def _continuum_subtract_median(flux0, ivar, continuum_win = 17, min_fibers = 20,
+                               continuum_error_frac = None, is_sky_fiber = None,
+                               return_sky_continuum = False):
     """
     Compute the median spectrum after continuum subtraction
 
@@ -772,11 +917,32 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
         ivar: (nfibers, npix)-shaped np.array of inverser variances
         continuum_win: integer. How-many pixels around are used to get continuum.
             Here we use the 1d annulus from continuum_win/2 to continuum_win
+        min_fibers: integer. Minimum number of fibers with ivar>0 at a given
+            pixel for the median at that pixel to get non-zero weight
+        continuum_error_frac: float or None. If set, add in quadrature to
+            each pixel's uncertainty this fraction of the object continuum,
+            and use an inverse-variance weighted median. This down-weights
+            bright objects whose continuum-subtracted absorption features
+            can otherwise dominate the median (e.g. stars on backup tiles)
+        is_sky_fiber: (nfibers,) boolean np.array or None. Sky fibers, used to
+            estimate the sky continuum when continuum_error_frac is set
+        return_sky_continuum: bool, also return the sky continuum (including
+            moonlight and twilight), common to all fibers
 
     Returns:
         mfux: npix np.array of median spectrum
         mivar: npix np.array with ivar of the median spectrum
         flux: (nfibers, npix) continuum subtracted original flux array
+        sky_continuum: npix np.array, only if return_sky_continuum
+
+    Notes:
+        The median at each pixel only uses fibers with ivar>0 at that pixel,
+        so that masked pixels (e.g. from a masked amplifier) do not enter
+        the median as zeros.
+        The object continuum is the fiber continuum minus the sky continuum
+        (the median of sky fibers, or a low percentile across fibers where no
+        sky fiber is available), so that a bright sky continuum (e.g.
+        moonlight) does not change the weights.
     """
     # here we get rid of continuum by applying a median filter
     continuum_foot = np.abs(np.arange(-continuum_win,continuum_win+1))>continuum_win /2.
@@ -785,36 +951,88 @@ def _continuum_subtract_median(flux0, ivar, continuum_win = 17):
     for ii in range(flux.shape[0]):
         flux[ii] = flux[ii] - median_filter(flux[ii], footprint=continuum_foot)
 
-    # boolean mask of fibers with good data
-    good_fibers = (np.sum(ivar>0, axis=1) > 0)
-    num_good_fibers = np.sum(good_fibers)
+    # boolean mask of good data per fiber and pixel, and number of
+    # good fibers at each pixel
+    good = (ivar > 0)
+    num_good_fibers = np.sum(good, axis=0)
+    enough_fibers = (num_good_fibers >= min(min_fibers, flux.shape[0]))
 
-    # median flux used as internal spectral reference
-    mflux = np.median(flux[good_fibers], axis=0)
+    # masked pixels are set to NaN so that they are ignored by nanmedian;
+    # pixels with no good fibers at all would warn about all-NaN slices
+    masked_flux = np.where(good, flux, np.nan)
+    masked_ivar = np.where(good, ivar, np.nan)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='All-NaN slice encountered', category=RuntimeWarning)
 
-    # we use data variance and MAD from different spectra
-    # to assign variance to a spectrum (1.48 is MAD factor,
-    # pi/2 is a factor from Stddev[median(N(0,1))]
-    mad_factor = 1.48
-    mad = np.maximum(np.median(np.abs(flux[good_fibers] - mflux[None, :]),
-                               axis=0), 1e-100)
-    # I prevent it from being zero to avoid the warning below
-    # The exact value does not matter as we're comparing to actual
-    # median(ivar)
+        continuum = np.where(good, flux0 - flux, np.nan)
+        # sky continuum (including moonlight), the same in all fibers,
+        # which should not affect the weights
+        if is_sky_fiber is not None and np.any(is_sky_fiber):
+            sky_continuum = np.nanmedian(continuum[is_sky_fiber], axis=0)
+        else:
+            # without sky fibers, use a low percentile across fibers:
+            # sky fibers are ~10% of fibers and usually the faintest.
+            # An underestimate only adds a similar term to all variances
+            sky_continuum = np.nanpercentile(continuum, 5, axis=0)
+        sky_continuum = np.nan_to_num(sky_continuum)
+
+        # median flux used as internal spectral reference
+        if continuum_error_frac is None:
+            mflux = np.nan_to_num(np.nanmedian(masked_flux, axis=0))
+        else:
+            object_continuum = np.nan_to_num(np.maximum(continuum - sky_continuum[None, :], 0))
+            var = 1. / (ivar + (~good)) + (continuum_error_frac * object_continuum)**2
+            mflux = _weighted_median(np.where(good, flux, 0.), good / var)
+
+        # we use data variance and MAD from different spectra
+        # to assign variance to a spectrum (1.48 is MAD factor,
+        # pi/2 is a factor from Stddev[median(N(0,1))]
+        mad_factor = 1.48
+        mad = np.maximum(np.nan_to_num(np.nanmedian(np.abs(masked_flux - mflux[None, :]),
+                                                    axis=0)), 1e-100)
+        # I prevent it from being zero to avoid the warning below
+        # The exact value does not matter as we're comparing to actual
+        # median(ivar)
+        median_ivar = np.nan_to_num(np.nanmedian(masked_ivar, axis=0))
+
     mivar = np.minimum(
-        np.median(ivar[good_fibers], axis=0) ,
+        median_ivar,
         1./mad_factor**2 / mad**2) * num_good_fibers * (2. / np.pi)
     # finally use use the MAD of the background subtracted spectra to
     # assign further variance limit
     # this is sort of "effective" noise in the continuum subtracted spectrum
-    mivar = np.minimum(mivar, 1. / mad_factor**2 / np.median(np.abs(mflux))**2)
+    # (only using pixels with enough fibers)
+    if np.any(enough_fibers):
+        mivar = np.minimum(mivar, 1. / mad_factor**2 / np.median(np.abs(mflux[enough_fibers]))**2)
+    # no weight for pixels with too few good fibers
+    mivar[~enough_fibers] = 0.
     # do not allow negatives
     mflux[mflux <  0] = 0
+    if return_sky_continuum:
+        return mflux, mivar, flux, sky_continuum
     return mflux, mivar, flux
+
+# Wavelength ranges (vacuum, Angstrom) of absorption features in the sky
+# continuum, used in the external calibration against the sky spectrum.
+# In bright moonlight or twilight the sky continuum is scattered sunlight
+# with solar (Na D) and telluric (O2 B band, H2O) absorption lines. The
+# continuum subtraction turns them into spurious features that the
+# cross-correlation can lock onto, several Angstroms away from the true
+# sky lines.
+# The Na D range is ignored: the absorption sits on the sky Na D emission
+# itself. In the telluric bands, which contain OH sky lines, the variance
+# of the stacked spectrum is increased by (continuum_error_frac x sky
+# continuum)^2, the expected size of the absorption residual, so that they
+# lose weight in proportion to the sky continuum.
+SKY_ABSORPTION_WAVELENGTH_MASKS = [(5886., 5900., 'Na D')]
+SKY_ABSORPTION_WAVELENGTH_BANDS = [(6862., 6960., 'O2 B band'),
+                                   (7150., 7400., 'H2O')]
 
 def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
                                         spectrum_filename, degyy=2, width=7,
-                                        prior_width_dy=0.1):
+                                        prior_width_dy=0.1, continuum_error_frac=0.3,
+                                        sky_fibers=None, mask_sky_absorption=False,
+                                        apply_throughput=False):
     """
     Measure y offsets (external wavelength calibration) from a preprocessed image , a PSF + trace set using a cross-correlation of boxcar extracted spectra
     and an external well-calibrated spectrum.
@@ -832,6 +1050,10 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         width  : int, extraction boxcar width, default is 7
         degyy  : int, degree of polynomial fit of shifts as a function of y, used to reject outliers.
         prior_width_dy: float with of the Gaussian prior on dy
+        continuum_error_frac: float or None, fraction of the object continuum added in quadrature to the pixel uncertainties when computing the median spectrum (see _continuum_subtract_median)
+        sky_fibers: 1D np.array of sky fiber indices or None, used to estimate the sky continuum
+        mask_sky_absorption: bool, if True account for absorption features of a bright sky continuum in the cross-correlation: ignore SKY_ABSORPTION_WAVELENGTH_MASKS, and add (continuum_error_frac x sky continuum)^2 to the variance of the stacked spectrum in SKY_ABSORPTION_WAVELENGTH_BANDS. Only for a sky spectrum reference (not arc lamps).
+        apply_throughput: bool, if True multiply the reference spectrum by the hardware throughput of the camera arm (from desimodel, arm from image.meta["CAMERA"]), so that its lines have the same relative strengths as in the extracted (uncalibrated) spectra. Matters at the arm edges where the throughput drops by more than an order of magnitude. For a reference spectrum given in physical flux units (sky spectrum).
 
     Returns:
         ycoef  : 2D np.array of same shape as input, with modified Legendre coefficients for each fiber to convert wavelength to YCCD
@@ -852,18 +1074,61 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     ref_spectrum=tmp[1]
     log.info("read reference spectrum in %s with %d entries"%(spectrum_filename,ref_wave.size))
 
+    if apply_throughput:
+        # the extracted spectra are not flux calibrated: give the reference
+        # spectrum the same throughput so that the relative strengths of its
+        # lines match the data (in particular at the arm edges)
+        import desimodel.io
+        arm = str(image.meta.get("CAMERA", "")).strip().lower()[:1]
+        throughput = desimodel.io.load_throughput(arm)
+        ref_spectrum = ref_spectrum * throughput.hardware_throughput(ref_wave)
+        log.info(f"multiplied the reference spectrum by the {arm} arm hardware throughput")
+
     log.info("rextract spectra with boxcar")
 
-    # boxcar extraction
-    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
+    # boxcar extraction of all fibers, then keep the rows of the requested
+    # fibers (see compute_dy_using_boxcar_extraction)
+    qframe_all = qproc_boxcar_extraction(xytraceset, image, width=width)
+
+    # fibers = trace-set rows to use; below, flux, ivar, xcoef, ... have one row per selected fiber
+    if fibers is None:
+        fibers = np.arange(xytraceset.nspec)
 
     # resampling on common finer wavelength grid
     oversampling = 2 #
-    flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=oversampling)
+    flux, ivar, wave = resample_boxcar_frame(qframe_all.flux[fibers], qframe_all.ivar[fibers], qframe_all.wave[fibers], oversampling=oversampling)
 
-    mflux, mivar, flux = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9)
+    is_sky_fiber = None
+    if sky_fibers is not None:
+        is_sky_fiber = np.isin(fibers, sky_fibers)
+        log.info(f"use {np.sum(is_sky_fiber)} sky fibers for the sky continuum")
+    mflux, mivar, flux, sky_continuum = _continuum_subtract_median(flux, ivar, continuum_win=oversampling*9,
+                                                                   continuum_error_frac=continuum_error_frac,
+                                                                   is_sky_fiber=is_sky_fiber,
+                                                                   return_sky_continuum=True)
 
-    ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar))
+    ref_wave, ref_spectrum = _prepare_ref_spectrum(ref_wave, ref_spectrum, psf, wave, mflux, len(ivar), width=width)
+
+    # absorption features of a bright sky continuum (moon, twilight) become
+    # spurious features after the continuum subtraction (see
+    # SKY_ABSORPTION_WAVELENGTH_MASKS and SKY_ABSORPTION_WAVELENGTH_BANDS)
+    if mask_sky_absorption:
+        for wmin, wmax, label in SKY_ABSORPTION_WAVELENGTH_MASKS:
+            masked = (wave >= wmin) & (wave <= wmax)
+            if np.any(masked & (mivar > 0)):
+                log.info(f"ignore {wmin:.0f}-{wmax:.0f}A ({label}) in the external wavelength calibration")
+            mivar[masked] = 0.
+        for wmin, wmax, label in SKY_ABSORPTION_WAVELENGTH_BANDS:
+            selection = (wave >= wmin) & (wave <= wmax) & (mivar > 0)
+            if not np.any(selection):
+                continue
+            if continuum_error_frac is None:
+                log.info(f"ignore {wmin:.0f}-{wmax:.0f}A ({label}) in the external wavelength calibration")
+                mivar[selection] = 0.
+            else:
+                log.info(f"add ({continuum_error_frac} x sky continuum)^2 to the variance in {wmin:.0f}-{wmax:.0f}A ({label}), "
+                         f"median sky continuum there {np.median(sky_continuum[selection]):.0f}")
+                mivar[selection] = 1. / (1. / mivar[selection] + (continuum_error_frac * sky_continuum[selection])**2)
 
     log.info("fit shifts on wavelength bins")
     # define bins
@@ -874,7 +1139,11 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
     wave_for_dy = np.array([])
     dwave_list = np.array([])
     dwave_err_list = np.array([])
-    fiber_for_psf_evaluation = flux.shape[0] //2
+    chi2_curves = []
+    dydw_list = np.array([])
+    n_fibers_for_psf = min(20, flux.shape[0])
+    rows_for_psf_evaluation = np.unique(np.linspace(0, flux.shape[0] - 1, n_fibers_for_psf).astype(int))
+    fibers_for_psf_evaluation = fibers[rows_for_psf_evaluation]
     wavelength_bins = np.linspace(wave[0], wave[-1], n_wavelength_bins+1)
     for b in range(n_wavelength_bins) :
         wmin, wmax = [wavelength_bins[_] for _ in [b, b + 1]]
@@ -883,24 +1152,32 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         flux_weights_sum = np.sum(flux_weights)
         if flux_weights_sum == 0 :
             continue
-        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],
+        dwave,err,shifts,chi2_data = compute_dy_from_spectral_cross_correlation(mflux[ok],
                 wave[ok], ref_spectrum[ok], ivar=mivar[ok], hw=10.,
-                prior_width_dy=prior_width_dy)
+                prior_width_dy=prior_width_dy, return_chi2=True)
         bin_wave  = np.sum(flux_weights * wave[ok]) / flux_weights_sum
         # flux weighted wavelength of the center
-        # Computing the derivative dy/dwavelength
-        x, y = psf.xy(fiber_for_psf_evaluation, bin_wave)
-        eps =  0.1
-        x, yp = psf.xy(fiber_for_psf_evaluation, bin_wave+eps)
-        dydw = (yp - y) / eps
-        if err * dydw < 1 :
+        dydws = []
+        for cur_fiber in fibers_for_psf_evaluation:
+            # Computing the derivative dy/dwavelength averaged over fibers
+            x, y = psf.xy(cur_fiber, bin_wave)
+            eps =  0.1
+            x, yp = psf.xy(cur_fiber, bin_wave+eps)
+            dydw = (yp - y) / eps
+            dydws.append(dydw)
+        dydws = np.array(dydws)
+        dydw = dydws.mean()
+        if err * dydw < 1 : # 1 pixel error limit
             dy = np.append(dy, -dwave * dydw)
             ey = np.append(ey, err*dydw)
+            dydw_list = np.append(dydw_list, dydw)
             wave_for_dy = np.append(wave_for_dy,bin_wave)
             dwave_list = np.append(dwave_list, dwave)
             dwave_err_list = np.append(dwave_err_list, err)
-            y_for_dy=np.append(y_for_dy,y)
-            log.info(f"wave = {bin_wave}A , y={y}, measured dwave = {dwave} +- {err} A")
+            y_for_dy=np.append(y_for_dy,y)  # this is only used for printing
+            chi2_curves.append(chi2_data) # data term only, the priors are applied in the joint fit
+            log.info(f"wave = {bin_wave:.3f}A , y={y:.3f}, measured "
+                     f"dwave = {dwave:.3f} +- {err:.3f} A")
 
     if False : # we don't need this for now
         try :
@@ -922,10 +1199,11 @@ def shift_ycoef_using_external_spectrum(psf, xytraceset, image, fibers,
         except :
             log.warning("couldn't correct for asymmetry of PSF: %s %s"%(sys.exc_info()[0],sys.exc_info()[1]))
 
-    log.info("polynomial fit of shifts and modification of PSF ycoef")
-    # pol fit
-    coef = np.polyfit(wave_for_dy, dy, degyy, w=1. / ey)
-    pol  = np.poly1d(coef)
+    log.info("joint fit of the chi2 curves of the bins and modification of PSF ycoef")
+    pol_dwave, wave0 = _fit_shift_polynomial(shifts, chi2_curves, wave_for_dy, degyy, prior_width_dy,
+                                             CROSS_CORRELATION_ERROR_FLOOR)
+    # dy = -dwave * dy/dwave, with dy/dwave interpolated between the bins
+    pol = lambda w : -pol_dwave(w - wave0) * np.interp(w, wave_for_dy, dydw_list)
 
     for i in range(dy.size) :
         log.info("wave=%fA y=%f, measured dy=%f+-%f , pol(wave) = %f"%(wave_for_dy[i],y_for_dy[i],dy[i],ey[i],pol(wave_for_dy[i])))
@@ -1537,7 +1815,7 @@ def compute_x_offset_from_central_band_cross_dispersion_profile(tset, image, fib
         end=begin+bandwidth
 
         sw=np.sum(ivar[begin:end,:],axis=0)
-        swf=np.sum(image.pix[begin:end,:]*ivar[begin:end,:])
+        swf=np.sum(image.pix[begin:end,:]*ivar[begin:end,:],axis=0)
         prof=(swf/(sw+(sw==0)))
         y=int(n0//2+b*bandwidth)
         xc=np.array([tset.x_vs_y(fiber,y) for fiber in fibers])

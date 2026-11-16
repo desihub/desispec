@@ -31,13 +31,98 @@ from desispec.util import header2night
 from desispec.io import findfile
 
 from desiutil.log import get_logger
-from desiutil.depend import add_dependencies
+from desiutil.depend import add_dependencies, getdep, hasdep
 
 from desispec.workflow.batch import get_config
 
+def dark_preproc_bias_matches(header_or_filename, biasfile):
+    """Check which bias a preprocessed dark was created with
+
+    Args:
+        header_or_filename: header of a preproc_for_dark image, either of an
+            image in memory (e.g. ``img.meta``) or the path to a file on disk
+        biasfile (str): the bias file the image should have been created with
+
+    Returns:
+        tuple (is_match, biasused) where is_match is True if the image was
+        preprocessed with biasfile, and biasused is the bias recorded in the
+        header (None if none was recorded)
+
+    preproc records the bias it used in the CCD_CALIB_BIAS dependency keyword,
+    e.g. SPECPROD/calibnight/20251217/biasnight-b0-20251217.fits.gz for a
+    nightly bias, or SPCALIB/ccd/bias-sm4-b-... for the default bias.  Those
+    paths are shortened when written, so full paths are only compared when both
+    sides are absolute, i.e. for a bias outside DESI_SPECTRO_CALIB and the
+    production directory, and then two spellings of the same file, e.g. through
+    the read-only mount, count as different.  Otherwise only the filename is
+    compared, which for a biasnight is what encodes the night and the camera.
+    """
+    log = get_logger()
+    if isinstance(header_or_filename, str):
+        ## write_image puts the metadata on the IMAGE HDU, which astropy then
+        ## promotes to the primary HDU, so for the files desispec writes these
+        ## are the same HDU; read it by name like io.read_image does, and fall
+        ## back to the primary HDU for anything without that name
+        header, message = None, None
+        for ext in ('IMAGE', 0):
+            try:
+                header = fitsio.read_header(header_or_filename, ext=ext)
+                break
+            except Exception as err:
+                message = f'{type(err).__name__}: {err}'
+
+        if header is None:
+            log.error(f'Unable to read the header of {header_or_filename}: {message}')
+            return False, None
+    else:
+        header = header_or_filename
+
+    if not hasdep(header, 'CCD_CALIB_BIAS'):
+        return False, None
+
+    biasused = getdep(header, 'CCD_CALIB_BIAS')
+
+    if os.path.isabs(str(biasused)) and os.path.isabs(str(biasfile)):
+        return str(biasused) == str(biasfile), biasused
+
+    #- compare without any .gz so that a bias is recognized whether or not it
+    #- was compressed
+    def _basename(filename):
+        return os.path.basename(str(filename)).removesuffix('.gz')
+
+    return _basename(biasused) == _basename(biasfile), biasused
+
+
+def expected_dark_preproc_bias(bias, night, camera):
+    """Return the bias that a preprocessed dark of night and camera should use
+
+    Args:
+        bias (str or bool): the bias handed to preproc for this exposure, i.e. a
+            filename if one was requested explicitly, or True to let preproc
+            find the bias itself
+        night (int or str): YEARMMDD night of the dark exposure
+        camera (str): camera of the dark exposure, e.g. b0
+
+    Returns:
+        str: filename of the bias this exposure should have been preprocessed
+        with, i.e. an explicitly requested bias, otherwise the nightly bias of
+        this night and camera
+
+    The nights spanned by a nightly dark each have their own bias, so callers
+    that want a nightly bias enforced must leave bias=True and let preproc
+    resolve it per exposure rather than pass one night's bias for all of them
+    (see desispec issue #2741).
+    """
+    if isinstance(bias, str):
+        return bias
+
+    return findfile('biasnight', night=night, camera=camera, readonly=True)
+
+
 def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                       exptime=None, min_vccdsec=0, max_temperature_diff=4, reference_header=None,
-                      save_preproc=True, preproc_dark_dir=None, min_dark_exposures=4, max_dark_exposures=50):
+                      save_preproc=True, preproc_dark_dir=None, min_dark_exposures=4, max_dark_exposures=50,
+                      require_nightlybias=True):
     """
     Compute classic dark model from input dark images
 
@@ -57,10 +142,13 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         preproc_dark_dir (str) : specify output directory used to save preproc images
         min_dark_exposures (int) : minimum number of dark exposures to use; if less are found to be valid code will raise an error and exit
         max_dark_exposures (int) : maximum number of dark exposures to use; if more are provided, only the nearest max_dark_exposures in mjd are used
+        require_nightlybias (bool) : skip preprocessed darks made with a bias other than the one used here (see issue #2741)
 
 
-    Note: if bias is None, the bias will be looked for in $DESI_SPECTRO_REDUX/$SPECPROD/calibnight, and will raise
-    an error if no nightly bias is found.
+    Note: if bias is None, the nightly bias of each exposure's own night is looked for in
+    $DESI_SPECTRO_REDUX/$SPECPROD/calibnight. With require_nightlybias, an exposure whose
+    preprocessed dark did not use that bias is skipped, which will raise an error later if
+    it leaves fewer than min_dark_exposures.
 
     Note: this computes a classic dark model without any non-linear terms.
     see bin/compute_dark_nonlinear for current DESI dark model.
@@ -124,11 +212,11 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             pass
         # If the reference calib has a dark reset and the date of the new dark is before the date of the reference dark, skip it
         elif dark_reset and calib.data['DATE-OBS-BEGIN']<reference_calib.data['DATE-OBS-BEGIN']:
-            log.info(f"skip {filename} because it is before the dark reset at {reference_calib.data['DATE-OBS-BEGIN']}")
+            log.info(f"skip {filename} for camera {camera} because it is before the dark reset at {reference_calib.data['DATE-OBS-BEGIN']}")
             continue
         # Quick and easy check that if both reference and new calib have dark reset, then skip it
         elif calib.haskey('DARK_RESET') and dark_reset:
-            log.info(f"skip {filename} because it has a dark reset and the reference calib also has a dark reset")
+            log.info(f"skip {filename} for camera {camera} because it has a dark reset and the reference calib also has a dark reset")
             continue
         # If the new calib has a dark reset and its date is before the reference calib, set dark_reset_begin and pass it
         elif calib.haskey('DARK_RESET') and calib.data['DATE-OBS-BEGIN']<reference_calib.data['DATE-OBS-BEGIN']:
@@ -136,21 +224,21 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
                 dark_reset_begin = calib.data['DATE-OBS-BEGIN']
                 pass
             else:
-                log.info(f'skip {filename} because it has a dark reset and is before the dark_reset_begin at {dark_reset_begin}')
+                log.info(f'skip {filename} for camera {camera} because it has a dark reset and is before the dark_reset_begin at {dark_reset_begin}')
                 continue
         # If the new calib has a dark reset and is later than the reference calib, set dark_reset_end and skip it
         elif calib.haskey('DARK_RESET') and calib.data['DATE-OBS-BEGIN']>reference_calib.data['DATE-OBS-BEGIN']:
             if dark_reset_end==0 or calib.data['DATE-OBS-BEGIN']<dark_reset_end:
                 dark_reset_end = calib.data['DATE-OBS-BEGIN']
-            log.info(f"skip {filename} because it has a dark reset and is later than the reference calib")
+            log.info(f"skip {filename} for camera {camera} because it has a dark reset and is later than the reference calib")
             continue
-        # If the new calib is after dark_reset_end, skip it
-        elif calib.data['DATE-OBS-BEGIN']>dark_reset_end:
-            log.info(f"skip {filename} because it is after a dark reset at {dark_reset_end}")
+        # If the new calib is after dark_reset_end, skip it but only if dark_reset_end is not zero
+        elif calib.data['DATE-OBS-BEGIN']>dark_reset_end and dark_reset_end!=0:
+            log.info(f"skip {filename} for camera {camera} because it is after a dark reset at {dark_reset_end}")
             continue
         # If the new calib is before dark_reset_begin, skip it
         elif calib.data['DATE-OBS-BEGIN']<dark_reset_begin:
-            log.info(f"skip {filename} because it is before a dark reset at {dark_reset_begin}")
+            log.info(f"skip {filename} for camera {camera} because it is before a dark reset at {dark_reset_begin}")
             continue
         # If the new calib is between dark_reset_begin and dark_reset_end, pass it
         else:
@@ -247,6 +335,21 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
         else:
             preproc_filename = default_preproc_filename
 
+        ## dark_preproc files feed the nightly darks, so they must strictly use
+        ## the bias we would use now, i.e. the nightly bias of their own night
+        ## and camera unless an explicit bias was requested, rather than the
+        ## default bias in $DESI_SPECTRO_CALIB (desispec issue #2741)
+        expected_bias = expected_dark_preproc_bias(thisbias, night, camera)
+
+        if (user_exists or default_exists) and require_nightlybias:
+            is_match, biasused = dark_preproc_bias_matches(preproc_filename, expected_bias)
+            if not is_match:
+                if biasused is None:
+                    biasused = 'an unrecorded bias (unreadable or missing CCD_CALIB_BIAS)'
+                log.error(f"Skipping {preproc_filename} because it was preprocessed with "
+                          + f"{biasused} instead of {os.path.basename(expected_bias)}")
+                continue
+
         if user_exists or default_exists:
             log.info(f"Reading existing {preproc_filename}")
             img = io.read_image(preproc_filename, skip=('readnoise', 'ivar'))
@@ -256,6 +359,17 @@ def compute_dark_file(rawfiles, outfile, camera, bias=None, nocosmic=False,
             # read raw data and preprocess them
             img = io.read_raw(filename, camera, bias=thisbias, nocosmic=nocosmic,
                               mask=False, dark=False, pixflat=False, fallback_on_dark_not_found=True)
+
+            ## preproc falls back to the default bias when it can't find a
+            ## nightly bias, so check what it used before using or writing it
+            if require_nightlybias:
+                is_match, biasused = dark_preproc_bias_matches(img.meta, expected_bias)
+                if not is_match:
+                    if biasused is None:
+                        biasused = 'an unrecorded bias (unreadable or missing CCD_CALIB_BIAS)'
+                    log.error(f"Skipping {filename} camera {camera} because preproc used "
+                              + f"{biasused} instead of {os.path.basename(expected_bias)}")
+                    continue
 
             if save_preproc :
                 # is saved in preproc_dark_dir if not None
@@ -1031,8 +1145,8 @@ def compare_bias(rawfile, biasfile1, biasfile2, ny=8, nx=40):
     d2 = median_diff2
 
     if readout_mode == '4Amp':
-        mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[2]])])
-        mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[2]])])
+        mdiff1 = np.vstack([np.hstack([d1[2],d1[3]]), np.hstack([d1[0],d1[1]])])
+        mdiff2 = np.vstack([np.hstack([d2[2],d2[3]]), np.hstack([d2[0],d2[1]])])
     elif readout_mode == '2AmpLeftRight':
         mdiff1 = np.hstack([d1[0], d1[1]])
         mdiff2 = np.hstack([d2[0], d2[1]])

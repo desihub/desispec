@@ -13,7 +13,7 @@ from astropy.table import Table
 
 from desiutil.log import get_logger
 from desispec.io import read_frame,write_frame
-from desispec.coaddition import coadd,coadd_cameras,resample_spectra_lin_or_log
+from desispec.coaddition import coadd,coadd_cameras,resample_spectra_lin_or_log,coadd_frame_resolution
 from desispec.specscore import  compute_and_append_frame_scores
 
 def parse(options=None):
@@ -65,12 +65,11 @@ def main(args=None):
 
 
 
+    rdata = np.array([frame.resolution_data for frame in frames])
+    pix_weights = np.array([frame.ivar * (frame.mask == 0) for frame in frames])
+
     ivar = frames[0].ivar * (frames[0].mask == 0)
     ivarflux = ivar * frames[0].flux
-    ivarres = np.zeros(frames[0].resolution_data.shape)
-    ndiag=ivarres.shape[1]
-    for diag in range(ndiag) :
-        ivarres[:,diag,:] = ivar * frames[0].resolution_data[:,diag,:]
 
     mask = frames[0].mask
 
@@ -79,18 +78,13 @@ def main(args=None):
         ivar += tmp_ivar
         ivarflux += tmp_ivar * frame.flux
 
-        for diag in range(ndiag) :
-            ivarres[:,diag,:] += tmp_ivar * frame.resolution_data[:,diag,:]
-
-
         mask &= frame.mask # and mask
 
     coadd = frames[0]
     coadd.ivar = ivar
     coadd.flux = ivarflux/(ivar+(ivar==0))
     coadd.mask = mask
-    for diag in range(ndiag) :
-        coadd.resolution_data[:,diag,:] = ivarres[:,diag,:]/(ivar+(ivar==0))
+    coadd.resolution_data = coadd_frame_resolution(rdata, pix_weights)
 
     if args.scores :
         compute_and_append_frame_scores(coadd)

@@ -102,7 +102,7 @@ Must specify --infile OR --night and --expid.
     parser.add_argument('--model-variance', action="store_true", help="compute a model of the CCD image to derive the Poisson noise")
     parser.add_argument('--no-traceshift', action="store_true", help="do not adjust the trace coordinates when computing a model of the CCD image")
     parser.add_argument('--ncpu', type=int, default=default_nproc,
-            help=f"number of parallel processes to use [{default_nproc}]")
+            help=f"number of parallel processes to use, or gzip threads if pigz is available [{default_nproc}]")
     parser.add_argument('--keep-overscan-cols', action="store_true", help="keep overscan columns in preproc image for debugging")
     parser.add_argument('--no-cte-correction', action="store_true", help="disable CTE correction")
     parser.add_argument('--cte-params', type = str, required = False, default=None, help="specify the CTE correction csv table file to use")
@@ -219,6 +219,8 @@ def main(args=None):
     if args.ncpu > 1 and num_cameras>1:
         n = min(args.ncpu, num_cameras)
         log.info(f'Processing {num_cameras} cameras with {n} multiprocessing processes')
+        for opts in opts_array:
+            opts['ncpu'] = max(1, args.ncpu // n)  #- threads left for gzip
         with mp.Pool(n) as pool:
             failed = pool.map(_preproc_file_kwargs_wrapper, opts_array)
         num_failed = np.sum(failed)
@@ -226,6 +228,7 @@ def main(args=None):
         log.info(f'Not using multiprocessing for {num_cameras} cameras')
         num_failed = 0
         for opts in opts_array:
+            opts['ncpu'] = args.ncpu
             num_failed += _preproc_file_kwargs_wrapper(opts)
 
     if num_failed > 0:
@@ -247,7 +250,7 @@ def _preproc_file_kwargs_wrapper(opts):
     return preproc_file(**opts)
 
 def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
-        zero_masked=False, **preproc_opts):
+        zero_masked=False, ncpu=1, **preproc_opts):
     """
     Preprocess a single camera from a single input file
 
@@ -260,6 +263,7 @@ def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
         outdir: output directory; derive filename from infile NIGHT and EXPID
         fibermap: fibermap filename to include in output
         zero_masked (bool): set masked pixels to 0
+        ncpu (int): number of threads for gzip compression of the output
         preproc_opts: dictionary to pass to preproc
 
     Returns error code (1=error, 0=success) but will not raise exception if
@@ -297,7 +301,7 @@ def preproc_file(infile, camera, outfile=None, outdir=None, fibermap=None,
                               outdir=outdir)
 
     tmpfile = get_tempfilename(outfile)
-    io.write_image(tmpfile, img)
+    io.write_image(tmpfile, img, ncpu=ncpu)
     os.rename(tmpfile, outfile)
     log.info("Wrote {}".format(outfile))
     return 0

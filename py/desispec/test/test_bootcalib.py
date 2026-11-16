@@ -39,8 +39,8 @@ class TestBoot(unittest.TestCase):
         for url, outfile in [(url_arc, cls.testarc), (url_flat, cls.testflat)]:
             if not os.path.exists(outfile):
                 try:
-                    f = requests.get(url)
-                except:
+                    f = requests.get(url, timeout=30)
+                except requests.RequestException:
                     cls.data_unavailable = True
                 else:
                     if f.status_code == 200:
@@ -215,5 +215,4 @@ class TestBoot(unittest.TestCase):
 
         x = psf.x_vs_wave(0, waves)
         y = psf.y_vs_wave(0, waves)
-
 

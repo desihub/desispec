@@ -22,7 +22,9 @@ def numba_extract(image_flux,image_var,x,hw=3) :
     ivar=np.zeros(n0)
     for j in range(n0) :
         var=0
-        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
+        cur_x = round(x[j])
+        # we assume always cur_x >= hw
+        for i in range(cur_x - hw, cur_x + hw + 1) :
             flux[j] += image_flux[j,i]
             if image_var[j,i]>0 :
                 var += image_var[j,i]

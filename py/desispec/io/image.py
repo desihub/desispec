@@ -13,23 +13,36 @@ import numpy as np
 from desispec.image import Image
 from desispec.io.util import fitsheader, native_endian, makepath
 from . import iotime
-from .util import checkgzip, get_tempfilename
+from .util import checkgzip, get_tempfilename, write_hdulist
 from .fibermap import annotate_fibermap
 from astropy.io import fits
 from desiutil.depend import add_dependencies
 from desiutil.log import get_logger
 from astropy.table import Table
 
-def write_image(outfile, image, meta=None):
+def write_image(outfile, image, meta=None, ncpu=1, cpus=None):
     """Writes image object to outfile
 
     Args:
-        outfile : output file string
-        image : desispec.image.Image object
-            (or any object with 2D array attributes image, ivar, mask)
+        outfile (str): output file string
+        image (desispec.image.Image): image to write, or any object with 2D
+            array attributes image, ivar, mask
+        meta (dict-like, optional): metadata key/values (e.g. FITS header)
+        ncpu (int, optional): number of threads for parallel gzip compression
+        cpus (list, optional): CPU ids for parallel gzip compression, one thread
+            per unique CPU id, overriding ncpu if non-empty (a single CPU id
+            means single-threaded gzip), e.g. CPUs of other MPI ranks from
+            ``desispec.parallel.gather_cpu_affinity(comm)``.  Those ranks must
+            be idle while writing, e.g. in
+            :func:`desispec.parallel.sleeping_barrier` rather than a blocking
+            ``comm.barrier()``, which may busy-poll their CPUs.
 
-    Optional:
-        meta : dict-like object with metadata key/values (e.g. FITS header)
+    Notes:
+        parallel compression only if ncpu>1 (or cpus has >1 unique CPU id), ``pigz`` is installed,
+        and outfile ends with .gz; the number of pigz threads is capped at
+        desispec.io.util.MAX_PIGZ_THREADS.
+        If pigz fails, an error is logged and the file is written with single-threaded gzip.
+        See :func:`desispec.io.util.write_hdulist` for details.
     """
 
     log = get_logger()
@@ -78,9 +91,7 @@ def write_image(outfile, image, meta=None):
         hx.append(fmhdu)
 
     t0 = time.time()
-    tmpfile = get_tempfilename(outfile)
-    hx.writeto(tmpfile, overwrite=True, checksum=True)
-    os.rename(tmpfile, outfile)
+    write_hdulist(outfile, hx, ncpu=ncpu, cpus=cpus)
     duration = time.time() - t0
     log.info(iotime.format('write', outfile, duration))
 

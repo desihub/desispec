@@ -631,7 +631,8 @@ def fit_cte(images):
         step = 1
         if need_to_reverse:
             step = -1
-            start, stop = stop, start
+            # convert [start, stop) to the equivalent reversed slice bounds
+            start, stop = stop - 1, (start - 1 if start > 0 else None)
         scte = np.s_[ampbd:ampbd+npix, start:stop:step]
         sclean = np.s_[ampbd-npix:ampbd, start:stop:step]
 

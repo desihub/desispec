@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+Create a navigable webpage of the job dependency graph of an entire production.
+
+A production is a single connected DAG of order 100,000 jobs, tied together
+across nights by linked calibrations, cross-night dark stacks, and cumulative
+redshifts. That is far too large to draw at once, so the generated page opens
+on a per-night overview and lets you drill into one night's graph or walk the
+ancestors and descendants of any single job across night boundaries.
+
+See desi_job_graph for a static mermaid diagram of a single night.
+"""
+
+import sys
+
+from desispec.scripts.proddag import main, parse
+
+if __name__ == '__main__':
+    sys.exit(main(parse()))

@@ -2,17 +2,284 @@
 desispec Change Log
 ===================
 
-0.72.0 (unreleased)
+0.73.6 (unreleased)
 -------------------
 
-Changes made for daily operations (daily branch) while Matterhorn was running.
-These changes were not used in Matterhorn.
+* No changes yet.
+
+0.73.5 (2026-11-13)
+-------------------
+
+Used to reprocess Nevis backup tiles due to y-traceshift improvements.
+
+* Fix y-traceshifts on backup tiles with targets brighter than sky (PR `#2895`_).
+* Add back ``MW_TRANSMISSION_{G,R,Z,W1,W2}`` columns to zcatalogs, computed
+  from ``EBV`` (PR `#2913`_).
+* Speed up desi_preproc with parallel compression (pigz), gzip level 1, and
+  optional numba caching (PR `#2914`_).
+* Parallel gzip updates (PR `#2915`_):
+
+  * ``write_spectra`` uses gzip level 1 (~2x faster, ~0.5% larger files).
+  * Add ``write_hdulist`` wrapper to standardize gzip-parallelism.
+  * Add ``sleeping_barrier`` for MPI without busy-polling unused CPUs
+    (allows them to be used for parallel gzip with pigz).
+
+.. _`#2895`: https://github.com/desihub/desispec/pull/2895
+.. _`#2913`: https://github.com/desihub/desispec/pull/2913
+.. _`#2914`: https://github.com/desihub/desispec/pull/2914
+.. _`#2915`: https://github.com/desihub/desispec/pull/2915
+
+0.73.4 (2026-11-03)
+-------------------
+
+Used for cleanup passes in Nevis.
+
+* Fix bug preventing row-by-row overscan subtraction (PR `#2901`_).
+* Add ``desi_run_scripts`` wrapper (PR `#2905`_).
+* Rewrite ``desi_tsnr_afterburner`` as ``desispec.scripts.tsnr_afterburner``,
+  reading TSNR2 and sky magnitudes from exposure QA files when available and
+  falling back to cframes otherwise (PR `#2911`_). 
+* ``desi_zproc`` updates for speed and minor bug fixes (PR `#2907`_)
+
+  - Run tileqa in parallel with afterburners
+  - Add I/O parallelism to group_spectra and tileqa when running on a
+    single tile. Keep multi-tile parallelism when processing multiple tiles.
+  - Optionally use pigz for parallel gzip compression of spectra files.
+  - Cache camera overlap calculation for faster coaddition.
+  - Use ``ls-dr11`` sky cutout (ls-dr11-early-v2 no longer works).
+  - Fix timing log messages MPI barrier logic.
+
+.. _`#2901`: https://github.com/desihub/desispec/pull/2901
+.. _`#2905`: https://github.com/desihub/desispec/pull/2905
+.. _`#2907`: https://github.com/desihub/desispec/pull/2907
+.. _`#2911`: https://github.com/desihub/desispec/pull/2911
+
+0.73.3 (2026-10-14)
+-------------------
+
+* special case tile 83063 skip TARGETID check (PR `#2897`_, see `desitarget #892`_).
+
+.. _`#2897`: https://github.com/desihub/desispec/pull/2897
+.. _`desitarget #892`: https://github.com/desihub/desitarget/issues/892
+
+0.73.2 (2026-10-13)
+-------------------
+
+* Skip stucksky check if FIBER_RA/DEC=0 (PR `#2883`_).
+* Patch zcatalog TARGETID check (commit `#0e7fd54`_).
+* Improve trace shifts when one amp is masked (PR `#2887`_).
+
+.. _`#0e7fd54`: https://github.com/desihub/desispec/commit/0e7fd546a40917a0f43b2225295996d4438c5931
+.. _`#2883`: https://github.com/desihub/desispec/pull/2883
+.. _`#2887`: https://github.com/desihub/desispec/pull/2887
+
+0.73.1 (2026-10-02)
+-------------------
+
+* Add ``desi_use_reservation --deps-ok`` option to allow moving jobs into
+  reservation even if waiting on dependencies (PR `#2872`_).
+* Update trace shift peak finding to be weighted matched filter and adjust
+  detection threshold. Fixes crash of too many spots. (PRs `#2874`_, `#2875`_).
+
+.. _`#2872`: https://github.com/desihub/desispec/pull/2872
+.. _`#2874`: https://github.com/desihub/desispec/pull/2874
+.. _`#2875`: https://github.com/desihub/desispec/pull/2875
+
+0.73.0 (2026-10-02)
+-------------------
+
+First tag for Nevis / DR3 production.
+
+* Improve flux calibration around bad stdstar pixels (PR `#2871`_).
+* Revert PR `#2642`_, i.e. do not apply flux calibration updates to
+  resolution matrix (PR `#2871`_).
+* Fix dark reset end bookkeeping bug (PR `#2867`_).
+
+.. _`#2867`: https://github.com/desihub/desispec/pull/2867
+.. _`#2871`: https://github.com/desihub/desispec/pull/2871
+
+0.72.2 (2026-09-29)
+-------------------
+
+* Fix get_nights_up_to_date return value (PR `#2860`_).
+* Use fiberassign's LKSKYSRC when rechecking stuck-sky positioners (PR `#2862`_).
+* Remove abs() on QSO MgII sigma/deltachi2 (PR `#2863`_).
+* Speed up tilenight and night purge scripts (PR `#2865`_).
+* Extract fail fast when outputs are corrupted (PR `#2866`_).
+* Improve the layout and rendering of the processing dashboards (PR `#2868`_).
+
+.. _`#2860`: https://github.com/desihub/desispec/pull/2860
+.. _`#2862`: https://github.com/desihub/desispec/pull/2862
+.. _`#2863`: https://github.com/desihub/desispec/pull/2863
+.. _`#2865`: https://github.com/desihub/desispec/pull/2865
+.. _`#2866`: https://github.com/desihub/desispec/pull/2866
+.. _`#2868`: https://github.com/desihub/desispec/pull/2868
+
+0.72.1 (2026-09-25)
+-------------------
+
+* Fix half-pixel and rebin-dependent y offsets in
+  ``compute_dx_from_cross_dispersion_profiles`` (PR `#2850`_).
+* Use consistent binning for boxcar extraction and trace shifts (PR `#2852`_).
+* Fix off-by-one in reversed-amp column indexing in correct_cte.py (PR `#2854`_).
+* Fix incorrect addition of resolution matrices in a couple of places (PR `#2855`_).
+* Fix output ivar of ``fast_resample_spectra`` (not used by core production) (PR `#2853`_).
+
+.. _`#2850`: https://github.com/desihub/desispec/pull/2850
+.. _`#2852`: https://github.com/desihub/desispec/pull/2852
+.. _`#2853`: https://github.com/desihub/desispec/pull/2853
+.. _`#2854`: https://github.com/desihub/desispec/pull/2854
+.. _`#2855`: https://github.com/desihub/desispec/pull/2855
+
+0.72.0 (2026-09-23)
+-------------------
+
+Mega update reference tag for pre-Nevis testing.
 
 * Fix flat selection when CTE flats come in between calib flats (PR `#2720`_).
 * Add test for CTE flats interleaved between lamp flat sequences (PR `#2721`_).
+* Bundle the nightly arc, normal-flat, and CTE-flat calibrations into one
+  Slurm job each, replacing the previous one-job-per-exposure submissions.
+  A normal night now submits 3 calibration jobs instead of 22. Note this
+  also lowers the ``ARC`` node cap in ``determine_resources()`` from 10 to 5;
+  ``PSFNIGHT`` is raised to 15 so a bundle can run every arc at once.
+* Add ``desi_prod_dag``, which writes a navigable HTML view of an entire
+  production's job dependency graph. Complements ``desi_job_graph``,
+  which draws one night as a static mermaid diagram.
+* ``desi_submit_prod`` now scans the override files of the nights it will
+  process and, for any that link calibrations from a *later* reference night,
+  submits that reference night's calibrations before the earlier night. When
+  ``biasnight`` is linked, the reference night's bias is submitted on its own
+  first, since the subsequent darknight generation spans nights and would
+  otherwise reach the linking night before its bias dependency exists.
+* Add python/3.14 and astropy/8.x to CI test matrix.  Add tests checking the
+  astropy behaviors that desispec I/O depends upon.
+* Require that preprocessed darks strictly use the nightly bias of their own
+  night and camera instead of silently falling back to the default bias
+  (`issue #2741`_). ``desi_preproc_darks`` now exits non-zero without
+  preprocessing anything if even one camera lacks a matching ``biasnight``,
+  and ``desi_compute_dark`` skips ``dark_preproc`` files that used a different
+  bias; both take ``--allow-default-bias`` to opt out. Relatedly,
+  ``desi_compute_dark_night`` no longer hands the reference night's bias to
+  every night of darks it spans.
+* Only try make science based nightqa PDFs if the data exists. (PR `#2767`_).
+* Turn Coveralls reporting back on in CI. (PR `#2768`_).
+* Merge daily branch into main (PR `#2770`_).
+* Switch to DR11 layer in legacysurvey URLs. (PR `#2772`_).
+* Restrict LGE petal n(z) QA to dark1b tiles (PR `#2773`_).
+* night QA petalnz fix when there are no tiles to plot (PR `#2774`_).
+* Improve the redshift quality cuts outside LSS redshift ranges (PR `#2775`_).
+* add good_z_lya criteria (PR `#2780`_).
+* add wise_var_qso to validredshifts function (PR `#2786`_).
+* keep DESI_TARGET+ for zcat SURVEY=special (PR `#2787`_).
+* Propagate UNIQPIX into spectra/coadd FIBERMAP headers (PR `#2796`_).
+* Bundle arcs into a single psfnight job and do similar for flats and cteflats (PR `#2799`_).
+* Override On a Per Camera Basis - Biases (PR `#2801`_).
+* Handle discrepant RA,DEC,etc per TARGETID (attempt 2) (PR `#2804`_).
+* Add OIII and QAFIBERSTATUS columns (PR `#2806`_).
+* fix WISE_VAR_QSO redshift logic (PR `#2808`_).
+* update determine_science_to_proc (PR `#2809`_).
+* Update submit prod for linkcals and add production-level job graph (PR `#2810`_).
+* Use multiprocessing.Pool fork (not forkserver) to get NoGPU context (PR `#2812`_).
+* Fix qsoqn redrock-rerun targetid matching crash on NumPy 2.x (PR `#2814`_).
+* Add tests for python/3.14 and astropy/8.x (PR `#2815`_).
+* Prevent intermittent CI hangs by bounding bootcalib test data downloads (PR `#2816`_).
+* Require matching nightly biases for preprocessed darks (#2741) (PR `#2817`_).
+* Distinguish PSF bundles masked by a bad amp from bundles that failed to fit, so
+  that ``psfnight`` only fails on real fit failures.  Requires the specex changes
+  in `specex#91`_, which must be installed first (PR `#2732`_).
+* Bugfix for ``fit_trace_shifts`` iteration output (Commit `#a5705a9`_).
+* Fix weighted spline fit bug (PR `#2822`_).
+* Add ``biasnight``, ``biaspdark``, ``pdark`` and ``linkcal`` rows to the
+  processing dashboard, with a new ``BIAS`` column
+  (`issue #2802`_, `issue #2677`_).
+* Write both dashboards as one page per year plus a master page keeping the
+  old filename, which frames the selected year and offers a link per year, so
+  only the year being looked at is downloaded and cached.
+* Apply the same per-bundle input selection to ``XTRACE``/``YTRACE`` in
+  ``psfnight`` that was already applied to the PSF coefficients, so a fiber
+  bundle masked out or fit badly in only some of the input arcs no longer has
+  its traces blended with arcs that never fit it and so carry only the input
+  PSF's traces. Where no arc passes the camera-wide rchi2 cut the traces are
+  still averaged, over the arcs that fit the bundle and are comparable by that
+  bundle's own rchi2, rather than following the coefficients onto a single arc
+  (`issue #2819`_).
+* Wrap scripts with ``if __name__ == "__main__"`` for multiprocessing robustness
+  (PR `#2837`_).
+* Error propagation fixes
+
+  * Fix incorrect variance in stdstars (PR `#2823`_).
+  * Fix incorrect equation for sigma_coadd_norm (PR `#2824`_).
+  * Fix fiberflat ivar rescaling (PR `#2843`_).
+  * Fix NaN in sky _model_variance when no valid pixels near a peak (PR `#2844`_).
+  * ivar of rebinned spectra was incorrect (PR `#2831`_).
+  * Fix uncorrect variance calculation when convolving (PR `#2832`_).
+  * Bug fix in the calculation of the uncertainties of the flux calibration vectors (PR `#2827`_).
+
+* Trace shift fixes
+
+  * correctly compute the profile by summing along one of the axes (PR `#2826`_).
+  * fix trace shift ycoeff typo (PR `#2845`_).
+
+* PSF fit only use good fits for XTRACE and YTRACE means (PR `#2828`_).
+* Update dashboards to show one year at a time and add calibration rows (PR `#2829`_).
+* Scattered light calculates the median over data  combined with ivar (PR `#2835`_).
+* get_quantz_cmap(): fix deprecated matplotlib.cm.get_cmap() (PR `#2838`_).
+* Fix assemble_fibermap flagging of stuck positions with BADPOSITION (PR `#2840`_).
+* Fix compare_bias amp stacking bug (PR `#2846`_).
+* Fix frame/sky mismatch in stdstars when b-arm missing for lowest expid (PR `#2847`_).
 
 .. _`#2720`: https://github.com/desihub/desispec/pull/2720
 .. _`#2721`: https://github.com/desihub/desispec/pull/2721
+.. _`issue #2741`: https://github.com/desihub/desispec/issues/2741
+.. _`#2767`: https://github.com/desihub/desispec/pull/2767
+.. _`#2768`: https://github.com/desihub/desispec/pull/2768
+.. _`#2770`: https://github.com/desihub/desispec/pull/2770
+.. _`#2772`: https://github.com/desihub/desispec/pull/2772
+.. _`#2773`: https://github.com/desihub/desispec/pull/2773
+.. _`#2774`: https://github.com/desihub/desispec/pull/2774
+.. _`#2775`: https://github.com/desihub/desispec/pull/2775
+.. _`#2780`: https://github.com/desihub/desispec/pull/2780
+.. _`#2786`: https://github.com/desihub/desispec/pull/2786
+.. _`#2787`: https://github.com/desihub/desispec/pull/2787
+.. _`#2796`: https://github.com/desihub/desispec/pull/2796
+.. _`#2799`: https://github.com/desihub/desispec/pull/2799
+.. _`#2801`: https://github.com/desihub/desispec/pull/2801
+.. _`#2804`: https://github.com/desihub/desispec/pull/2804
+.. _`#2806`: https://github.com/desihub/desispec/pull/2806
+.. _`#2808`: https://github.com/desihub/desispec/pull/2808
+.. _`#2809`: https://github.com/desihub/desispec/pull/2809
+.. _`#2810`: https://github.com/desihub/desispec/pull/2810
+.. _`#2812`: https://github.com/desihub/desispec/pull/2812
+.. _`#2814`: https://github.com/desihub/desispec/pull/2814
+.. _`#2815`: https://github.com/desihub/desispec/pull/2815
+.. _`#2816`: https://github.com/desihub/desispec/pull/2816
+.. _`#2817`: https://github.com/desihub/desispec/pull/2817
+.. _`#2732`: https://github.com/desihub/desispec/pull/2732
+.. _`issue #2677`: https://github.com/desihub/desispec/issues/2677
+.. _`issue #2802`: https://github.com/desihub/desispec/issues/2802
+.. _`issue #2819`: https://github.com/desihub/desispec/issues/2819
+.. _`specex#91`: https://github.com/desihub/specex/pull/91
+.. _`#a5705a9`: https://github.com/desihub/desispec/commit/a5705a9230674371371d8cac2d916e66d1fd417d
+.. _`#2822`: https://github.com/desihub/desispec/pull/2822
+.. _`#2837`: https://github.com/desihub/desispec/pull/2837
+.. _`#2823`: https://github.com/desihub/desispec/pull/2823
+.. _`#2824`: https://github.com/desihub/desispec/pull/2824
+.. _`#2826`: https://github.com/desihub/desispec/pull/2826
+.. _`#2827`: https://github.com/desihub/desispec/pull/2827
+.. _`#2828`: https://github.com/desihub/desispec/pull/2828
+.. _`#2829`: https://github.com/desihub/desispec/pull/2829
+.. _`#2831`: https://github.com/desihub/desispec/pull/2831
+.. _`#2832`: https://github.com/desihub/desispec/pull/2832
+.. _`#2835`: https://github.com/desihub/desispec/pull/2835
+.. _`#2838`: https://github.com/desihub/desispec/pull/2838
+.. _`#2840`: https://github.com/desihub/desispec/pull/2840
+.. _`#2843`: https://github.com/desihub/desispec/pull/2843
+.. _`#2844`: https://github.com/desihub/desispec/pull/2844
+.. _`#2845`: https://github.com/desihub/desispec/pull/2845
+.. _`#2846`: https://github.com/desihub/desispec/pull/2846
+.. _`#2847`: https://github.com/desihub/desispec/pull/2847
+
 
 0.71.6 (2026-06-03)
 -------------------

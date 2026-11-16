@@ -6,10 +6,10 @@ desispec.workflow.proc_dashboard_funcs
 import multiprocessing
 import os,glob
 import json
-import sys
 import re
 import time,datetime
 import numpy as np
+from collections import OrderedDict
 from os import listdir
 from astropy.table import Table
 from astropy.io import fits
@@ -367,37 +367,89 @@ def return_color_profile():
     return color_profile
 
 
+def year_page_pathname(outfile, year):
+    """
+    Pathname of the page holding a single year, derived from the master page.
+
+    Args:
+        outfile (str): pathname of the master page, e.g. '.../dashboard.html'.
+        year (str or int): the year the page covers.
+
+    Returns:
+        str: e.g. '.../dashboard-2025.html'.
+    """
+    stem, ext = os.path.splitext(outfile)
+    return f'{stem}-{year}{ext}'
+
+
 def make_html_page(monthly_tables, outfile, titlefill='Processing',
                    show_null=False, color_profile=None):
+    """
+    Write the dashboard as one page per year plus a master page that frames them.
+
+    A production spans years and its single page grew to megabytes, all of which
+    every visitor downloaded and cached to look at one night. Each year is
+    therefore written to its own complete, independently viewable page, and
+    outfile keeps the name people have bookmarked, holding only the header and
+    the year links that swap the framed year.
+
+    Args:
+        monthly_tables (dict): keyed by 'YYYYMM', each a dict of night to the
+            per-night info dict. In reverse chronological order.
+        outfile (str): pathname of the master page.
+        titlefill (str): describes the dashboard in the page title.
+        show_null (bool): whether to include rows with nothing to report.
+        color_profile (dict, optional): row colors, defaults to
+            return_color_profile().
+    """
     if color_profile is None:
         color_profile = return_color_profile()
 
-    html_page = _initialize_page(color_profile, titlefill=titlefill)
-
+    ## Group the months by year, keeping the order they came in, and dropping
+    ## months with nothing in them so an empty year never reaches the nav
+    months_by_year = OrderedDict()
     for month, nightly_tables in monthly_tables.items():
         if len(nightly_tables) == 0:
             continue
-        print(
-            "Month: {}, nights: {}".format(month, list(nightly_tables.keys())))
-        nightly_table_htmls, statuses = list(), list()
-        for night, night_info in nightly_tables.items():
-            if len(night_info) == 0:
-                continue
-            ####################################
-            ### Table for individual night ####
-            ####################################
-            nightly_table_html, status = \
-                generate_nightly_table_html(night_info, night, show_null)
-            nightly_table_htmls.append(nightly_table_html)
-            statuses.append(status)
-        html_page += generate_monthly_table_html(nightly_table_htmls,
-                                                 statuses, month)
+        months_by_year.setdefault(month[:4], OrderedDict())[month] = nightly_tables
 
-    # html_page += js_import_str(os.environ['DESI_DASHBOARD'])
-    html_page += js_str()
-    html_page += _closing_str()
+    ## The status of each year, for coloring its link on the master page
+    year_statuses = dict()
+    for year, months in months_by_year.items():
+        html_page = _initialize_page(color_profile, titlefill=titlefill)
+        month_statuses = list()
+        for month, nightly_tables in months.items():
+            print("Month: {}, nights: {}".format(month,
+                                                 list(nightly_tables.keys())))
+            nightly_table_htmls, statuses = list(), list()
+            for night, night_info in nightly_tables.items():
+                if len(night_info) == 0:
+                    continue
+                ####################################
+                ### Table for individual night ####
+                ####################################
+                nightly_table_html, status = \
+                    generate_nightly_table_html(night_info, night, show_null)
+                nightly_table_htmls.append(nightly_table_html)
+                statuses.append(status)
+            html_page += generate_monthly_table_html(nightly_table_htmls,
+                                                     statuses, month)
+            month_statuses.append(_combine_banner_statuses(statuses))
+        year_statuses[year] = _combine_banner_statuses(month_statuses)
+
+        # html_page += js_import_str(os.environ['DESI_DASHBOARD'])
+        html_page += js_str()
+        html_page += _closing_str()
+        yearfile = year_page_pathname(outfile, year)
+        with open(yearfile, 'w') as hs:
+            hs.write(html_page)
+            print(f"Write to {yearfile} complete.")
+
+    _remove_stale_year_pages(outfile, months_by_year.keys())
+
     with open(outfile, 'w') as hs:
-        hs.write(html_page)
+        hs.write(_master_page(color_profile, titlefill, months_by_year.keys(),
+                              outfile, year_statuses=year_statuses))
         print(f"Write to {outfile} complete.")
 
     if 'NERSC_HOST' in os.environ and outfile.startswith(
@@ -405,6 +457,146 @@ def make_html_page(monthly_tables, outfile, titlefill='Processing',
         url = outfile.replace('/global/cfs/cdirs/desi',
                               'https://data.desi.lbl.gov/desi')
         print(f"This can be found via webserver at: {url}")
+
+
+def _remove_stale_year_pages(outfile, years):
+    """
+    Delete year pages left behind by an earlier run that covered more years.
+
+    Args:
+        outfile (str): pathname of the master page.
+        years (iterable of str): the years this run wrote.
+    """
+    keep = set(year_page_pathname(outfile, year) for year in years)
+    stem, ext = os.path.splitext(outfile)
+    for pathname in glob.glob(f'{stem}-[0-9][0-9][0-9][0-9]{ext}'):
+        if pathname not in keep:
+            os.remove(pathname)
+            print(f"Removed {pathname}, which this run has no data for.")
+
+
+def _master_page(color_profile, titlefill, years, outfile, year_statuses=None):
+    """
+    Build the master page: the header, the year links, and the framed year.
+
+    Args:
+        color_profile (dict): row colors, for the legend.
+        titlefill (str): describes the dashboard in the page title.
+        years (iterable of str): the years that have a page, newest first.
+        outfile (str): pathname of the master page, used to name the year pages.
+        year_statuses (dict, optional): year to the status its link is colored
+            by, combined from its months the same way a month banner combines
+            its nights. Years not in it are colored as DEFAULT.
+
+    Returns:
+        str: the complete html page.
+    """
+    years = list(years)
+    if year_statuses is None:
+        year_statuses = dict()
+    html_page = _page_head(color_profile)
+    html_page += _page_title(titlefill=titlefill, color_profile=color_profile)
+
+    ## the year links sit directly above the year they switch
+    html_page += '<nav class="yearnav">Year:\n'
+    for year in years:
+        status = year_statuses.get(year, 'DEFAULT')
+        html_page += (f'  <a href="#{year}" id="yearlink-{year}"'
+                      + f' class="{status}">{year}</a>\n')
+    html_page += '</nav>\n'
+
+    ## Each year is its own page so that only the year being looked at is ever
+    ## downloaded, which is the point of splitting them up
+    yearfiles = {year: os.path.basename(year_page_pathname(outfile, year))
+                 for year in years}
+    ## Framing the newest year here rather than leaving it to showYear() means
+    ## the page still shows a year without javascript. data-year is set to match
+    ## so that showYear() doesn't fetch the same file a second time on load.
+    newest = years[0]
+    html_page += (f'<iframe id="yearframe" data-year="{newest}"'
+                  + f' src="{yearfiles[newest]}"'
+                  + ' title="Dashboard for one year"></iframe>\n')
+    html_page += f'<script >\n{_master_js(years, yearfiles)}\n</script>\n'
+    html_page += _closing_str()
+    return html_page
+
+
+def _master_js(years, yearfiles):
+    """
+    Return the master page's javascript, which swaps the framed year.
+
+    Args:
+        years (list of str): the years that have a page, newest first.
+        yearfiles (dict): year to the basename of its page.
+
+    Returns:
+        str: the script body, without the enclosing script tag.
+    """
+    ## the data is prepended rather than interpolated, so that a % or a brace
+    ## appearing in the script below can never be taken for a placeholder
+    script = f'    var yearFiles = {json.dumps(yearfiles)};\n'
+    script += f'    var years = {json.dumps(list(years))};\n'
+    return script + """
+    var frame = document.getElementById('yearframe');
+
+    function showYear(year) {
+        if (!yearFiles.hasOwnProperty(year)) {
+            /* a bookmark from another production, or a year since removed */
+            year = years[0];
+        }
+        /* reassigning the same src would pointlessly reload the year */
+        if (frame.getAttribute('data-year') !== year) {
+            frame.setAttribute('data-year', year);
+            frame.src = yearFiles[year];
+        }
+        for (var i = 0; i < years.length; i++) {
+            var link = document.getElementById('yearlink-' + years[i]);
+            /* toggle rather than assign, which would wipe the status class
+               that colors the link */
+            if (link) { link.classList.toggle('active', years[i] === year); }
+        }
+    }
+
+    function sizeFrame() {
+        /* fill what is left of the window so the header and year links stay
+           put and the year itself scrolls inside the frame */
+        var top = frame.getBoundingClientRect().top + window.scrollY;
+        frame.style.height = Math.max(200, window.innerHeight - top - 10) + 'px';
+    }
+
+    window.addEventListener('hashchange', function() {
+        showYear(window.location.hash.replace('#', ''));
+    });
+    window.addEventListener('resize', sizeFrame);
+
+    showYear(window.location.hash.replace('#', ''));
+    sizeFrame();
+    """
+
+def _combine_banner_statuses(statuses):
+    """
+    Combine the statuses of the nights in a month, or the months in a year,
+    into the status of the banner that holds them.
+
+    A problem anywhere outranks work still pending, so that a failure is never
+    hidden behind jobs that haven't finished.
+
+    Args:
+        statuses (list of str): the statuses to combine, e.g. 'GOOD' or 'BAD'.
+
+    Returns:
+        str: 'GOOD' if every status is GOOD (including when there are none),
+            otherwise the first of 'BAD', 'INCOMPLETE', 'OVERFULL' and
+            'PENDING' that is present, otherwise 'DEFAULT'.
+    """
+    statuses = list(statuses)
+    if all(status == 'GOOD' for status in statuses):
+        return 'GOOD'
+    for status in ['BAD', 'INCOMPLETE', 'OVERFULL', 'PENDING']:
+        if status in statuses:
+            return status
+    return 'DEFAULT'
+
 
 def generate_monthly_table_html(tables, statuses, month):
     """
@@ -419,18 +611,12 @@ def generate_monthly_table_html(tables, statuses, month):
 
     heading = f"{month_dict[month[4:]]} {month[:4]} ({month})"
     month_table_str = '\n<!--Begin {}-->\n'.format(month)
+    ## The section bounds the sticky banner, so that it scrolls away with the
+    ## last of its nights rather than staying at the top of the page
+    month_table_str += '<section class="month">\n'
 
-    statuses = np.array(statuses)
-    monthlystatus = 'DEFAULT'
-    if np.all(statuses == 'GOOD'):
-        monthlystatus = 'GOOD'
-    elif np.any(statuses == 'BAD'):
-        monthlystatus = 'BAD'
-    elif np.any(statuses == 'INCOMPLETE'):
-        monthlystatus = 'INCOMPLETE'
-    elif np.any(statuses == 'OVERFULL'):
-        monthlystatus = 'OVERFULL'
-    month_table_str += f'<button class="collapsible" id="{monthlystatus}">' \
+    monthlystatus = _combine_banner_statuses(statuses)
+    month_table_str += f'<button class="collapsible monthbanner" id="{monthlystatus}">' \
                        + heading + '</button>'
 
     month_table_str += '<div class="content" style="display:inline-block;min-height:0%;">\n'
@@ -440,6 +626,7 @@ def generate_monthly_table_html(tables, statuses, month):
 
     #month_table_str += "</table></div>\n"
     month_table_str += "</div>\n"
+    month_table_str += "</section>\n"
     month_table_str += '<!--End {}-->\n\n'.format(month)
 
     return month_table_str
@@ -476,11 +663,13 @@ def generate_nightly_table_html(night_info, night, show_null):
             elif color == 'OVERFULL':
                 nover += 1
                 n_notnull += 1
-            elif color == 'PENDING':
-                npending += 1
-                n_notnull += 1
             elif color == 'RUNNING':
                 nrunning += 1
+                n_notnull += 1
+            elif color == 'PENDING' or color in non_final_q_states:
+                ## rows of unfinished jobs are colored by their queue state,
+                ## e.g. SUBMITTED or REQUEUED, and are all still to come
+                npending += 1
                 n_notnull += 1
             else:
                 nnull += 1
@@ -504,17 +693,24 @@ def generate_nightly_table_html(night_info, night, show_null):
                + f"Other: {nnull}"
                )
 
+    ## Same precedence as _combine_banner_statuses, so that a failure is never
+    ## shown as anything milder
     night_status = 'DEFAULT'
     if ngood == n_notnull:
         night_status = "GOOD"
-    elif ninter > 0:
-        night_status = "INCOMPLETE"
     elif nbad > 0:
         night_status = "BAD"
+    elif ninter > 0:
+        night_status = "INCOMPLETE"
     elif nover > 0:
         night_status = "OVERFULL"
+    elif npending + nrunning > 0:
+        ## nothing has gone wrong yet, but the night isn't done either
+        night_status = "PENDING"
     nightly_table_str = '<!--Begin {}-->\n'.format(night)
-    nightly_table_str += f'<button class="collapsible" id="{night_status}">{heading}</button>'
+    ## As for the month, the section bounds the sticky banner to its own rows
+    nightly_table_str += '<section class="night">\n'
+    nightly_table_str += f'<button class="collapsible nightbanner" id="{night_status}">{heading}</button>'
     nightly_table_str += '<div class="content" style="display:inline-block;min-height:0%;">\n'
     # table header
     nightly_table_str += "<table id='c' class='nightTable'><tbody>\n\t<tr>"
@@ -529,6 +725,7 @@ def generate_nightly_table_html(night_info, night, show_null):
 
     # End table
     nightly_table_str += "</tbody></table></div>\n"
+    nightly_table_str += "</section>\n"
     nightly_table_str += '<!--End {}-->\n\n'.format(night)
     return nightly_table_str, night_status
 
@@ -555,9 +752,10 @@ def write_json(output_data, filename_json):
                   + "not saving that information.")
 
 
-def _initialize_page(color_profile, titlefill='Processing'):
+def _page_head(color_profile):
     """
-    Initialize the html file for showing the statistics, giving all the headers and CSS setups.
+    Open an html page with the shared CSS, up to the first element of the body.
+    Used by both the per-year pages and the master page that frames them.
     """
     # strTable="<html><style> table {font-family: arial, sans-serif;border-collapse: collapse;width: 100%;}"
     # strTable=strTable+"td, th {border: 1px solid #dddddd;text-align: left;padding: 8px;}"
@@ -573,7 +771,20 @@ def _initialize_page(color_profile, titlefill='Processing'):
     .collapsible {background-color: #eee;color: #444;cursor: pointer;padding: 18px;width: 100%;border: none;text-align: left;outline: none;font-size: 25px;}
     .regular {background-color: #eee;color: #444;  cursor: pointer;  padding: 18px;  width: 25%;  border: 18px;  text-align: left;  outline: none;  font-size: 25px;}
     .active, .collapsible:hover { background-color: #ccc;}
-    .content {padding: 0 18px;display: table;overflow: hidden;background-color: #f1f1f1;maxHeight:0px;}
+    /* clip rather than hidden: hidden makes each content block a scroll
+       container of its own, which stops the banners inside it from sticking.
+       hidden comes first for browsers that don't know clip, which ignore it
+       and would otherwise show collapsed content rather than hide it. */
+    .content {padding: 0 18px;display: table;overflow: hidden;overflow: clip;background-color: #f1f1f1;}
+    /* While its rows are in view, a night's banner stays at the top of the
+       page under its month's. Each is bounded by its own section, so it
+       leaves once the last of its rows has scrolled past. */
+    .monthbanner {position: sticky; top: 0; z-index: 3;}
+    .nightbanner {position: sticky; top: var(--month-banner-height, 66px); z-index: 2;}
+    /* The column names stay just below the night's banner. A header cell is
+       bounded by its own table, so it leaves along with the night's rows. */
+    .nightTable th {position: sticky; z-index: 1;
+                    top: calc(var(--month-banner-height, 66px) + var(--night-banner-height, 66px));}
     /* The Modal (background) */
     .modal {
     display: none;        /* Hidden by default */
@@ -633,12 +844,37 @@ def _initialize_page(color_profile, titlefill='Processing'):
           border: 1px solid #ddd;
           margin-bottom: 12px;
     }
+    /* the master page already shows these above the frame */
+    .framed #pageheader {display: none;}
+    .yearnav {font-size: 20px; margin-bottom: 12px;}
+    .yearnav a {color: #34495e; padding: 6px 14px; margin-right: 4px;
+                text-decoration: none; border: 1px solid #ddd;
+                background-color: #eee;}
+    .yearnav a:hover {background-color: #ccc; filter: brightness(90%);}
+    /* marked by an outline rather than a fill, so its status color still shows */
+    .yearnav a.active {font-weight: bold; box-shadow: inset 0 0 0 3px #34495e;}
+    #yearframe {width: 100%; border: none;}
+    /* the build time and the color legend, sharing one line */
+    .pageinfo {display: flex; flex-wrap: wrap; align-items: center;
+               column-gap: 32px; row-gap: 8px; margin-bottom: 20px;}
+    /* dark enough to read comfortably on white (about 5:1 contrast) */
+    .runtime {color: #2e7d32;}
+    .legend {display: flex; flex-wrap: wrap; align-items: center; gap: 4px;}
+    /* the border keeps the white PENDING box visible on the white page */
+    .legend span {padding: 4px 8px; border: 1px solid #ccc;}
 
     """
 
     for ctype,cdict in color_profile.items():
         background = cdict['background']
         html_page += f'\t#{ctype} ' + '{background-color:' + f'{background}' + ';}\n'
+
+    html_page += "\n"
+    ## Year links are colored by the status of their year. These come after the
+    ## .yearnav a:hover rule above, which has the same precedence, so they win.
+    for ctype,cdict in color_profile.items():
+        html_page += (f'\t.yearnav a.{ctype} {{background-color:{cdict["background"]};'
+                      + f' color:{cdict["font"]};}}\n')
 
     html_page += "\n"
     ## Table rows shouldn't do the default background because of cell coloring
@@ -648,24 +884,70 @@ def _initialize_page(color_profile, titlefill='Processing'):
         ## double bracket in fstring produces single string bracket in output
         html_page += f'\ttable tr#{ctype} {{background-color:{background}; color:{font};}}\n'
 
-    html_page += '</style>\n\n'
-    html_page += f"</head><body><h1>DESI '{os.environ['SPECPROD']}' "
-    html_page += f'{titlefill} Status Monitor</h1>\n'
+    html_page += '</style>\n'
+    ## Set before the body renders, so a framed year page never flashes the
+    ## title and legend that the master page is already showing above it
+    html_page += ('<script >if (window.self !== window.top)'
+                  + " { document.documentElement.className = 'framed'; }</script>\n\n")
+    html_page += '</head><body>'
+
+    return html_page
+
+
+def _page_title(titlefill='Processing', color_profile=None):
+    """
+    Return the page heading and the line below it, which says when the
+    dashboard was built and, if given colors, explains them.
+
+    Args:
+        titlefill (str): describes the dashboard in the page title.
+        color_profile (dict, optional): row colors, to show a legend of on the
+            same line as the build time. No legend if None.
+
+    Returns:
+        str: the html for the heading and the line below it.
+    """
+    title = f"<h1>DESI '{os.environ['SPECPROD']}' {titlefill} Status Monitor</h1>\n"
 
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     # running='No'
     # if check_running(proc_name='desi_dailyproc',suppress_outputs=True):
     #     running='Yes'
     #     strTable=strTable+"<div style='color:#00FF00'>{} {} running: {}</div>\n".format(timestamp,'desi_dailyproc',running)
-    script = os.path.basename(sys.argv[0])
-    html_page += f'<div style="color:#00FF00;margin-bottom:20px"> {script} running at: {timestamp}</div>\n'
+    ## One line, wrapping onto a second only when the window is too narrow.
+    ## The build time comes first since it is what changes from run to run.
+    title += '<div class="pageinfo">\n'
+    title += f'<span class="runtime">Run at: {timestamp}</span>\n'
+    if color_profile is not None:
+        title += _color_legend(color_profile)
+    title += '</div>\n'
 
-    html_page += 'Color Legend:\n'
-    html_page += '<table style="margin-bottom:20px;margin-left:20px"><tr>\n'
+    return title
 
+
+def _color_legend(color_profile):
+    """
+    Return the html that explains what each row color means.
+    """
+    ## Each color is its own box rather than a table cell, so that on a narrow
+    ## window the colors wrap onto another line instead of running off the page
+    legend = '<span class="legend">Color Legend:\n'
     for ctype in color_profile.keys():
-        html_page += f' <td id="{ctype}">{ctype}</td>\n'
-    html_page += f'</tr></table>\n'
+        legend += f' <span id="{ctype}">{ctype}</span>\n'
+    legend += '</span>\n'
+    return legend
+
+
+def _initialize_page(color_profile, titlefill='Processing'):
+    """
+    Initialize the html file for showing the statistics, giving all the headers and CSS setups.
+    """
+    ## The master page shows all of this above the frame, so it is hidden when
+    ## this page is framed and kept for when it is opened on its own
+    html_page = _page_head(color_profile)
+    html_page += '<div id="pageheader">\n'
+    html_page += _page_title(titlefill=titlefill, color_profile=color_profile)
+    html_page += '</div>\n'
 
     html_page += '\n\n'
     html_page += """Filter By Status:
@@ -782,27 +1064,65 @@ def js_str(): # Used
                             }
                     });
              };
+             /* Only desi_dashboard.py emits these buttons; without the guard
+                the missing element throws and aborts the rest of the script */
              var b1 = document.getElementById('b1');
+             if (b1) {
              b1.addEventListener('click',function() {
                  for (i = 0; i < coll.length; i++) {
                      coll[i].nextElementSibling.style.maxHeight=null;
                                                    }});
+             }
              var b2 = document.getElementById('b2');
+             if (b2) {
              b2.addEventListener('click',function() {
                  for (i = 0; i < coll.length; i++) {
                      coll[i].nextElementSibling.style.maxHeight='0px'
                              }});
+             }
+             /* Night banners stick just below their month's banner, and the
+                column names just below their night's banner. Banner heights
+                depend on the font and on whether the heading wraps, so each
+                banner is measured separately and its height set on its own
+                section, which everything inside it inherits. */
+             function setBannerHeights() {
+                 var kinds = [['.monthbanner', '--month-banner-height'],
+                              ['.nightbanner', '--night-banner-height']];
+                 for (var j = 0; j < kinds.length; j++) {
+                     var banners = document.querySelectorAll(kinds[j][0]);
+                     for (var k = 0; k < banners.length; k++) {
+                         banners[k].parentElement.style.setProperty(
+                             kinds[j][1], banners[k].offsetHeight + 'px');
+                     }
+                 }
+             }
+             setBannerHeights();
+             window.addEventListener('resize', setBannerHeights);
+
+           function statusColumnIndex(table) {
+                /* The column count differs between dashboards and grows as
+                   columns are added, so find STATUS by its header instead */
+                var th = table.getElementsByTagName("th");
+                for (var k = 0; k < th.length; k++) {
+                    if (th[k].innerHTML.toUpperCase().trim() === "STATUS") {
+                        return k;
+                    }
+                }
+                return -1;
+           }
+
            function filterByStatus() {
-                var input, filter, table, tr, td, i;
+                var input, filter, table, tr, td, i, statuscol;
                 input = document.getElementById("statuslist");
                 filter = input.value.toUpperCase();
                 tables = document.getElementsByClassName("nightTable")
                 for (j = 0; j < tables.length; j++){
                  table = tables[j]
+                 statuscol = statusColumnIndex(table);
+                 if (statuscol < 0) { continue; }
                  tr = table.getElementsByTagName("tr");
                  for (i = 0; i < tr.length; i++) {
-                   td = tr[i].getElementsByTagName("td")[15];
-                   console.log(td)
+                   td = tr[i].getElementsByTagName("td")[statuscol];
                    if (td) {
                        if (td.innerHTML.toUpperCase().indexOf(filter) > -1 || filter==='ALL') {
                            tr[i].style.display = "";

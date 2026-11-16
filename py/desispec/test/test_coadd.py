@@ -12,7 +12,9 @@ from desispec.io import empty_fibermap
 from desispec.coaddition import (coadd, coadd_exposures, fast_resample_spectra,
                                  spectroperf_resample_spectra,
                                  coadd_fibermap, coadd_cameras,
-                                 _mask_cosmics)
+                                 _mask_cosmics, coadd_frame_resolution,
+                                 _wave_near, _crude_coadd_grid,
+                                 _build_crude_coadd_arrays)
 from desispec.specscore import compute_coadd_scores
 from desispec.resolution import Resolution
 from desispec.maskbits import fibermask
@@ -252,6 +254,79 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(s1.exp_fibermap['COADD_NORM'][-1], 1)
         self.assertIsInstance(s1.scores, Table)
 
+    @staticmethod
+    def _wave_near_loop(wave, other, tol=1e-4):
+        """Reference implementation of _wave_near: loop over every pixel"""
+        flag = np.zeros(wave.size, dtype=bool)
+        for k, w in enumerate(wave):
+            if np.any(np.abs(w - other) <= tol):
+                flag[k] = True
+        return flag
+
+    def test_wave_near(self):
+        """Test vectorized band overlap matches a per-pixel loop"""
+        wave = self.spectra.wave
+        for b0, b1 in (('b', 'r'), ('r', 'b'), ('r', 'z'), ('z', 'r'), ('b', 'z')):
+            np.testing.assert_array_equal(
+                _wave_near(wave[b0], wave[b1]),
+                self._wave_near_loop(wave[b0], wave[b1]))
+
+        #- points just inside and just outside the tolerance, and out of range
+        other = np.array([5000.0, 5001.0, 5002.0])
+        test = np.array([4999.0, 4999.9999, 5000.00009, 5000.00011, 5000.5,
+                         5001.99991, 5002.00009, 5002.00011, 6000.0])
+        np.testing.assert_array_equal(_wave_near(test, other),
+                                      self._wave_near_loop(test, other))
+        np.testing.assert_array_equal(_wave_near(test, other[::-1]),
+                                      self._wave_near_loop(test, other))
+
+        #- nothing to overlap with
+        self.assertFalse(np.any(_wave_near(test, np.array([]))))
+
+    def test_crude_coadd_grid(self):
+        """Test the cached crude coadd wavelength grid"""
+        sp = self.spectra
+        sbands = np.array(['b', 'r', 'z'])
+        for bands_list in (['b', 'r', 'z'], ['b', 'z'], ['r', 'z'], ['z']):
+            #- reference: original per-pixel overlap loop
+            overlap = dict()
+            for j, b in enumerate(bands_list):
+                flag = np.zeros(sp.wave[b].size, dtype=int)
+                if j > 0:
+                    flag[self._wave_near_loop(sp.wave[b], sp.wave[bands_list[j-1]])] = 1
+                if j < len(bands_list) - 1:
+                    flag[self._wave_near_loop(sp.wave[b], sp.wave[bands_list[j+1]])] = 1
+                overlap[b] = flag
+            expected_wave = np.concatenate(
+                [sp.wave[b][overlap[b] == 0] for b in sbands[np.isin(sbands, bands_list)]])
+
+            cache = dict()
+            for ncall in range(2):   # second call comes from the cache
+                ov, cw = _crude_coadd_grid(sp, bands_list, sbands, cache)
+                np.testing.assert_array_equal(cw, expected_wave)
+                for b in bands_list:
+                    np.testing.assert_array_equal(ov[b], overlap[b])
+            self.assertEqual(len(cache), 1)
+
+        #- adjacent bands really do overlap
+        ov, cw = _crude_coadd_grid(sp, ['b', 'r', 'z'], sbands)
+        self.assertTrue(np.any(ov['b'] == 1) and np.any(ov['r'] == 1) and np.any(ov['z'] == 1))
+        self.assertEqual(len(cw), len(np.unique(cw)))
+
+    def test_build_crude_coadd_arrays_cache(self):
+        """Test _build_crude_coadd_arrays gives the same result with and without the grid cache"""
+        s1 = self._random_spectra(ns=4, nw=300, bands=('b', 'r', 'z'))
+        sbands = np.array(['b', 'r', 'z'])
+        all_idx = np.arange(4)
+        good_idx = np.array([0, 2, 3])
+        cache = dict()
+        for bands_list in (['b', 'r', 'z'], ['b', 'z'], ['b', 'r', 'z']):
+            ref = _build_crude_coadd_arrays(s1, all_idx, good_idx, bands_list, sbands)
+            got = _build_crude_coadd_arrays(s1, all_idx, good_idx, bands_list, sbands,
+                                            grid_cache=cache)
+            for r, g in zip(ref, got):
+                np.testing.assert_array_equal(r, g)
+
     def test_coadd_exposures(self):
         """Test coadd_exposures doesn't mutate input and matches in-place coadd"""
         nspec, nwave = 3, 10
@@ -483,6 +558,26 @@ class TestCoadd(unittest.TestCase):
         resmod = resmat2@model0
         self.assertTrue(np.allclose(resmod, s1.flux['b'][0]))
 
+    def test_coadd_frame_resolution(self):
+        """Test that coadd_frame_resolution weights rows by the pixel weights
+        i.e. if input spectra are D_ij = R_ij * M_j, the weighted coadd
+        of D_ij must be equal to R_j * M_j with the coadded R_j"""
+        nframe, nfiber, nres, nwave = 4, 3, 11, 50
+        rng = np.random.default_rng(4344)
+        resol = rng.uniform(size=(nframe, nfiber, nres, nwave))
+        weights = rng.uniform(size=(nframe, nfiber, nwave))
+        # completely mask some fraction of pixels
+        weights[rng.uniform(size=weights.shape) < 0.05] = 0
+        models = rng.uniform(size=(nfiber, nwave))
+        flux = np.array([[Resolution(resol[i, j]) @ models[j]
+                          for j in range(nfiber)] for i in range(nframe)])
+        sw = weights.sum(axis=0)
+        cflux = (weights * flux).sum(axis=0) / (sw + (sw == 0))
+        cres = coadd_frame_resolution(resol, weights)
+        self.assertEqual(cres.shape, (nfiber, nres, nwave))
+        for j in range(nfiber):
+            self.assertTrue(np.allclose(Resolution(cres[j]) @ models[j], cflux[j]))
+
     def test_coadd_no_resolution(self):
         """Test coaddition when there is no resolution data"""
         nspec, nwave = 20, 30
@@ -709,6 +804,173 @@ class TestCoadd(unittest.TestCase):
         s1 = self._random_spectra(1,20)
         wave = np.linspace(4000, 6000, 10)
         s2 = fast_resample_spectra(s1,wave=wave)
+
+    def _uniform_spectra(self, wave, ivar=4.0, flux=10.0, mask=None):
+        """Single target with constant flux and ivar on the given wave grids
+
+        wave is a dict of band -> wavelength array
+        """
+        bands = list(wave.keys())
+        fluxes, ivars, rdat, masks = dict(), dict(), dict(), dict()
+        for b in bands:
+            nw = wave[b].size
+            fluxes[b] = np.full((1, nw), float(flux))
+            ivars[b] = np.full((1, nw), float(ivar))
+            rdat[b] = np.ones((1, 1, nw))
+            masks[b] = np.zeros((1, nw), dtype=np.int32)
+        fmap = empty_fibermap(1)
+        fmap['TARGETID'] = 12
+        return Spectra(bands=bands, wave=wave, flux=fluxes, ivar=ivars,
+                       mask=(masks if mask else None),
+                       resolution_data=rdat, fibermap=fmap)
+
+    def test_fast_resample_ivar(self):
+        """fast_resample_spectra output ivar is the sum of the input ivar per bin
+
+        resample_flux conserves flux density, i.e. it returns the *mean* of its
+        input over each output bin, so resampling ivar directly loses the
+        binsize factor and under-estimates the output ivar by out_dwave/in_dwave.
+        """
+        in_wave = np.arange(4000., 5000., 0.8)
+        ivar_in = 4.0
+
+        #- rebin by an integer factor: ivar adds
+        for rebin in (2, 5):
+            out_wave = np.arange(4100., 4900., 0.8*rebin)
+            s2 = fast_resample_spectra(self._uniform_spectra({'b':in_wave}, ivar=ivar_in),
+                                       wave=out_wave)
+            b = s2.bands[0]
+            #- trim the edge bins where the resampling kernel is truncated
+            ivar_out = s2.ivar[b][0][3:-3]
+            self.assertTrue(np.allclose(ivar_out, ivar_in*rebin),
+                            f'rebin={rebin}: {ivar_out[:3]} != {ivar_in*rebin}')
+
+        #- identity resampling leaves ivar unchanged
+        s2 = fast_resample_spectra(self._uniform_spectra({'b':in_wave}, ivar=ivar_in),
+                                   wave=in_wave)
+        b = s2.bands[0]
+        self.assertTrue(np.allclose(s2.ivar[b][0][3:-3], ivar_in))
+
+        #- upsampling splits the ivar between the (correlated) output bins
+        out_wave = np.arange(4100., 4900., 0.4)
+        s2 = fast_resample_spectra(self._uniform_spectra({'b':in_wave}, ivar=ivar_in),
+                                   wave=out_wave)
+        b = s2.bands[0]
+        self.assertTrue(np.allclose(s2.ivar[b][0][3:-3], ivar_in/2))
+
+    def test_fast_resample_ivar_bands(self):
+        """Overlapping bands add their ivar, and flux is preserved"""
+        in_wave = {'b': np.arange(4000., 5000., 0.8),
+                   'r': np.arange(4800., 5800., 0.8)}
+        ivar_in, flux_in = 4.0, 10.0
+        s1 = self._uniform_spectra(in_wave, ivar=ivar_in, flux=flux_in)
+        rebin = 5
+        out_wave = np.arange(4100., 5700., 0.8*rebin)
+        s2 = fast_resample_spectra(s1, wave=out_wave)
+        b = s2.bands[0]
+        ivar_out = s2.ivar[b][0]
+        flux_out = s2.flux[b][0]
+
+        #- b only, both b and r, r only (away from the band edges)
+        only_b = (out_wave > 4050) & (out_wave < 4750)
+        both = (out_wave > 4850) & (out_wave < 4950)
+        only_r = (out_wave > 5050) & (out_wave < 5750)
+        self.assertTrue(np.allclose(ivar_out[only_b], ivar_in*rebin))
+        self.assertTrue(np.allclose(ivar_out[both], 2*ivar_in*rebin))
+        self.assertTrue(np.allclose(ivar_out[only_r], ivar_in*rebin))
+
+        #- constant input flux in, constant flux out
+        ok = only_b | both | only_r
+        self.assertTrue(np.allclose(flux_out[ok], flux_in))
+
+    def test_fast_resample_vs_resample_flux(self):
+        """fast_resample_spectra matches resample_flux for integer rebinning
+
+        For a single band, fast_resample_spectra computes the same inverse
+        variance weighted mean as resample_flux(..., ivar=...), so the rebinned
+        flux and ivar should agree. Also check both against their analytically
+        known values: resampling conserves flux density, so a linear input flux
+        is reproduced exactly, and the ivar of N combined input pixels is N
+        times the input ivar.
+        """
+        from desispec.interpolation import resample_flux
+
+        step = 0.8
+        in_wave = np.arange(4000., 5000., step)
+        ivar_in = 4.0
+        #- linear flux, exactly reproduced by flux-density conserving resampling
+        flux_in = 3.0 + 0.01*(in_wave - in_wave[0])
+
+        #- even and odd rebinning: for odd factors the output bin centers land
+        #- on input pixel centers, for even factors they land halfway between
+        for rebin in (2, 5):
+            #- offset the output grid so each output bin covers exactly
+            #- `rebin` whole input pixels
+            out_wave = np.arange(in_wave[20] + 0.5*step*(rebin-1),
+                                 in_wave[-20], step*rebin)
+            s1 = self._uniform_spectra({'b':in_wave}, ivar=ivar_in)
+            s1.flux['b'][0] = flux_in
+
+            s2 = fast_resample_spectra(s1, wave=out_wave)
+            b = s2.bands[0]
+            flux_out, ivar_out = s2.flux[b][0], s2.ivar[b][0]
+
+            #- same answer as resample_flux
+            flux_ref, ivar_ref = resample_flux(out_wave, in_wave, flux_in,
+                                               ivar=np.full(in_wave.size, ivar_in))
+            self.assertTrue(np.allclose(flux_out, flux_ref),
+                            f'rebin={rebin} flux differs from resample_flux')
+            self.assertTrue(np.allclose(ivar_out, ivar_ref),
+                            f'rebin={rebin} ivar differs from resample_flux')
+
+            #- and the answer both of them give is the right one;
+            #- skip the edge bins where the resampling kernel is truncated
+            interior = slice(2, -2)
+            self.assertTrue(np.allclose(flux_out[interior],
+                                        3.0 + 0.01*(out_wave[interior] - in_wave[0])),
+                            f'rebin={rebin} flux not conserved')
+            self.assertTrue(np.allclose(ivar_out[interior], ivar_in*rebin),
+                            f'rebin={rebin} ivar {ivar_out[interior][:3]} '
+                            f'!= {ivar_in*rebin}')
+
+    def test_fast_resample_ivar_consistency(self):
+        """fast_resample_spectra agrees with resample_flux for noisy masked input"""
+        from desispec.interpolation import resample_flux
+
+        rng = np.random.default_rng(42)
+        in_wave = np.arange(4000., 5000., 0.8)
+        out_wave = np.arange(4100., 4900., 4.0)
+        s1 = self._uniform_spectra({'b':in_wave})
+        s1.flux['b'][0] = rng.uniform(1, 10, size=in_wave.size)
+        s1.ivar['b'][0] = rng.uniform(0.1, 5, size=in_wave.size)
+        #- some masked pixels, which is why ivar and not var is resampled
+        s1.ivar['b'][0][::13] = 0.0
+
+        s2 = fast_resample_spectra(s1, wave=out_wave)
+        b = s2.bands[0]
+        flux_ref, ivar_ref = resample_flux(out_wave, in_wave,
+                                           s1.flux['b'][0], ivar=s1.ivar['b'][0])
+        self.assertTrue(np.allclose(s2.ivar[b][0], ivar_ref))
+        self.assertTrue(np.allclose(s2.flux[b][0], flux_ref))
+        self.assertTrue(np.all(np.isfinite(s2.flux[b])))
+        self.assertTrue(np.all(np.isfinite(s2.ivar[b])))
+
+    def test_fast_resample_masked(self):
+        """Masked input pixels don't produce NaN/inf"""
+        in_wave = np.arange(4000., 5000., 0.8)
+        out_wave = np.arange(4100., 4900., 4.0)
+        s1 = self._uniform_spectra({'b':in_wave}, mask=True)
+        #- mask an entire output bin's worth of input pixels
+        s1.mask['b'][0][100:130] = 1
+        s2 = fast_resample_spectra(s1, wave=out_wave)
+        b = s2.bands[0]
+        self.assertTrue(np.all(np.isfinite(s2.flux[b])))
+        self.assertTrue(np.all(np.isfinite(s2.ivar[b])))
+        self.assertTrue(np.all(s2.ivar[b] >= 0))
+        #- fully masked region has ivar=0 and flux=0
+        fully_masked = (out_wave > in_wave[103]) & (out_wave < in_wave[127])
+        self.assertTrue(np.all(s2.ivar[b][0][fully_masked] == 0.0))
+        self.assertTrue(np.all(s2.flux[b][0][fully_masked] == 0.0))
 
     def test_coadd_fibermap_onetile(self):
         """Test coadding a fibermap of a single tile"""

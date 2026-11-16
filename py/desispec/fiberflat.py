@@ -610,6 +610,9 @@ def autocalib_fiberflat(fiberflats):
             fflat=fiberflats[i]
             scale = fflat.meanspec/(mmspec+(mmspec==0))
             fflat.fiberflat *= scale
+            # rescaling the fiberflat rescales its uncertainty: var -> var*scale**2
+            # scale=0 where meanspec=0; no information there, so ivar=0
+            fflat.ivar *= (scale!=0)/(scale**2+(scale==0))
 
         # fit a 2D polynomial per wavelenght to get the fiberflat at the center of the focal plane
         cfflat[ee] = np.zeros(nwave)
@@ -682,6 +685,7 @@ def autocalib_fiberflat(fiberflats):
     corr=1./(mflat+(mflat==0))
     for spec in np.unique(spectro) :
         output_fiberflats[spec].fiberflat *= corr
+        output_fiberflats[spec].ivar /= corr**2  # var -> var*corr**2
         #mask_bad_fiberflat(output_fiberflats[spec])
         filter_fiberflat(output_fiberflats[spec])
     log.info("done")
@@ -740,7 +744,9 @@ def gradient_correction(fiberflats, ref_fiberflats, iterations=5, max_gradient=0
 
     for spectro in fiberflats.keys():
         x, y = fiberflats[spectro].fibermap['FIBERASSIGN_X'], fiberflats[spectro].fibermap['FIBERASSIGN_Y']
-        fiberflats[spectro].fiberflat /= poly_val_2d(x, y, [1, y_slope, x_slope])[:, None]  # force the intercept to be 1
+        gradient = poly_val_2d(x, y, [1, y_slope, x_slope])[:, None]
+        fiberflats[spectro].fiberflat /= gradient  # force the intercept to be 1
+        fiberflats[spectro].ivar *= gradient**2    # var -> var/gradient**2
         fiberflats[spectro].header['GRADX'] = (x_slope, 'Gradient correction slope in X direction')
         fiberflats[spectro].header['GRADY'] = (y_slope, 'Gradient correction slope in Y direction')
 

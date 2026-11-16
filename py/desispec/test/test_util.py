@@ -44,7 +44,7 @@ class TestNight(unittest.TestCase):
             os.environ['DESI_SPECTRO_ROBUST'] = orig
         else:
             del os.environ['DESI_SPECTRO_ROBUST']
-    
+
     def test_ymd2night(self):
         """
         test util.ymd2night
@@ -83,14 +83,14 @@ class TestNight(unittest.TestCase):
             'int8', 'uint8', 'i1', 'u1',
             ):
             x = np.ones(10, dtype=np.dtype(dtype))
-            m32 = util.mask32(x)                
+            m32 = util.mask32(x)
             self.assertTrue(np.all(m32 == 1))
-            
+
         x = util.mask32( np.array([-1,0,1], dtype='i4') )
         self.assertEqual(x[0], 2**32-1)
         self.assertEqual(x[1], 0)
         self.assertEqual(x[2], 1)
-        
+
         with self.assertRaises(ValueError):
             util.mask32(np.arange(2**35, 2**35+5))
 
@@ -107,7 +107,7 @@ class TestNight(unittest.TestCase):
         izero = np.where(ivar2 == 0)
         self.assertTrue(np.all(ivar[izero] == 0))
         self.assertTrue(ivar.dtype == np.float64)
-        
+
         #- input inverse variances with some zeros (2D)
         np.random.seed(0)
         ivar1 = np.random.uniform(-1, 10, size=(10,20)).clip(0)
@@ -125,11 +125,11 @@ class TestNight(unittest.TestCase):
         #- ivar must be positive
         self.assertRaises(AssertionError, util.combine_ivar, -ivar1, ivar2)
         self.assertRaises(AssertionError, util.combine_ivar, ivar1, -ivar2)
-        
+
         #- does it actually combine them correctly?
         ivar = util.combine_ivar(1, 2)
         self.assertEqual(ivar, 1.0/(1.0 + 0.5))
-        
+
         #- float -> float, int -> float, 0-dim ndarray -> 0-dim ndarray
         ivar = util.combine_ivar(1, 2)
         self.assertTrue(isinstance(ivar, float))
@@ -289,7 +289,7 @@ class TestRunCmd(unittest.TestCase):
         fx = open(self.infile, 'w')
         fx.write('This file is leftover from a test; you can remove it\n')
         fx.close()
-        
+
         #- run a command
         token = uuid4().hex
         cmd = 'echo {} > {}'.format(token, self.testfile)
@@ -300,9 +300,9 @@ class TestRunCmd(unittest.TestCase):
         #- command should have run even though outputs exist,
         #- so updated token should be equal
         fx = open(self.testfile)
-        line = fx.readline().strip()        
+        line = fx.readline().strip()
         self.assertEqual(token, line)
-        
+
     @classmethod
     def setUpClass(cls):
         cls.origdir = os.getcwd()
@@ -332,19 +332,66 @@ class TestRunCmd(unittest.TestCase):
 class TestUtil(unittest.TestCase):
 
     def test_utils_default_nproc(self):
-        n = 4
-        tmp = os.getenv('SLURM_CPUS_PER_TASK')
-        os.environ['SLURM_CPUS_PER_TASK'] = str(n)
-        importlib.reload(dpl)
-        self.assertEqual(dpl.default_nproc, n)
-        os.environ['SLURM_CPUS_PER_TASK'] = str(2*n)
-        importlib.reload(dpl)
-        self.assertEqual(dpl.default_nproc, 2*n)
-        del os.environ['SLURM_CPUS_PER_TASK']
-        importlib.reload(dpl)
-        import multiprocessing
-        
-        self.assertEqual(dpl.default_nproc, max(multiprocessing.cpu_count()//2, 1))
+        """
+        default_nproc should honor $SLURM_CPUS_PER_TASK when set, and
+        otherwise should be capped small on a NERSC login node (outside
+        any Slurm allocation) to avoid overloading a shared login node,
+        vs. scaling with the core count elsewhere.
+        """
+        from unittest import mock
+
+        #- Save/restore the env vars this test manipulates, and always
+        #- reload dpl back to a real (unmocked) state afterwards, even if
+        #- an assertion fails or an exception is raised.
+        env_keys = ('SLURM_CPUS_PER_TASK', 'NERSC_HOST', 'SLURM_JOB_NAME')
+        orig_env = {k: os.environ.get(k) for k in env_keys}
+        try:
+            #- SLURM_CPUS_PER_TASK always wins, login node or not
+            os.environ['SLURM_CPUS_PER_TASK'] = '4'
+            os.environ['NERSC_HOST'] = 'perlmutter'
+            os.environ.pop('SLURM_JOB_NAME', None)
+            importlib.reload(dpl)
+            self.assertEqual(dpl.default_nproc, 4)
+
+            os.environ['SLURM_CPUS_PER_TASK'] = '8'
+            importlib.reload(dpl)
+            self.assertEqual(dpl.default_nproc, 8)
+
+            #- Without SLURM_CPUS_PER_TASK, mock a large multi-core machine
+            #- so that this test doesn't depend on how many cores are
+            #- actually available on whatever machine runs it
+            del os.environ['SLURM_CPUS_PER_TASK']
+            with mock.patch('multiprocessing.cpu_count', return_value=256):
+                #- Simulate a NERSC login node (NERSC_HOST set, not in a
+                #- Slurm job): default_nproc should be capped small
+                os.environ['NERSC_HOST'] = 'perlmutter'
+                os.environ.pop('SLURM_JOB_NAME', None)
+                importlib.reload(dpl)
+                self.assertTrue(dpl.on_nersc_login_node())
+                login_node_nproc = dpl.default_nproc
+                self.assertEqual(login_node_nproc, 8)
+
+                #- Simulate being inside a Slurm job on that same NERSC
+                #- system: default_nproc should scale with core count
+                #- instead of being capped
+                os.environ['SLURM_JOB_NAME'] = 'interactive'
+                importlib.reload(dpl)
+                self.assertFalse(dpl.on_nersc_login_node())
+                self.assertGreater(dpl.default_nproc, login_node_nproc)
+
+                #- Simulate a non-NERSC machine: also should not be capped
+                os.environ.pop('NERSC_HOST', None)
+                os.environ.pop('SLURM_JOB_NAME', None)
+                importlib.reload(dpl)
+                self.assertFalse(dpl.on_nersc_login_node())
+                self.assertGreater(dpl.default_nproc, login_node_nproc)
+        finally:
+            for k, v in orig_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+            importlib.reload(dpl)
 
     def test_header2night(self):
         from astropy.time import Time
@@ -413,6 +460,39 @@ class TestUtil(unittest.TestCase):
         a, idx = util.ordered_unique([1,1,2,3,0], return_index=True)
         self.assertEqual(list(a), [1,2,3,0])
         self.assertEqual(list(idx), [0,2,3,4])
+
+    def test_ordered_unique_by_provenance(self):
+        # This tests disambiguating both between primary > secondary but also
+        # main > special > anything else
+        tbl = Table()
+        tbl['TARGETID']    = [1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 6]
+        tbl['SCND_TARGET'] = [0, 8, 0, 0, 4, 0, 0, 8, 0, 0, 0]
+        tbl['SURVEY']      = ['special', 'main', 'special', 'main', 'main',
+                              'cmx', 'main', 'main', 'other', 'cmx', 'main']
+        targets, ii = util.ordered_unique_by_provenance(tbl)
+        self.assertEqual(list(targets), [1, 2, 3, 4, 5, 6])
+        # Logic per targetid:
+        # 1: prefer (0) over (1) because it is primary, even though main >  special
+        # 2: prefer (3) over (2) because it is main, not special
+        # 3: prefer (5) over (4) because it is primary, even though main > cmx
+        # 4: prefer (6) overe (7) because it is primary, and both are main
+        # 5: only occurs once, should always be 8
+        # 6: prefer (10) over (9) because it is main > cmx
+        self.assertEqual(list(ii), [0, 3, 5, 6, 8, 10])
+
+        # Also check that it works with a numpy structured array
+        targets, ii = util.ordered_unique_by_provenance(tbl.as_array())
+        self.assertEqual(list(targets), [1, 2, 3, 4, 5, 6])
+        self.assertEqual(list(ii), [0, 3, 5, 6, 8, 10])
+
+        # Testing that the returned order matches the "first seen" order
+        # of the input targetids.
+        tbl2 = Table()
+        tbl2['TARGETID']    = [40, 10, 30, 10, 20]
+        tbl2['SCND_TARGET'] = [0,   8,  0,  0,  0]
+        targets2, ii2 = util.ordered_unique_by_provenance(tbl2)
+        self.assertEqual(list(targets2), [40,10,30,20])
+        self.assertEqual(list(ii2), [0,3,2,4])
 
     def test_itemindices(self):
         r = util.itemindices([10,30,20,30])

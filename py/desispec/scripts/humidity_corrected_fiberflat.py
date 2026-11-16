@@ -54,7 +54,14 @@ def main(args=None) :
     cfinder = CalibFinder([frame_header])
     if not cfinder.haskey("FIBERFLATVSHUMIDITY"):
         log.info("No information on fiberflat vs humidity for camera {}, simply link the input fiberflat".format(frame_header["CAMERA"]))
-        if not os.path.islink(args.outfile) :
+        relpath = relsymlink(args.fiberflat, args.outfile, pathonly=True)
+        if os.path.islink(args.outfile) and os.readlink(args.outfile) == relpath:
+            log.info(f"{args.outfile} already links to {relpath}")
+        else:
+            #- replace a pre-existing file or a link to a different fiberflat
+            if os.path.lexists(args.outfile):
+                log.info(f"Replacing existing {args.outfile} with link to {relpath}")
+                os.remove(args.outfile)
             relsymlink(args.fiberflat, args.outfile)
         return 0
 

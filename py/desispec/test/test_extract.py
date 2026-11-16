@@ -99,6 +99,57 @@ class TestExtract(unittest.TestCase):
         self.assertEqual(frame1.meta['BUNIT'], 'electron/Angstrom')
         self.assertEqual(frame2.meta['BUNIT'], 'electron/Angstrom')
 
+    def test_check_extraction_output(self):
+        """Non-finite or float32-overflow extraction output raises RuntimeError"""
+        from desispec.scripts.extract import check_extraction_output
+
+        nspec, ndiag, nwave = 3, 5, 10
+        flux = np.ones((nspec, nwave))
+        ivar = np.ones((nspec, nwave))
+        rdata = np.zeros((nspec, ndiag, nwave))
+        rdata[:, ndiag//2, :] = 1.0
+        chi2pix = np.ones((nspec, nwave))
+
+        #- clean input passes
+        check_extraction_output(flux, ivar, rdata, chi2pix)
+
+        #- flux and ivar are the only required arguments
+        check_extraction_output(flux, ivar)
+
+        #- NaN flux
+        f = flux.copy()
+        f[1, 2] = np.nan
+        with self.assertRaises(RuntimeError):
+            check_extraction_output(f, ivar, rdata, chi2pix)
+
+        #- Inf ivar
+        iv = ivar.copy()
+        iv[0, 3] = np.inf
+        with self.assertRaises(RuntimeError):
+            check_extraction_output(flux, iv, rdata, chi2pix)
+
+        #- finite float64 ivar that would become Inf when written as float32
+        iv = ivar.copy()
+        iv[2, 0] = 1e40
+        with self.assertRaises(RuntimeError):
+            check_extraction_output(flux, iv, rdata, chi2pix)
+
+        #- NaN resolution data
+        r = rdata.copy()
+        r[2, 0, 5] = np.nan
+        with self.assertRaises(RuntimeError):
+            check_extraction_output(flux, ivar, r, chi2pix)
+
+        #- NaN chi2pix
+        c = chi2pix.copy()
+        c[1, 4] = np.nan
+        with self.assertRaises(RuntimeError):
+            check_extraction_output(flux, ivar, rdata, c)
+
+        #- NaN flux still caught without resolution_data/chi2pix
+        with self.assertRaises(RuntimeError):
+            check_extraction_output(f, ivar)
+
     def test_boxcar(self):
         from desispec.qproc.qextract import qproc_boxcar_extraction
         from desispec.io import read_xytraceset

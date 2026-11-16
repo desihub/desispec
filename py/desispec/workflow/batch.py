@@ -125,6 +125,29 @@ def parse_reservation(reservation, jobdesc):
         return reservation_gpu
 
 
+def max_nodes_for_jobdesc(jobdesc):
+    """
+    Return the maximum number of nodes that should be requested for a job type
+
+    Args:
+        jobdesc (str): type of data being processed, e.g. 'ARC', 'PSFNIGHT'.
+            Case insensitive.
+
+    Returns:
+        int: the largest node count that should be requested for this job type.
+
+    Note:
+        PSFNIGHT is allowed more nodes than everything else because a bundled
+        arc job runs every selected arc exposure concurrently, one node each.
+        Everything else is throttled so that two jobs can run together in the
+        10-node realtime queue.
+    """
+    if jobdesc is not None and jobdesc.upper() == 'PSFNIGHT':
+        return 15
+    else:
+        return 5
+
+
 def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=None, system_name=None):
     """
     Determine the resources that should be assigned to the batch script given what
@@ -156,7 +179,9 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
     if jobdesc in ('ARC', 'TESTARC'):
         ncores          = 20 * (10*(ncameras+1)//20) # lowest multiple of 20 exceeding 10 per camera
         ncores, runtime = ncores + 1, 45             # + 1 for worflow.schedule scheduler proc
-    elif jobdesc in ('FLAT', 'TESTFLAT'):
+    elif jobdesc in ('FLAT', 'TESTFLAT', 'CTEFLAT'):
+        ## CTEFLAT is the resource class of a single CTE flat exposure step
+        ## within a cteflat bundle; it gets exactly the resources a FLAT gets
         runtime = 40
         if system_name.startswith('perlmutter'):
             ncores = config['cores_per_node']
@@ -250,10 +275,9 @@ def determine_resources(ncameras, jobdesc, nexps=1, forced_runtime=None, queue=N
     # - exposures to 5 nodes to enable two to run together in the 10-node
     # - realtime queue, since their wallclock is dominated by less
     # - efficient sky and fluxcalib steps
-    if jobdesc in ('ARC', 'TESTARC'):#, 'FLAT', 'TESTFLAT'):
-        max_realtime_nodes = 10
-    else:
-        max_realtime_nodes = 5
+    # - PSFNIGHT is the exception: a bundled arc job runs one node per arc
+    # - exposure, so it is allowed a larger allocation
+    max_realtime_nodes = max_nodes_for_jobdesc(jobdesc)
 
     #- Pending further optimizations, use same number of nodes in all queues
     ### if (queue == 'realtime') and (nodes > max_realtime_nodes):

@@ -24,7 +24,7 @@ class TestPixGroup(unittest.TestCase):
         cls.origenv = dict()
         for key in ['DESI_SPECTRO_REDUX', 'SPECPROD']:
             cls.origenv[key] = os.getenv(key)  #- will be None if not set
-        
+
         os.environ['DESI_SPECTRO_REDUX'] = cls.testdir
         os.environ['SPECPROD'] = 'grouptest'
 
@@ -33,7 +33,7 @@ class TestPixGroup(unittest.TestCase):
         cls.nights = [20200101, 20200102, 20200103] # needs to be at least 3 nights
         cls.badnight = cls.nights[-1]
         cls.badslice = np.arange(2, int(np.min([6,cls.nspec_per_frame]) ) ).astype(int)
-        
+
         cls.healpix = 19456
         cls.nside = 64
         cls.uniqpix = desiutil.healpix.hpix2upix(cls.nside, cls.healpix)
@@ -70,7 +70,7 @@ class TestPixGroup(unittest.TestCase):
             for ii,night in enumerate(cls.nights):
                 for nfram in range(cls.nframe_per_night):
                     expid = (ii*cls.nframe_per_night) + (nfram + 1)
-                    
+
                     if night == cls.badnight and \
                        (nfram == bad_nfram_on_night or nfram == bad_brz_nfram):
                         curframe = deepcopy(frame)
@@ -199,7 +199,7 @@ class TestPixGroup(unittest.TestCase):
             spectra = read_spectra(self.specfile)
             num_nights = i+1
             nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
-        
+
             self.assertEqual(len(spectra.fibermap), nspec)
             self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
@@ -215,14 +215,14 @@ class TestPixGroup(unittest.TestCase):
 
         fibermap_array = np.array(spectra.fibermap['FIBERSTATUS'])
         self.assertEqual(len(fibermap_array), nspec)
-        
+
         self.assertEqual(np.sum( (fibermap_array & fibermask.BADAMPB) > 0 ), 2*len(self.badslice))
         self.assertEqual(np.sum( (fibermap_array & fibermask.BADAMPR) > 0 ), 2*len(self.badslice))
         self.assertEqual(np.sum( (fibermap_array & fibermask.BADAMPZ) > 0 ), 2*len(self.badslice))
 
         badamp_brz = ( fibermask.BADAMPB | fibermask.BADAMPR | fibermask.BADAMPZ )
         self.assertEqual(np.sum( (fibermap_array == badamp_brz) ), len(self.badslice))
-        
+
     def test_regroup_nights(self):
         """Test filtering to a specific set of nights"""
         num_nights = 2
@@ -234,10 +234,150 @@ class TestPixGroup(unittest.TestCase):
 
         spectra = read_spectra(self.specfile)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
-        
+
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
-        
+
+    def test_regroup_write_ncpu(self):
+        """Without --mpi, outputs are written with default_nproc pigz threads"""
+        from unittest import mock
+        from desispec.parallel import default_nproc
+        import desispec.io
+        cmd = f'desi_group_spectra -o {self.specfile} --expfile {self.expfile}'
+        args = group_spectra.parse(cmd.split()[1:])
+        with mock.patch('desispec.io.write_spectra', wraps=desispec.io.write_spectra) as write_spectra:
+            group_spectra.main(args)
+
+        write_spectra.assert_called_once()
+        self.assertEqual(write_spectra.call_args.kwargs['ncpu'], default_nproc)
+        self.assertIsNone(write_spectra.call_args.kwargs['cpus'])
+
+    def test_regroup_inframes_mpi(self):
+        """Test grouping from an input list of frames with --mpi on a one-rank communicator"""
+        try:
+            from mpi4py import MPI
+        except ImportError:
+            self.skipTest('mpi4py not available')
+
+        cmd = 'desi_group_spectra -o {}'.format(self.specfile)
+        cmd += ' --inframes ' + ' '.join(self.framefiles)
+
+        group_spectra.main(group_spectra.parse(cmd.split()[1:]))
+        serial = read_spectra(self.specfile)
+        os.remove(self.specfile)
+
+        args = group_spectra.parse((cmd + ' --mpi').split()[1:])
+        group_spectra.main(args, comm=MPI.COMM_WORLD)
+        parallel = read_spectra(self.specfile)
+
+        self.assertEqual(len(serial.fibermap), len(parallel.fibermap))
+        nt.assert_array_equal(serial.fibermap['TARGETID'], parallel.fibermap['TARGETID'])
+        for band in serial.bands:
+            nt.assert_array_equal(serial.flux[band], parallel.flux[band])
+            nt.assert_array_equal(serial.ivar[band], parallel.ivar[band])
+            nt.assert_array_equal(serial.mask[band], parallel.mask[band])
+
+    def _run_mpi_with_fake_comm(self, rank, bcast_values=None, error=None):
+        """
+        Run group_spectra.main with --mpi on a fake 2-rank comm as ``rank``
+
+        On rank 0, frames2spectra raises ``error`` if not None.
+        On other ranks, bcast returns ``bcast_values`` in order, as if from rank 0.
+
+        Returns (result or exception, fake comm)
+        """
+        import itertools
+        from contextlib import contextmanager
+        from unittest import mock
+
+        class FakeRequest:
+            def Test(self):
+                return True
+
+        class FakeComm:
+            def __init__(self, rank, bcast_values):
+                self.rank, self.size = rank, 2
+                self.bcast_values = list(bcast_values or [])
+                self.bcast_args = list()
+                self.nbarrier = 0
+            def allgather(self, obj):
+                return [obj, obj]
+            def bcast(self, obj, root=0):
+                self.bcast_args.append(obj)
+                return obj if self.rank == root else self.bcast_values.pop(0)
+            def barrier(self):
+                self.nbarrier += 1
+            def Ibarrier(self):
+                #- used by desispec.parallel.sleeping_barrier; completes immediately
+                return FakeRequest()
+
+        class FakePool:
+            def starmap(self, func, args):
+                return itertools.starmap(func, args)
+
+        @contextmanager
+        def fake_executor(comm, root=0):
+            yield FakePool() if comm.rank == root else None
+
+        comm = FakeComm(rank, bcast_values)
+        cmd = 'desi_group_spectra --mpi -o {}'.format(self.specfile)
+        cmd += ' --inframes ' + ' '.join(self.framefiles)
+        args = group_spectra.parse(cmd.split()[1:])
+        with mock.patch('mpi4py.futures.MPICommExecutor', fake_executor), \
+             mock.patch('desispec.scripts.group_spectra.frames2spectra', side_effect=error):
+            try:
+                result = group_spectra.main(args, comm=comm)
+            except Exception as err:
+                result = err
+
+        return result, comm
+
+    def test_regroup_mpi_root_error(self):
+        """An exception on rank 0 is sent to the other ranks before being raised"""
+        try:
+            import mpi4py.futures
+        except ImportError:
+            self.skipTest('mpi4py not available')
+
+        #- rank 0 raises the original error after telling the other ranks
+        error = RuntimeError('fake frames2spectra failure')
+        result, comm = self._run_mpi_with_fake_comm(rank=0, error=error)
+        self.assertIs(result, error)
+        self.assertIs(comm.bcast_args[-1], True)
+        self.assertEqual(comm.nbarrier, 0)
+
+        #- other ranks return an error code instead of waiting at the barrier;
+        #- bcast values: no read error, nframes, rank 0 failed
+        result, comm = self._run_mpi_with_fake_comm(rank=1, bcast_values=[False, 1, True])
+        self.assertEqual(result, 1)
+        self.assertEqual(comm.nbarrier, 0)
+
+        #- if rank 0 succeeds, the other ranks continue to the barrier
+        result, comm = self._run_mpi_with_fake_comm(rank=1, bcast_values=[False, 1, False])
+        self.assertEqual(result, 0)
+        self.assertEqual(comm.nbarrier, 1)
+
+    def test_regroup_mpi_read_error(self):
+        """An exception reading frames on rank 0 is sent to the other ranks"""
+        try:
+            import mpi4py.futures
+        except ImportError:
+            self.skipTest('mpi4py not available')
+
+        from unittest import mock
+        error = OSError('fake read failure')
+        with mock.patch('desispec.scripts.group_spectra._read_framefile', side_effect=error):
+            result, comm = self._run_mpi_with_fake_comm(rank=0)
+
+        self.assertIs(result, error)
+        self.assertEqual(comm.bcast_args, [True])
+        self.assertEqual(comm.nbarrier, 0)
+
+        #- other ranks return before the nframes bcast
+        result, comm = self._run_mpi_with_fake_comm(rank=1, bcast_values=[True])
+        self.assertEqual(result, 1)
+        self.assertEqual(len(comm.bcast_args), 1)
+
     def test_regroup_inframes(self):
         """Test grouping from an input list of frames"""
         cmd = 'desi_group_spectra -o {}'.format(self.specfile)
@@ -270,7 +410,7 @@ class TestPixGroup(unittest.TestCase):
         spectra = read_spectra(self.specfile)
         num_nights = len(self.nights)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
-    
+
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
 
@@ -280,7 +420,9 @@ class TestPixGroup(unittest.TestCase):
 
     def test_regroup_healpix(self):
         """Test grouping table of exposures with healpix filter"""
+        coaddfile = os.path.join(self.testdir, 'test-uniqpix-coadd.fits')
         cmd = f'desi_group_spectra -o {self.specfile} --expfile {self.expfile}'
+        cmd += f' -c {coaddfile}'
         cmd += f' --healpix {self.healpix}'
         cmd += f' --header BLAT=True BIM=False BAM=false FOO=bar BIZ=1 BAT=2.3'
 
@@ -302,6 +444,7 @@ class TestPixGroup(unittest.TestCase):
         with fits.open(self.specfile, memmap=True) as fx:
             mask = fx['B_MASK'].data
             hdr = fx[0].header
+            fmaphdr = fx['FIBERMAP'].header
 
         print(f"HEADER {type(hdr)} is")
         for key in hdr:
@@ -313,12 +456,20 @@ class TestPixGroup(unittest.TestCase):
         self.assertEqual(hdr['HPXPIXEL'], self.healpix)
         self.assertEqual(hdr['HPXNSIDE'], self.nside)
         self.assertEqual(hdr['HPXNEST'], True)
+        self.assertEqual(fmaphdr['UNIQPIX'], self.uniqpix)
+        self.assertEqual(fmaphdr['HPXPIXEL'], self.healpix)
         self.assertEqual(hdr['BLAT'], True)
         self.assertEqual(hdr['BIM'], False)
         self.assertEqual(hdr['BAM'], 'false')
         self.assertEqual(hdr['FOO'], 'bar')
         self.assertEqual(hdr['BIZ'], 1)
         self.assertEqual(hdr['BAT'], 2.3)
+
+        with fits.open(coaddfile, memmap=True) as fx:
+            self.assertEqual(fx['FIBERMAP'].header['UNIQPIX'], self.uniqpix)
+            self.assertEqual(fx['FIBERMAP'].header['HPXPIXEL'], self.healpix)
+            self.assertEqual(fx['EXP_FIBERMAP'].header['UNIQPIX'], self.uniqpix)
+            self.assertEqual(fx['EXP_FIBERMAP'].header['HPXPIXEL'], self.healpix)
 
 
     def test_reduxdir(self):
@@ -713,5 +864,46 @@ class TestPixGroup(unittest.TestCase):
             self.assertEqual(fr.fibermap.meta['TILEID'], 1234)
             self.assertEqual(fr.fibermap.meta['SURVEY'], 'main')
             self.assertEqual(fr.fibermap.meta['PROGRAM'], 'dark')
+
+    def test_frames2spectra_discrepant_radec(self):
+        """A target with disagreeing TARGET_RA/DEC across exposures should
+        still land in a single pixel, keeping all of its exposures"""
+        from ..pixgroup import FrameLite, frames2spectra
+        from desimodel.footprint import radec2pix
+
+        #- reuse two already-written good (non-badnight) exposures from self.framefiles
+        night = self.nights[0]
+        expid1, expid2 = 2, 3
+
+        #- TARGETID 100: secondary occurrence (expid1, RA=10.0) and primary
+        #- occurrence (expid2, RA=15.0), chosen so the two RA values land in
+        #- different healpix pixels at this nside
+        pix_secondary = radec2pix(self.nside, 10.0, 0.0)
+        pix_primary = radec2pix(self.nside, 15.0, 0.0)
+        self.assertNotEqual(pix_secondary, pix_primary)
+
+        frames = dict()
+        for camera in ['b0', 'r0', 'z0']:
+            f1 = FrameLite.read(findfile('cframe', night, expid1, camera))
+            f1.fibermap['TARGETID'][0:2] = [100, 200]
+            f1.fibermap['TARGET_RA'][0:2] = [10.0, 50.0]
+            f1.fibermap['TARGET_DEC'][0:2] = [0.0, 0.0]
+            f1.fibermap['SCND_TARGET'][0:2] = [8, 0]
+            frames[(night, expid1, camera)] = f1
+
+            f2 = FrameLite.read(findfile('cframe', night, expid2, camera))
+            f2.fibermap['TARGETID'][0:2] = [100, 300]
+            f2.fibermap['TARGET_RA'][0:2] = [15.0, 60.0]
+            f2.fibermap['TARGET_DEC'][0:2] = [0.0, 0.0]
+            f2.fibermap['SCND_TARGET'][0:2] = [0, 0]
+            frames[(night, expid2, camera)] = f2
+
+        spectra = frames2spectra(frames, pix=int(pix_primary), nside=self.nside)
+        tids = np.asarray(spectra.fibermap['TARGETID'])
+
+        #- both exposures of TARGETID 100 should be kept, under the primary's pixel
+        self.assertEqual(np.sum(tids == 100), 2)
+        self.assertNotIn(200, tids)
+        self.assertNotIn(300, tids)
 
 

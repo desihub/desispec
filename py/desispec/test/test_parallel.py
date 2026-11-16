@@ -7,6 +7,7 @@ import unittest
 import shutil
 import time
 import copy
+from unittest.mock import patch, MagicMock
 
 import numpy as np
 
@@ -124,6 +125,55 @@ class TestParallel(unittest.TestCase):
         sumweights = sorted([np.sum(weights[ii]) for ii in groups])
         self.assertEqual(sumweights, [10,11])
 
+    def test_get_cpu_affinity(self):
+        """test get_cpu_affinity with and without platform support"""
+        cpus = get_cpu_affinity()
+        self.assertGreater(len(cpus), 0)
+        self.assertTrue(cpus.issubset(range(os.cpu_count())))
+
+        #- platforms without sched_getaffinity (e.g. macOS) get all CPUs
+        with patch('desispec.parallel.os') as mock_os:
+            del mock_os.sched_getaffinity
+            mock_os.cpu_count.return_value = 4
+            self.assertEqual(get_cpu_affinity(), {0, 1, 2, 3})
+
+    def test_gather_cpu_affinity(self):
+        """test gather_cpu_affinity merging CPUs of ranks on the same node"""
+        comm = MagicMock()
+        comm.allgather.return_value = [('a', {0, 1}), ('a', {4, 2}), ('a', {1, 3})]
+        with patch('desispec.parallel.socket.gethostname', return_value='a'):
+            self.assertEqual(gather_cpu_affinity(comm), [0, 1, 2, 3, 4])
+
+        #- ranks on other nodes are ignored
+        comm.allgather.return_value = [('a', {0, 1}), ('b', {4, 2}), ('a', {1, 3}), ('b', {5})]
+        with patch('desispec.parallel.socket.gethostname', return_value='a'):
+            self.assertEqual(gather_cpu_affinity(comm), [0, 1, 3])
+        with patch('desispec.parallel.socket.gethostname', return_value='b'):
+            self.assertEqual(gather_cpu_affinity(comm), [2, 4, 5])
+
+    @unittest.skipUnless(hasattr(os, 'sched_setaffinity'), 'no CPU affinity support')
+    def test_cpu_affinity(self):
+        """test cpu_affinity context manager sets and restores affinity"""
+        original_cpus = os.sched_getaffinity(0)
+        cpu = min(original_cpus)
+        with cpu_affinity([cpu]):
+            self.assertEqual(os.sched_getaffinity(0), {cpu})
+        self.assertEqual(os.sched_getaffinity(0), original_cpus)
+
+        #- restored even if the block raises an exception
+        with self.assertRaises(RuntimeError):
+            with cpu_affinity([cpu]):
+                raise RuntimeError('test')
+        self.assertEqual(os.sched_getaffinity(0), original_cpus)
+
+    def test_cpu_affinity_unsupported(self):
+        """test cpu_affinity is a no-op without platform support"""
+        with patch('desispec.parallel.os') as mock_os:
+            del mock_os.sched_setaffinity
+            with cpu_affinity([0]):
+                pass
+            mock_os.sched_getaffinity.assert_not_called()
+
     def test_weighted_partition_nodes(self):
         """test weighted_partition spreading across nodes"""
         
@@ -161,3 +211,34 @@ class TestParallel(unittest.TestCase):
 
         groups = weighted_partition(weights, num_groups-3, groups_per_node=groups_per_node)
         check_weight_distribution(weights, groups, num_nodes, groups_per_node)
+
+    def test_sleeping_barrier(self):
+        """test sleeping_barrier sleeps instead of spinning"""
+        #- comm=None is a no-op
+        self.assertIsNone(sleeping_barrier(None))
+
+        #- fake comm whose non-blocking barrier completes on the 3rd test
+        class FakeRequest:
+            def __init__(self):
+                self.ntest = 0
+            def Test(self):
+                self.ntest += 1
+                return self.ntest >= 3
+
+        comm = MagicMock()
+        request = FakeRequest()
+        comm.Ibarrier.return_value = request
+        with patch('desispec.parallel.time.sleep') as sleep:
+            sleeping_barrier(comm, interval=0.2)
+            self.assertEqual(request.ntest, 3)
+            self.assertEqual(sleep.call_count, 2)
+            sleep.assert_called_with(0.2)
+
+        #- real MPI communicator, if available
+        try:
+            import mpi4py.MPI as MPI
+        except ImportError:
+            return
+
+        comm = MPI.COMM_WORLD
+        sleeping_barrier(comm)

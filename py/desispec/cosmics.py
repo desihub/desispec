@@ -12,6 +12,7 @@ import math
 import copy
 import scipy.ndimage
 import time
+import os
 
 import numba
 
@@ -110,7 +111,11 @@ def reject_cosmic_rays_1d(frame,nsig=3,psferr=0.05) :
                         log.info("fiber {} wave={} S/N={} add cosmic mask of {} pix".format(fiber,int(frame.wave[i]),int(snr),nmasked))
     log.info("done")
 
-@numba.jit(nopython=True)
+# Only cache numba compilations if NUMBA_CACHE_DIR is explicitly set.
+# Otherwise, when desispec is installed in a read-only location (e.g. on
+# compute nodes), numba falls back to caching in $HOME, which causes
+# I/O contention for jobs with many processes.
+@numba.jit(nopython=True, cache=('NUMBA_CACHE_DIR' in os.environ))
 def dilate_numba(input_boolean_array,include_input=False) :
     output_boolean_array = np.zeros(input_boolean_array.shape, input_boolean_array.dtype)
     if include_input :
@@ -130,7 +135,7 @@ def dilate_numba(input_boolean_array,include_input=False) :
 
 
 
-@numba.jit(nopython=True)
+@numba.jit(nopython=True, cache=('NUMBA_CACHE_DIR' in os.environ))
 def _reject_cosmic_rays_ala_sdss_single_numba(pix,ivar,selection,psf_gradients,nsig,cfudge,c2fudge) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)
@@ -366,6 +371,9 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.5,niter=6,dilate
     log=get_logger()
     log.info("starting with nsig=%2.1f cfudge=%2.1f c2fudge=%2.1f"%(nsig,cfudge,c2fudge))
     t0=time.time()
+
+    # cast to float so that numba compiles a single signature
+    nsig, cfudge, c2fudge = float(nsig), float(cfudge), float(c2fudge)
 
     tivar=img.ivar*(img.mask==0)*(img.ivar>0)
 
