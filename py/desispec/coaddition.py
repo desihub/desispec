@@ -646,7 +646,7 @@ def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
     return cosmic_mask
 
 
-def _resolution_coadd(resolution, pix_weights):
+def _resolution_coadd(resolution, pix_weights, mask_outside=False):
     """
     Given the resolution matrices for set of spectra, and
     inverse variances (or generally weights) for fluxes return the
@@ -656,6 +656,9 @@ def _resolution_coadd(resolution, pix_weights):
     Args:
     resolution (ndarray): (nspec, nres, npix) array of resolution matrices
     pix_weights (ndarray): (nspec, npix) array of ivars or weights
+    mask_outside (bool): if True, the elements of the resolution data that
+        refer to rows outside the spectrum (they are not part of the
+        resolution matrix) get zero weight
 
     Returns resolution matrix (nres, npix),
     and the weight (nres, npix)
@@ -666,8 +669,10 @@ def _resolution_coadd(resolution, pix_weights):
     # indices of the corresponding variance point
     # that needs to be used for ivar weights
     res_indices = (np.arange(npix)[None, :] +
-                   np.arange(-ww, ww + 1)[:, None]) % npix
-    res_whts = np.array([_[res_indices] for _ in pix_weights])
+                   np.arange(-ww, ww + 1)[:, None])
+    res_whts = np.array([_[res_indices % npix] for _ in pix_weights])
+    if mask_outside:
+        res_whts = res_whts * ((res_indices >= 0) & (res_indices < npix))
     res = np.sum(res_whts * resolution, axis=0)
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
@@ -1375,7 +1380,9 @@ def coadd_cameras(spectra):
             if has_res:
                 res = spectra.resolution_data[b][i][np.newaxis, :, :]
                 iv_i = iv[i:i+1]
-                raccum, rnorm_i = _resolution_coadd(res, iv_i)
+                # elements referring to rows outside of this band must not
+                # contribute to the rows covered by the other bands
+                raccum, rnorm_i = _resolution_coadd(res, iv_i, mask_outside=True)
                 ndiag = raccum.shape[0]
                 offset = (max_ndiag - ndiag) // 2
 
