@@ -657,8 +657,8 @@ def _resolution_coadd(resolution, pix_weights, mask_outside=False):
     resolution (ndarray): (nspec, nres, npix) array of resolution matrices
     pix_weights (ndarray): (nspec, npix) array of ivars or weights
     mask_outside (bool): if True, the elements of the resolution data that
-        refer to rows outside the spectrum (they are not part of the
-        resolution matrix) get zero weight
+    refer to rows outside the spectrum (they are not part of the
+    resolution matrix) get zero weight
 
     Returns resolution matrix (nres, npix),
     and the weight (nres, npix)
