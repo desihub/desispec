@@ -1229,13 +1229,17 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False, norm_ch
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
 
 
-def coadd_cameras(spectra):
+def coadd_cameras(spectra, mask_edges=True):
     """
     Coadd flux, ivar, and resolution (and model, if available)
     across all bands (cameras) for a given Spectra object.
 
     Args:
         spectra: desispec.spectra.Spectra (Input spectra object to coadd)
+        mask_edges (bool): if True, in the wavelength ranges covered by two
+            cameras the pixels closer to the edge of a camera than the
+            half-width of its resolution kernel get zero weight, because
+            their resolution matrix rows are truncated
 
     Returns:
         desispec.spectra.Spectra
@@ -1343,6 +1347,17 @@ def coadd_cameras(spectra):
 
         f = spectra.flux[b]
         iv = spectra.ivar[b]
+        if mask_edges and has_res:
+            # the resolution matrix rows of the pixels next to the edge of
+            # the camera are truncated, so where another camera covers
+            # these pixels we take them from that camera only
+            # shortcut: assumes overlaps wider than the resolution kernel
+            ww = spectra.resolution_data[b].shape[1] // 2
+            iv = iv.copy()
+            if overlap_flag[b][0]:
+                iv[:, :ww] = 0
+            if overlap_flag[b][-1]:
+                iv[:, iv.shape[1] - ww:] = 0
         m = spectra.mask[b] if has_mask else np.zeros_like(f, dtype=np.int32)
 
         # True for pixels in b that are non-overlapping
@@ -1382,7 +1397,7 @@ def coadd_cameras(spectra):
                 iv_i = iv[i:i+1]
                 # elements referring to rows outside of this band must not
                 # contribute to the rows covered by the other bands
-                raccum, rnorm_i = _resolution_coadd(res, iv_i, mask_outside=True)
+                raccum, rnorm_i = _resolution_coadd(res, iv_i, mask_outside=mask_edges)
                 ndiag = raccum.shape[0]
                 offset = (max_ndiag - ndiag) // 2
 

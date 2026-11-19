@@ -666,6 +666,32 @@ class TestCoadd(unittest.TestCase):
             self.assertTrue(np.allclose(resmat2[block, block][single],
                                         resmat1[single]))
 
+    def test_coadd_cameras_consistency(self):
+        """The coadded flux of a model seen through the resolution matrices
+        of the cameras must be the model seen through the coadded
+        resolution matrix
+        """
+        nspec, nwave = 2, 100
+        bands = ['b', 'r', 'z']
+        rng = np.random.default_rng(4346)
+        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
+        for band in bands:
+            s1.ivar[band] = rng.uniform(1, 2, size=s1.ivar[band].shape)
+            s1.resolution_data[band] = rng.uniform(
+                size=s1.resolution_data[band].shape)
+        wave = coadd_cameras(s1).wave['brz']
+        model = rng.uniform(size=len(wave))
+        for band in bands:
+            start = np.argmin(np.abs(wave - s1.wave[band][0]))
+            for i in range(nspec):
+                s1.flux[band][i] = Resolution(s1.resolution_data[band][i]).dot(
+                    model[start:start + nwave])
+        s2 = coadd_cameras(s1)
+        for i in range(nspec):
+            self.assertTrue(np.allclose(
+                s2.flux['brz'][i],
+                Resolution(s2.resolution_data['brz'][i]).dot(model)))
+
     def test_coadd_cameras_model(self):
         """
         Check if models are properly coadded by coadd_cameras
