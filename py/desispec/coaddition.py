@@ -646,7 +646,7 @@ def _mask_cosmics(wave, flux, ivar, tid=None, cosmics_nsig=None, camera=''):
     return cosmic_mask
 
 
-def _resolution_coadd(resolution, pix_weights):
+def _resolution_coadd(resolution, pix_weights, mask_outside=False):
     """
     Given the resolution matrices for set of spectra, and
     inverse variances (or generally weights) for fluxes return the
@@ -656,6 +656,9 @@ def _resolution_coadd(resolution, pix_weights):
     Args:
     resolution (ndarray): (nspec, nres, npix) array of resolution matrices
     pix_weights (ndarray): (nspec, npix) array of ivars or weights
+    mask_outside (bool): if True, the elements of the resolution data that
+    refer to rows outside the spectrum (they are not part of the
+    resolution matrix) get zero weight
 
     Returns resolution matrix (nres, npix),
     and the weight (nres, npix)
@@ -666,8 +669,10 @@ def _resolution_coadd(resolution, pix_weights):
     # indices of the corresponding variance point
     # that needs to be used for ivar weights
     res_indices = (np.arange(npix)[None, :] +
-                   np.arange(-ww, ww + 1)[:, None]) % npix
-    res_whts = np.array([_[res_indices] for _ in pix_weights])
+                   np.arange(-ww, ww + 1)[:, None])
+    res_whts = np.array([_[res_indices % npix] for _ in pix_weights])
+    if mask_outside:
+        res_whts = res_whts * ((res_indices >= 0) & (res_indices < npix))
     res = np.sum(res_whts * resolution, axis=0)
     res_norm = np.sum(res_whts, axis=0)
     return res, res_norm
@@ -1224,13 +1229,17 @@ def coadd(spectra, cosmics_nsig=None, onetile=False, no_normalize=False, norm_ch
     compute_coadd_scores(spectra, orig_scores, update_coadd=True)
 
 
-def coadd_cameras(spectra):
+def coadd_cameras(spectra, mask_edges=True):
     """
     Coadd flux, ivar, and resolution (and model, if available)
     across all bands (cameras) for a given Spectra object.
 
     Args:
         spectra: desispec.spectra.Spectra (Input spectra object to coadd)
+        mask_edges (bool): if True, in the wavelength ranges covered by two
+            cameras the pixels closer to the edge of a camera than the
+            half-width of its resolution kernel get zero weight, because
+            their resolution matrix rows are truncated
 
     Returns:
         desispec.spectra.Spectra
@@ -1338,6 +1347,17 @@ def coadd_cameras(spectra):
 
         f = spectra.flux[b]
         iv = spectra.ivar[b]
+        if mask_edges and has_res:
+            # the resolution matrix rows of the pixels next to the edge of
+            # the camera are truncated, so where another camera covers
+            # these pixels we take them from that camera only
+            # shortcut: assumes overlaps wider than the resolution kernel
+            ww = spectra.resolution_data[b].shape[1] // 2
+            iv = iv.copy()
+            if overlap_flag[b][0]:
+                iv[:, :ww] = 0
+            if overlap_flag[b][-1]:
+                iv[:, iv.shape[1] - ww:] = 0
         m = spectra.mask[b] if has_mask else np.zeros_like(f, dtype=np.int32)
 
         # True for pixels in b that are non-overlapping
@@ -1375,7 +1395,9 @@ def coadd_cameras(spectra):
             if has_res:
                 res = spectra.resolution_data[b][i][np.newaxis, :, :]
                 iv_i = iv[i:i+1]
-                raccum, rnorm_i = _resolution_coadd(res, iv_i)
+                # elements referring to rows outside of this band must not
+                # contribute to the rows covered by the other bands
+                raccum, rnorm_i = _resolution_coadd(res, iv_i, mask_outside=mask_edges)
                 ndiag = raccum.shape[0]
                 offset = (max_ndiag - ndiag) // 2
 

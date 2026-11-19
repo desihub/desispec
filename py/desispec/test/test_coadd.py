@@ -636,6 +636,62 @@ class TestCoadd(unittest.TestCase):
         self.assertTrue(np.allclose(resmod[~edge_mask],
                         s2.flux['brz'][0][~edge_mask]))
 
+    def test_coadd_cameras_resolution_edges(self):
+        """Rows of the coadded resolution matrix for pixels covered by a
+        single camera must be the rows of that camera, i.e. the resolution
+        data elements of the other cameras that refer to rows outside
+        their wavelength range must not contribute
+        """
+        nspec, nwave = 2, 100
+        bands = ['b', 'r', 'z']
+        rng = np.random.default_rng(4345)
+        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
+        for band in bands:
+            s1.ivar[band] = rng.uniform(1, 2, size=s1.ivar[band].shape)
+            # random resolution data, also nonzero in the elements
+            # referring to rows outside the spectrum, like in real data
+            s1.resolution_data[band] = rng.uniform(
+                size=s1.resolution_data[band].shape)
+        s2 = coadd_cameras(s1)
+        wave = s2.wave['brz']
+        resmat2 = Resolution(s2.resolution_data['brz'][0]).toarray()
+        for band in bands:
+            start = np.argmin(np.abs(wave - s1.wave[band][0]))
+            block = slice(start, start + nwave)
+            # pixels of this camera not covered by any other camera
+            single = np.all([np.abs(s1.wave[band][:, None] - s1.wave[other]
+                                    ).min(axis=1) > 1e-4
+                             for other in bands if other != band], axis=0)
+            resmat1 = Resolution(s1.resolution_data[band][0]).toarray()
+            self.assertTrue(np.allclose(resmat2[block, block][single],
+                                        resmat1[single]))
+
+    def test_coadd_cameras_consistency(self):
+        """The coadded flux of a model seen through the resolution matrices
+        of the cameras must be the model seen through the coadded
+        resolution matrix
+        """
+        nspec, nwave = 2, 100
+        bands = ['b', 'r', 'z']
+        rng = np.random.default_rng(4346)
+        s1 = self._random_spectra(nspec, nwave, with_mask=True, bands=bands)
+        for band in bands:
+            s1.ivar[band] = rng.uniform(1, 2, size=s1.ivar[band].shape)
+            s1.resolution_data[band] = rng.uniform(
+                size=s1.resolution_data[band].shape)
+        wave = coadd_cameras(s1).wave['brz']
+        model = rng.uniform(size=len(wave))
+        for band in bands:
+            start = np.argmin(np.abs(wave - s1.wave[band][0]))
+            for i in range(nspec):
+                s1.flux[band][i] = Resolution(s1.resolution_data[band][i]).dot(
+                    model[start:start + nwave])
+        s2 = coadd_cameras(s1)
+        for i in range(nspec):
+            self.assertTrue(np.allclose(
+                s2.flux['brz'][i],
+                Resolution(s2.resolution_data['brz'][i]).dot(model)))
+
     def test_coadd_cameras_model(self):
         """
         Check if models are properly coadded by coadd_cameras
