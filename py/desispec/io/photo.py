@@ -966,8 +966,8 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
     assert(np.all(input_cat['BRICKNAME'] == input_cat['BRICKNAME'][0]))
     brick = input_cat['BRICKNAME'][0]
 
-    idr9 = np.where((input_cat['RELEASE'] > 0) * (input_cat['BRICKID'] > 0) *
-                    (input_cat['BRICK_OBJID'] > 0) * (input_cat['PHOTSYS'] != ''))[0]
+    idr9 = np.where((input_cat['RELEASE'] > 0) & (input_cat['BRICKID'] > 0) &
+                    (input_cat['BRICK_OBJID'] > 0) & (input_cat['PHOTSYS'] != ''))[0]
     ipos = np.delete(np.arange(len(input_cat)), idr9)
 
     out = Table(np.hstack(np.repeat(datamodel, len(np.atleast_1d(input_cat)))))
@@ -975,7 +975,12 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
 
     # DR9 targeting photometry exists
     if len(idr9) > 0:
-        assert(np.all(input_cat['PHOTSYS'][idr9] == input_cat['PHOTSYS'][idr9][0]))
+        good_photsys = np.all(input_cat['PHOTSYS'][idr9] == input_cat['PHOTSYS'][idr9][0])
+        if not good_photsys:
+            bad_photsys = str(np.unique(input_cat['PHOTSYS'][idr9]))
+            errmsg = f"Inconsistent values of PHOTSYS: {bad_photsys}!"
+            log.critical(errmsg)
+            raise ValueError(errmsg)
 
         # find the catalog
         photsys = input_cat['PHOTSYS'][idr9][0]
@@ -984,8 +989,12 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
             region = 'south'
         elif photsys == 'N':
             region = 'north'
+        else:
+            errmsg = f"Unexpected value of PHOTSYS: {photsys}!"
+            log.critical(errmsg)
+            raise ValueError(errmsg)
 
-        #raslice = np.array(['{:06d}'.format(int(ra*1000))[:3] for ra in input_cat['RA']])
+        # raslice = np.array(['{:06d}'.format(int(ra*1000))[:3] for ra in input_cat['RA']])
         tractorfile = os.path.join(legacysurveydir, region, 'tractor', brick[:3], f'tractor-{brick}.fits')
 
         if not os.path.isfile(tractorfile):
