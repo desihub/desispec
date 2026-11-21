@@ -968,15 +968,15 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
 
     if isinstance(input_cat['PHOTSYS'], MaskedColumn):
         input_cat['PHOTSYS'].fill_value = ''
-        photsys = input_cat['PHOTSYS'].filled()
-    else:
-        photsys = input_cat['PHOTSYS']
+        input_cat['PHOTSYS'] = input_cat['PHOTSYS'].filled()
+    # This cut is already applied when running desi-photometry, but if
+    # this is being called by other code, the cut is still necessary.
     idr9 = np.where((input_cat['RELEASE'] > 0) & (input_cat['BRICKID'] > 0) &
                     (input_cat['BRICK_OBJID'] > 0) &
-                    (photsys != 'G') &
-                    (photsys != 'P') &
-                    (photsys != 'X') &
-                    (photsys != ''))[0]
+                    (input_cat['PHOTSYS'] != 'G') &
+                    (input_cat['PHOTSYS'] != 'P') &
+                    (input_cat['PHOTSYS'] != 'X') &
+                    (input_cat['PHOTSYS'] != ''))[0]
     ipos = np.delete(np.arange(len(input_cat)), idr9)
 
     out = Table(np.hstack(np.repeat(datamodel, len(np.atleast_1d(input_cat)))))
@@ -984,7 +984,7 @@ def _gather_tractorphot_onebrick(input_cat, legacysurveydir, radius_match, racol
 
     # DR9 targeting photometry exists
     if len(idr9) > 0:
-        good_photsys = np.all(photsys[idr9] == photsys[idr9][0])
+        good_photsys = np.all(input_cat['PHOTSYS'][idr9] == input_cat['PHOTSYS'][idr9][0])
         if not good_photsys:
             bad_photsys = str(np.unique(input_cat['PHOTSYS'][idr9]))
             errmsg = f"Inconsistent values of PHOTSYS: {bad_photsys}!"
